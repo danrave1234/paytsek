@@ -21,6 +21,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # expo-github-action authenticates its own step, but plain `run:` steps do
+    # not inherit that session, so `eas build` reports "An Expo user account is
+    # required". The token has to be in the job environment.
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
