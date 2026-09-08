@@ -13,7 +13,7 @@ export interface CollectorBinding {
   workspaceId: string;
   workspaceName: string;
   sourceLabel: string;
-  provider: 'GCASH' | 'GOTYME';
+  provider: 'GCASH' | 'GOTYME' | 'MAYA' | 'MARIBANK';
   deviceId: string;
   pairedAt: string;
 }

@@ -2,16 +2,18 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { Button, Card, Text, useTheme } from 'react-native-paper';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { ErrorState, Loading, Notice, Row } from '@/components/ui';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ErrorState, Loading, Notice, Row, ScreenTitle } from '@/components/ui';
 import { countDrafts, syncAll } from '@/lib/drafts';
 import { lastSeen, peso } from '@/lib/format';
 import { useHome } from '@/lib/queries';
 import { useIsOwner, useSession } from '@/lib/session';
 import { OfflineError } from '@/lib/api';
+import { SPACING } from '@/theme';
 
 export default function Home() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { workspace } = useSession();
   const isOwner = useIsOwner();
@@ -35,9 +37,8 @@ export default function Home() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
-      <ScrollView contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 32 }} refreshControl={<RefreshControl refreshing={home.isRefetching} onRefresh={() => void home.refetch()} />}>
-        <Text variant="headlineSmall">{workspace?.name}</Text>
-        <Text variant="bodySmall" style={{ opacity: 0.7 }}>Today · recorded payments, not wallet balance</Text>
+      <ScrollView contentContainerStyle={{ padding: SPACING.lg, gap: SPACING.md, paddingBottom: insets.bottom + SPACING.xxl }} refreshControl={<RefreshControl refreshing={home.isRefetching} onRefresh={() => void home.refetch()} />}>
+        <ScreenTitle title={workspace?.name ?? 'Today'} subtitle="Today · recorded payments, not wallet balance" />
         {workspace?.isDemo ? <Notice kind="warning">Demo workspace — records here never count toward real totals or billing.</Notice> : null}
         {offline ? <Notice kind="warning">Offline. Showing the last data received from the server; nothing here is verified while offline.</Notice> : null}
         {pending > 0 ? (
@@ -52,22 +53,27 @@ export default function Home() {
 
         {d ? (
           <>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flexDirection: 'row', gap: SPACING.md }}>
               <Stat title="Notification matched" count={d.today.notificationMatchedCount} amount={d.today.notificationMatchedCentavos} />
               <Stat title="Confirmed manually" count={d.today.confirmedManuallyCount} amount={d.today.confirmedManuallyCentavos} />
             </View>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
+            <View style={{ flexDirection: 'row', gap: SPACING.md }}>
               <Stat title="Unverified" count={d.today.unverifiedCount} amount={d.today.unverifiedCentavos} />
-              <Card mode="outlined" style={{ flex: 1 }} onPress={() => router.push('/(tabs)/review')}>
-                <Card.Content>
-                  <Text variant="labelMedium">Review needed</Text>
-                  <Text variant="headlineMedium">{d.today.reviewRequiredCount}</Text>
-                  <Text variant="bodySmall" style={{ opacity: 0.7 }}>Tap to review</Text>
+              <Card
+                mode="contained"
+                style={{ flex: 1, backgroundColor: d.today.reviewRequiredCount > 0 ? theme.colors.tertiaryContainer : theme.colors.elevation.level1 }}
+                onPress={() => router.push('/(tabs)/review')}
+                accessibilityLabel={`Review needed: ${d.today.reviewRequiredCount}. Tap to review.`}
+              >
+                <Card.Content style={{ gap: 2 }}>
+                  <Text variant="labelMedium" style={{ color: d.today.reviewRequiredCount > 0 ? theme.colors.onTertiaryContainer : theme.colors.onSurfaceVariant }}>Review needed</Text>
+                  <Text variant="headlineMedium" style={{ fontWeight: '700', letterSpacing: -0.5, color: d.today.reviewRequiredCount > 0 ? theme.colors.onTertiaryContainer : theme.colors.onSurface }}>{d.today.reviewRequiredCount}</Text>
+                  <Text variant="bodySmall" style={{ color: d.today.reviewRequiredCount > 0 ? theme.colors.onTertiaryContainer : theme.colors.onSurfaceVariant }}>Tap to review</Text>
                 </Card.Content>
               </Card>
             </View>
 
-            <Card mode="outlined">
+            <Card mode="contained" style={{ backgroundColor: theme.colors.elevation.level1 }}>
               <Card.Title title="Payment phone" subtitle={d.collectors.length === 0 ? 'No Android payment phone connected' : `${d.collectors.length} connected`} />
               <Card.Content style={{ gap: 8 }}>
                 {d.collectors.length === 0 ? (
@@ -88,7 +94,7 @@ export default function Home() {
               {isOwner ? <Card.Actions><Button onPress={() => router.push('/settings/devices')}>Manage devices</Button></Card.Actions> : null}
             </Card>
 
-            <Card mode="outlined">
+            <Card mode="contained" style={{ backgroundColor: theme.colors.elevation.level1 }}>
               <Card.Title title="Monthly records" />
               <Card.Content>
                 <Row label="Used this month" value={`${d.quota.monthlyUsed} / ${d.quota.monthlyAllowance}`} />
@@ -105,12 +111,13 @@ export default function Home() {
 }
 
 function Stat({ title, count, amount }: { title: string; count: number; amount: number }) {
+  const theme = useTheme();
   return (
-    <Card mode="outlined" style={{ flex: 1 }}>
-      <Card.Content>
-        <Text variant="labelMedium">{title}</Text>
-        <Text variant="headlineMedium">{count}</Text>
-        <Text variant="bodySmall" style={{ opacity: 0.7 }}>{peso(amount)}</Text>
+    <Card mode="contained" style={{ flex: 1, backgroundColor: theme.colors.elevation.level1 }}>
+      <Card.Content style={{ gap: 2 }}>
+        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={2}>{title}</Text>
+        <Text variant="headlineMedium" style={{ fontWeight: '700', letterSpacing: -0.5 }}>{count}</Text>
+        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{peso(amount)}</Text>
       </Card.Content>
     </Card>
   );
