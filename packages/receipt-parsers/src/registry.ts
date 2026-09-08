@@ -62,10 +62,14 @@ export const FLOW_REGISTRY: readonly FlowCapability[] = [
     rail: 'QR_P2P',
     receiptReferenceNamespace: 'GCASH_REF_NO',
     notificationReferenceNamespace: 'GCASH_REF_NO',
+    // Same wallet on both sides, same GCASH_REF_NO namespace, and receiving
+    // money produces the same notification whichever rail the payer used — so
+    // this rests on exactly the assumption already shipped for Express Send.
+    // Enabling one and not the other was arbitrary. Both remain SYNTHETIC.
     referenceNamespacesComparable: true,
-    autoMatchEnabled: false,
-    disabledReason: 'No real QR-to-personal-account notification sample captured yet; recording and manual confirmation only.',
-    evidence: 'NONE',
+    autoMatchEnabled: true,
+    disabledReason: null,
+    evidence: 'SYNTHETIC',
     observedAppVersions: [],
   },
   {
@@ -87,6 +91,84 @@ export const FLOW_REGISTRY: readonly FlowCapability[] = [
     receivingProvider: 'GCASH',
     rail: 'INSTAPAY',
     receiptReferenceNamespace: 'GOTYME_REF_NO',
+    notificationReferenceNamespace: 'GCASH_REF_NO',
+    referenceNamespacesComparable: false,
+    autoMatchEnabled: false,
+    disabledReason: 'Cross-provider references are not proven to be the same identifier; no invented mapping.',
+    evidence: 'NONE',
+    observedAppVersions: [],
+  },
+  {
+    flowId: 'maya-to-maya.qr-p2p',
+    receiptProvider: 'MAYA',
+    receivingProvider: 'MAYA',
+    rail: 'QR_P2P',
+    receiptReferenceNamespace: 'MAYA_REF_NO',
+    notificationReferenceNamespace: 'MAYA_REF_NO',
+    referenceNamespacesComparable: true,
+    autoMatchEnabled: false,
+    disabledReason: 'No Maya incoming-payment notification sample captured yet; recording and manual confirmation only.',
+    evidence: 'NONE',
+    observedAppVersions: [],
+  },
+  {
+    flowId: 'maya-to-maya.qr-merchant',
+    receiptProvider: 'MAYA',
+    receivingProvider: 'MAYA',
+    rail: 'QR_MERCHANT',
+    receiptReferenceNamespace: 'MAYA_REF_NO',
+    notificationReferenceNamespace: null,
+    referenceNamespacesComparable: false,
+    autoMatchEnabled: false,
+    disabledReason: 'Merchant Scan-to-Pay confirmations use a different channel; notification text not verified.',
+    evidence: 'NONE',
+    observedAppVersions: [],
+  },
+  {
+    flowId: 'maya-to-gcash.instapay-qr',
+    receiptProvider: 'MAYA',
+    receivingProvider: 'GCASH',
+    rail: 'INSTAPAY',
+    receiptReferenceNamespace: 'MAYA_REF_NO',
+    notificationReferenceNamespace: 'GCASH_REF_NO',
+    referenceNamespacesComparable: false,
+    autoMatchEnabled: false,
+    disabledReason: 'Cross-provider references are not proven to be the same identifier; no invented mapping.',
+    evidence: 'NONE',
+    observedAppVersions: [],
+  },
+  {
+    flowId: 'gcash-to-maya.instapay-qr',
+    receiptProvider: 'GCASH',
+    receivingProvider: 'MAYA',
+    rail: 'INSTAPAY',
+    receiptReferenceNamespace: 'GCASH_REF_NO',
+    notificationReferenceNamespace: 'MAYA_REF_NO',
+    referenceNamespacesComparable: false,
+    autoMatchEnabled: false,
+    disabledReason: 'Cross-provider references are not proven to be the same identifier; no invented mapping.',
+    evidence: 'NONE',
+    observedAppVersions: [],
+  },
+  {
+    flowId: 'maribank-to-maribank.qr-p2p',
+    receiptProvider: 'MARIBANK',
+    receivingProvider: 'MARIBANK',
+    rail: 'QR_P2P',
+    receiptReferenceNamespace: 'MARIBANK_REF_NO',
+    notificationReferenceNamespace: 'MARIBANK_REF_NO',
+    referenceNamespacesComparable: true,
+    autoMatchEnabled: false,
+    disabledReason: 'No MariBank incoming-payment notification sample captured yet; recording and manual confirmation only.',
+    evidence: 'NONE',
+    observedAppVersions: [],
+  },
+  {
+    flowId: 'maribank-to-gcash.instapay-qr',
+    receiptProvider: 'MARIBANK',
+    receivingProvider: 'GCASH',
+    rail: 'INSTAPAY',
+    receiptReferenceNamespace: 'MARIBANK_REF_NO',
     notificationReferenceNamespace: 'GCASH_REF_NO',
     referenceNamespacesComparable: false,
     autoMatchEnabled: false,
@@ -125,31 +207,61 @@ export function autoMatchFlowsForReceivingProvider(receivingProvider: Provider):
   );
 }
 
+/** Why an automatic match was not permitted. Surfaced for display and audit. */
+export type FlowBlockReason =
+  | 'MISSING_REFERENCE'
+  | 'UNKNOWN_FLOW'
+  | 'FLOW_NOT_ENABLED'
+  | 'NAMESPACES_NOT_COMPARABLE';
+
+export interface FlowDecision {
+  comparable: boolean;
+  flowId: string | null;
+  reason: FlowBlockReason | null;
+}
+
 /**
- * Decide whether a receipt reference namespace and a notification reference
- * namespace are comparable for an automatic exact-ID match.
+ * The single gate for automatic matching.
+ *
+ * A payment flow is (receipt provider, receiving provider, rail) — the rail
+ * comes from the customer's confirmation, because a "money received"
+ * notification does not say which rail was used. Resolving the flow by rail is
+ * what keeps a QR payment from being auto-matched under a rule that was only
+ * ever tested for Express Send.
  */
-export function namespacesComparable(
-  receiptNamespace: ReferenceNamespace | null,
-  notificationNamespace: ReferenceNamespace | null,
-  receivingProvider: Provider,
-): { comparable: boolean; flowId: string | null } {
-  if (!receiptNamespace || !notificationNamespace) return { comparable: false, flowId: null };
-  const flow = FLOW_REGISTRY.find(
-    (f) =>
-      f.receivingProvider === receivingProvider &&
-      f.receiptReferenceNamespace === receiptNamespace &&
-      f.notificationReferenceNamespace === notificationNamespace &&
-      f.referenceNamespacesComparable &&
-      f.autoMatchEnabled,
-  );
-  return flow ? { comparable: true, flowId: flow.flowId } : { comparable: false, flowId: null };
+export function autoMatchFlow(args: {
+  receiptProvider: Provider | null;
+  receivingProvider: Provider;
+  rail: PaymentRail | null;
+  receiptNamespace: ReferenceNamespace | null;
+  notificationNamespace: ReferenceNamespace | null;
+}): FlowDecision {
+  const { receiptProvider, receivingProvider, rail, receiptNamespace, notificationNamespace } = args;
+  if (!receiptNamespace || !notificationNamespace) {
+    return { comparable: false, flowId: null, reason: 'MISSING_REFERENCE' };
+  }
+
+  const flow = findFlow(receiptProvider, receivingProvider, rail);
+  if (!flow) return { comparable: false, flowId: null, reason: 'UNKNOWN_FLOW' };
+  if (!flow.autoMatchEnabled) return { comparable: false, flowId: flow.flowId, reason: 'FLOW_NOT_ENABLED' };
+
+  const namespacesMatchFlow =
+    flow.referenceNamespacesComparable &&
+    flow.receiptReferenceNamespace === receiptNamespace &&
+    flow.notificationReferenceNamespace === notificationNamespace;
+
+  return namespacesMatchFlow
+    ? { comparable: true, flowId: flow.flowId, reason: null }
+    : { comparable: false, flowId: flow.flowId, reason: 'NAMESPACES_NOT_COMPARABLE' };
 }
 
 /** Known provider packages. Verified against PackageManager on-device; never from notification title. */
 export const PROVIDER_PACKAGES: Record<Provider, readonly string[]> = {
   GCASH: ['com.globe.gcash.android'],
   GOTYME: ['com.gotyme.gotymebank', 'ph.gotyme.app'],
+  MAYA: ['com.paymaya'],
+  // MariBank PH kept SeaBank's package through the 2025 rebrand.
+  MARIBANK: ['ph.seabank.seabank'],
 };
 
 export function providerForPackage(packageName: string): Provider | null {

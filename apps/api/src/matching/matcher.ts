@@ -1,6 +1,6 @@
-import type { MatchReasonCode, Provider, ReferenceNamespace, TimeBasis, TimePrecision } from '@payrecord/contracts';
+import type { MatchReasonCode, PaymentRail, Provider, ReferenceNamespace, TimeBasis, TimePrecision } from '@payrecord/contracts';
 import { MATCHING_CRITICAL_FIELDS } from '@payrecord/contracts';
-import { namespacesComparable, normalizeReference, referencesEqual } from '@payrecord/receipt-parsers';
+import { autoMatchFlow, normalizeReference, referencesEqual } from '@payrecord/receipt-parsers';
 
 /**
  * Matching policy v1 — correctness before automatic coverage.
@@ -18,9 +18,28 @@ import { namespacesComparable, normalizeReference, referencesEqual } from '@payr
  */
 export const MATCHER_VERSION = 'v1';
 
+/**
+ * Resolve the capability-registry flow for this record. The rail comes from
+ * the customer's confirmation, not from the notification, so a QR payment is
+ * never gated by a rule that was only tested for Express Send.
+ */
+function flowFor(record: MatchRecordInput, receiptNamespace: ReferenceNamespace, notificationNamespace: ReferenceNamespace) {
+  return autoMatchFlow({
+    receiptProvider: record.receiptProvider,
+    receivingProvider: record.receivingProvider,
+    rail: record.paymentRail,
+    receiptNamespace,
+    notificationNamespace,
+  });
+}
+
 export interface MatchRecordInput {
   id: string;
   receivingProvider: Provider;
+  /** Provider named on the customer's confirmation, when it could be read. */
+  receiptProvider: Provider | null;
+  /** Rail named on the customer's confirmation. The flow is keyed on it. */
+  paymentRail: PaymentRail | null;
   currency: 'PHP';
   amountCentavos: number;
   referenceNamespace: ReferenceNamespace | null;
@@ -104,7 +123,7 @@ export function assessCandidate(record: MatchRecordInput, event: MatchEventInput
   if (!recRef) missing.push('receipt.reference');
   if (!evRef) missing.push('notification.reference');
   if (recRef && evRef) {
-    const cmp = namespacesComparable(recRef.namespace, evRef.namespace, record.receivingProvider);
+    const cmp = flowFor(record, recRef.namespace, evRef.namespace);
     if (!cmp.comparable) blockers.push('NO_COMPARABLE_NAMESPACE');
     else if (referencesEqual(recRef, evRef)) supporting.push('reference');
     else blockers.push('CONTRADICTORY_DATA');
@@ -133,7 +152,7 @@ export function decide(record: MatchRecordInput, events: MatchEventInput[], cfg:
     const a = exact[0]!;
     const recRef = normalizeReference(record.referenceNamespace!, record.referenceValue!)!;
     const evRef = normalizeReference(a.event.referenceNamespace, a.event.referenceValue!)!;
-    const flow = namespacesComparable(recRef.namespace, evRef.namespace, record.receivingProvider);
+    const flow = flowFor(record, recRef.namespace, evRef.namespace);
     const delayed = a.deltaSeconds !== null && Math.abs(a.deltaSeconds) > window;
     return {
       kind: 'AUTO',

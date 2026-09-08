@@ -1,3 +1,4 @@
+import type { PaymentRail } from '@payrecord/contracts';
 import { findMoneyCandidates } from '../money';
 import { normalizeReference } from '../reference';
 import { PROVIDER_PACKAGES } from '../registry';
@@ -5,6 +6,17 @@ import { parseManilaDateTime } from '../time';
 import { classifyNegative } from './filters';
 import { joinNotificationText, normalizeForHash } from './types';
 import type { NotificationAdapter, NotificationParseResult, NotificationText } from './types';
+
+/**
+ * Rails a notification can legitimately name. Anything else stays UNKNOWN
+ * rather than being guessed from the fact that money arrived.
+ */
+function railNamedIn(text: string): PaymentRail {
+  if (/InstaPay/i.test(text)) return 'INSTAPAY';
+  if (/PESONet/i.test(text)) return 'PESONET';
+  if (/Express\s+Send/i.test(text)) return 'EXPRESS_SEND';
+  return 'UNKNOWN';
+}
 
 export const GCASH_PARSER_ID = 'gcash.incoming.v1';
 export const GCASH_PARSER_VERSION = '1';
@@ -92,10 +104,10 @@ export const gcashAdapter: NotificationAdapter = {
         provider: 'GCASH',
         parserId: GCASH_PARSER_ID,
         parserVersion: GCASH_PARSER_VERSION,
-        // The notification does not reliably say which rail was used; Express Send is
-        // the only flow enabled for auto-match, and matching still requires the
-        // registry to approve the (receipt rail, namespace) pair.
-        paymentRail: 'EXPRESS_SEND',
+        // A "money received" notification does not say which rail was used, so
+        // the rail is only claimed when the text names one. The flow is resolved
+        // from the customer's confirmation instead — see autoMatchFlow().
+        paymentRail: railNamedIn(text),
         currency: 'PHP',
         amountCentavos,
         referenceNamespace: normalizedRef ? 'GCASH_REF_NO' : 'UNKNOWN',
