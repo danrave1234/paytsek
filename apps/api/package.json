@@ -1,0 +1,36 @@
+{
+  "name": "@payrecord/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PayRecord API (NestJS): auth, pairing, ingestion, records, reconciliation, billing, exports, worker.",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node dist/main.js",
+    "start:dev": "tsx watch src/main.ts",
+    "worker": "tsx src/worker.ts",
+    "test": "vitest run",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.4.15",
+    "@nestjs/core": "^10.4.15",
+    "@nestjs/platform-express": "^10.4.15",
+    "@payrecord/contracts": "workspace:*",
+    "@payrecord/receipt-parsers": "workspace:*",
+    "@supabase/supabase-js": "^2.47.10",
+    "jose": "^5.9.6",
+    "pg": "^8.13.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,3 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Nothing app-level here; ML Kit and EXIF libraries are declared in build.gradle. -->
+</manifest>

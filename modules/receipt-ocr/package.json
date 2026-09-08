@@ -1,0 +1,23 @@
+{
+  "name": "receipt-ocr",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Expo local module: on-device ML Kit Text Recognition v2 (Android + iOS) with bundled Latin model, plus iOS share-extension staging inbox.",
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "test": "echo \"receipt-ocr: native module; verified in device E2E (docs/testing.md)\" && exit 0"
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "expo-modules-core": "*",
+    "react-native": "*"
+  },
+  "devDependencies": {
+    "@expo/config-plugins": "^10.0.0",
+    "expo-modules-core": "~57.0.0",
+    "typescript": "^5.6.3"
+  }
+}

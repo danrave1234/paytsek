@@ -1,0 +1,23 @@
+{
+  "name": "payment-collector",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Expo local module: Android NotificationListenerService that captures supported wallet incoming-payment notifications into an encrypted outbox and uploads them with WorkManager.",
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "test": "echo \"payment-collector: Kotlin parity tests run via gradle in an Android build (see docs/testing.md)\" && exit 0"
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "expo-modules-core": "*",
+    "react-native": "*"
+  },
+  "devDependencies": {
+    "@expo/config-plugins": "^10.0.0",
+    "expo-modules-core": "~57.0.0",
+    "typescript": "^5.6.3"
+  }
+}
