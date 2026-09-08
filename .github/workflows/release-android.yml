@@ -89,7 +89,11 @@ jobs:
           echo "APK_URL=$(node -p "JSON.parse(require('fs').readFileSync('build.json','utf8'))[0].artifacts.buildUrl")" >> "$GITHUB_ENV"
 
       - name: Download APK
-        run: curl -L "$APK_URL" -o "PayRecord-${GITHUB_REF_NAME}.apk"
+        # A second, stable-named copy so payrecord.ph/download/android can link
+        # to a URL that never changes between releases.
+        run: |
+          curl -fL "$APK_URL" -o "PayRecord-${GITHUB_REF_NAME}.apk"
+          cp "PayRecord-${GITHUB_REF_NAME}.apk" PayRecord-latest.apk
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -97,4 +101,6 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: PayRecord ${{ github.ref_name }}
           generate_release_notes: true
-          files: PayRecord-${{ github.ref_name }}.apk
+          files: |
+            PayRecord-${{ github.ref_name }}.apk
+            PayRecord-latest.apk
