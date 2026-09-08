@@ -83,6 +83,34 @@ class PaymentCollectorModule : Module() {
       prefs.clear()
     }
 
+    /** Opt-in capture of unrecognised notification shapes (redacted, local only). */
+    AsyncFunction("setCaptureUnknownTemplates") { enabled: Boolean ->
+      prefs.captureUnknownTemplates = enabled
+      if (!enabled) TemplateSamples.clear(context)
+    }
+
+    AsyncFunction("isCaptureUnknownTemplates") { prefs.captureUnknownTemplates }
+
+    AsyncFunction("listTemplateSamples") {
+      TemplateSamples.list(context).map { s ->
+        mapOf(
+          "id" to s.id.toInt(),
+          "packageName" to s.packageName,
+          "provider" to s.provider,
+          "title" to s.title,
+          "text" to s.text,
+          "bigText" to s.bigText,
+          "lines" to s.lines,
+          "appVersionName" to s.appVersionName,
+          "capturedAt" to s.capturedAt,
+        )
+      }
+    }
+
+    AsyncFunction("exportTemplateSamples") { TemplateSamples.exportJson(context) }
+
+    AsyncFunction("clearTemplateSamples") { TemplateSamples.clear(context) }
+
     AsyncFunction("setPaused") { paused: Boolean ->
       prefs.paused = paused
       if (!paused) UploadWorker.enqueue(context, expedited = false)

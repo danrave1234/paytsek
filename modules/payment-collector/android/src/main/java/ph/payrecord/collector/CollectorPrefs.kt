@@ -46,6 +46,14 @@ class CollectorPrefs(context: Context) {
     get() = prefs.getBoolean("paused", false)
     set(v) = prefs.edit().putBoolean("paused", v).apply()
 
+  /**
+   * Opt-in capture of unrecognised notification shapes (redacted, local only).
+   * Off unless the owner turns it on; see TemplateSamples.
+   */
+  var captureUnknownTemplates: Boolean
+    get() = prefs.getBoolean("captureUnknownTemplates", false)
+    set(v) = prefs.edit().putBoolean("captureUnknownTemplates", v).apply()
+
   var unknownTemplateCount: Long
     get() = prefs.getLong("unknownTemplateCount", 0)
     set(v) = prefs.edit().putLong("unknownTemplateCount", v).apply()
