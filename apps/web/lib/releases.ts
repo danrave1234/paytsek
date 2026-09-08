@@ -36,8 +36,12 @@ export const GITHUB_RELEASES_URL = 'https://github.com/danrave1234/pay_record/re
 export const DOWNLOADS = {
   android: {
     playStoreUrl: process.env.NEXT_PUBLIC_PLAY_STORE_URL || null,
-    /** Direct APK for beta testers (signed release build). Defaults to the latest GitHub release. */
-    apkUrl: process.env.NEXT_PUBLIC_ANDROID_APK_URL || `${GITHUB_RELEASES_URL}/latest`,
+    /**
+     * Served from our own domain so nobody lands on a GitHub release page
+     * hunting for an asset; /download/android redirects to the stable-named
+     * APK that the release workflow publishes.
+     */
+    apkUrl: process.env.NEXT_PUBLIC_ANDROID_APK_URL || '/download/android',
     minOs: 'Android 8.0 (API 26) or newer',
   },
   ios: {

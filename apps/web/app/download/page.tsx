@@ -2,19 +2,16 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/page-header';
-import { DOWNLOADS, GITHUB_RELEASES_URL, latest } from '@/lib/releases';
+import { DOWNLOADS, latest } from '@/lib/releases';
 
 export const metadata: Metadata = { title: 'Download', description: 'Get PayRecord for Android and iPhone.' };
 
 const installSteps: ReactNode[] = [
   <>
-    Open the{' '}
-    <a className="ul" href={`${GITHUB_RELEASES_URL}/latest`} rel="noreferrer">
-      latest release
-    </a>{' '}
-    on the phone itself and tap the <span className="data">PayRecord-vX.Y.Z.apk</span> asset.
+    Open this page <em>on the Android phone itself</em> and tap <strong className="font-semibold text-ink">Download the APK</strong>.
+    The file saves to your Downloads folder.
   </>,
-  <>When Android asks, allow your browser to install unknown apps. This is a one-time prompt.</>,
+  <>Open it from the notification or your Downloads folder. When Android asks, allow your browser to install unknown apps — a one-time prompt.</>,
   <>
     Open PayRecord and sign in. On the phone that receives your payment notifications, also grant <em>Notification access</em>{' '}
     when the app asks.
@@ -89,7 +86,7 @@ export default function Download() {
               <span className="data text-[11px] text-ink-3">{DOWNLOADS.android.minOs}</span>
             </div>
             <p className="mt-3 max-w-lg text-[15px] leading-7 text-ink-2">
-              Required for the phone that receives your GCash, GoTyme or Maya notifications. It scans payment confirmations
+              Required for the phone that receives your GCash, GoTyme, Maya or MariBank notifications. It scans payment confirmations
               too, so one Android phone can do the whole job.
             </p>
           </div>
@@ -102,7 +99,7 @@ export default function Download() {
               <div className="text-[13px] leading-6 text-ink-3">
                 <p className="font-medium text-ink-2">Signed release build</p>
                 <p>
-                  <span className="data">v{rel.version}</span> · from GitHub Releases
+                  <span className="data">v{rel.version}</span> · Android 8.0+
                 </p>
               </div>
             </div>
