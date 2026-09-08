@@ -1,13 +1,19 @@
 import { gcashAdapter } from './gcash';
 import { gotymeAdapter } from './gotyme';
+import { maribankAdapter } from './maribank';
+import { mayaAdapter } from './maya';
 import type { NotificationAdapter, NotificationParseResult, NotificationText } from './types';
 
 export * from './types';
 export * from './filters';
 export { gcashAdapter, GCASH_PARSER_ID, GCASH_PARSER_VERSION } from './gcash';
 export { gotymeAdapter, GOTYME_PARSER_ID, GOTYME_PARSER_VERSION } from './gotyme';
+export { mayaAdapter, MAYA_PARSER_ID, MAYA_PARSER_VERSION } from './maya';
+export { maribankAdapter, MARIBANK_PARSER_ID, MARIBANK_PARSER_VERSION } from './maribank';
 
-export const NOTIFICATION_ADAPTERS: readonly NotificationAdapter[] = [gcashAdapter, gotymeAdapter];
+/** One adapter per supported wallet. Wallets without a verified template are
+ *  registered anyway and fail closed, so every known package resolves here. */
+export const NOTIFICATION_ADAPTERS: readonly NotificationAdapter[] = [gcashAdapter, gotymeAdapter, mayaAdapter, maribankAdapter];
 
 export function adapterForPackage(packageName: string): NotificationAdapter | null {
   return NOTIFICATION_ADAPTERS.find((a) => a.packages.includes(packageName)) ?? null;

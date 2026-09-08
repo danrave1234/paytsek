@@ -33,6 +33,14 @@ export function normalizeReference(namespace: ReferenceNamespace, raw: string): 
       if (!/^[A-Z0-9-]{6,40}$/.test(compact)) return null;
       return { namespace, value: compact, raw };
     }
+    case 'MARIBANK_REF_NO':
+    case 'MAYA_REF_NO': {
+      // No verified Maya or MariBank sample yet, so accept the same conservative
+      // alphanumeric shape as GoTyme rather than inventing a stricter rule
+      // that would silently drop valid references.
+      if (!/^[A-Z0-9-]{6,40}$/.test(compact)) return null;
+      return { namespace, value: compact, raw };
+    }
     case 'INSTAPAY_TRACE_NO':
     case 'PESONET_TRACE_NO': {
       if (!/^[A-Z0-9]{6,40}$/.test(compact.replace(/-/g, ''))) return null;
