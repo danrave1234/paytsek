@@ -9,6 +9,8 @@ function record(over: Partial<MatchRecordInput> = {}): MatchRecordInput {
   return {
     id: 'rec-1',
     receivingProvider: 'GCASH',
+    receiptProvider: 'GCASH',
+    paymentRail: 'EXPRESS_SEND',
     currency: 'PHP',
     amountCentavos: 125000,
     referenceNamespace: 'GCASH_REF_NO',
@@ -137,6 +139,28 @@ describe('matcher v1 — never auto-confirm on weak evidence', () => {
     if (d.kind === 'REVIEW') expect(d.timeBasis).toBe('CAPTURE_TIME');
     const far = decide(record({ receiptTransactionAt: null, receiptTransactionPrecision: 'DAY', referenceValue: null, referenceNamespace: null }), [event({ referenceValue: null, referenceNamespace: 'UNKNOWN', eventAt: plus(60 + 2000) })], cfg);
     expect(far.kind).toBe('NONE');
+  });
+
+  it('resolves the flow by the receipt rail, not by namespace alone', () => {
+    // Both GCash-to-GCash rails are enabled in the registry.
+    expect(decide(record({ paymentRail: 'EXPRESS_SEND' }), [event()], cfg).kind).toBe('AUTO');
+    expect(decide(record({ paymentRail: 'QR_P2P' }), [event()], cfg).kind).toBe('AUTO');
+
+    // Merchant QR shares the provider and namespace but its own flow is
+    // disabled, so it must go to Review rather than borrow an enabled rule.
+    const merchant = decide(record({ paymentRail: 'QR_MERCHANT' }), [event()], cfg);
+    expect(merchant.kind).toBe('REVIEW');
+    if (merchant.kind === 'REVIEW') expect(merchant.candidates[0]!.blockers).toContain('NO_COMPARABLE_NAMESPACE');
+  });
+
+  it('never auto-matches when the confirmation did not name a rail', () => {
+    const d = decide(record({ paymentRail: null }), [event()], cfg);
+    expect(d.kind).toBe('REVIEW');
+  });
+
+  it('never auto-matches a cross-provider flow', () => {
+    const d = decide(record({ receiptProvider: 'MAYA', paymentRail: 'INSTAPAY' }), [event()], cfg);
+    expect(d.kind).toBe('REVIEW');
   });
 
   it('no events -> NONE (shown as "No matching notification yet", never "failed")', () => {

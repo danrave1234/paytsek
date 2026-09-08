@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { CandidateEvent, CandidatesResponse, EvidenceState, Provider, ReferenceNamespace, TimePrecision } from '@payrecord/contracts';
+import type { CandidateEvent, CandidatesResponse, EvidenceState, PaymentRail, Provider, ReferenceNamespace, TimePrecision } from '@payrecord/contracts';
 import { loadEnv } from '../config/env';
 import { AuditService } from '../db/audit.service';
 import { DbService, isUniqueViolation, type Queryable } from '../db/db.service';
@@ -15,6 +15,8 @@ interface RecordRow {
   amount_centavos: string;
   reference_namespace: ReferenceNamespace | null;
   reference_value: string | null;
+  receipt_provider: Provider | null;
+  payment_rail: PaymentRail | null;
   receipt_status: MatchRecordInput['receiptStatus'];
   receipt_transaction_at: Date | null;
   receipt_transaction_precision: TimePrecision;
@@ -180,7 +182,7 @@ export class ReconcileService {
   private async loadRecord(q: Queryable, recordId: string, lock: boolean): Promise<RecordRow | null> {
     const r = await q.query<RecordRow>(
       `select r.id, r.organization_id, r.source_id, s.provider, r.currency, r.amount_centavos, r.reference_namespace, r.reference_value,
-              r.receipt_status, r.receipt_transaction_at, r.receipt_transaction_precision, r.captured_at, r.edited_fields, r.evidence_state,
+              r.receipt_provider, r.payment_rail, r.receipt_status, r.receipt_transaction_at, r.receipt_transaction_precision, r.captured_at, r.edited_fields, r.evidence_state,
               m.role as creator_role, s.require_owner_approval_for_staff_matches as require_owner_approval
          from payment_records r
          join payment_sources s on s.id = r.source_id
@@ -231,6 +233,8 @@ function toMatchInput(r: RecordRow): MatchRecordInput {
   return {
     id: r.id,
     receivingProvider: r.provider,
+    receiptProvider: r.receipt_provider,
+    paymentRail: r.payment_rail,
     currency: r.currency,
     amountCentavos: Number(r.amount_centavos),
     referenceNamespace: r.reference_namespace,
