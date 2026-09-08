@@ -1,63 +1,87 @@
 import type { Metadata, Viewport } from 'next';
+import { Fraunces, IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { latest } from '@/lib/releases';
 import './globals.css';
 
+const fraunces = Fraunces({ subsets: ['latin'], variable: '--font-fraunces', axes: ['opsz', 'SOFT'], display: 'swap' });
+const plexSans = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-plex-sans', display: 'swap' });
+const plexMono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '600'], variable: '--font-plex-mono', display: 'swap' });
+
 export const metadata: Metadata = {
-  title: { default: 'PayRecord — keep every GCash/GoTyme payment on record', template: '%s · PayRecord' },
+  title: { default: 'PayRecord — a paper trail for GCash & GoTyme payments', template: '%s · PayRecord' },
   description: 'Scan a payment proof, keep an organized record, and match it with incoming-payment evidence from your own Android phone. Built for Philippine sellers.',
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://payrecord.ph'),
-  openGraph: { title: 'PayRecord', description: 'Scan a payment proof, keep an organized record, and match it with incoming-payment evidence.', type: 'website' },
+  openGraph: { title: 'PayRecord', description: 'A paper trail for GCash & GoTyme payments.', type: 'website' },
 };
 
-export const viewport: Viewport = { themeColor: '#0b5fff', width: 'device-width', initialScale: 1 };
+export const viewport: Viewport = { themeColor: '#f4efe6', width: 'device-width', initialScale: 1 };
 
 const nav = [
-  { href: '/', label: 'Home' },
   { href: '/updates', label: 'Updates' },
   { href: '/download', label: 'Download' },
   { href: '/support', label: 'Support' },
 ];
 
 export default function RootLayout({ children }: { children: ReactNode }) {
+  const rel = latest();
   return (
-    <html lang="en">
-      <body className="min-h-dvh flex flex-col">
-        <header className="sticky top-0 z-20 border-b border-line/70 bg-white/85 backdrop-blur dark:bg-[#0b1220]/85 dark:border-slate-800">
-          <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
-            <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
-              <span className="inline-block size-7 rounded-lg bg-brand" aria-hidden />
-              PayRecord
+    <html lang="en" className={`${fraunces.variable} ${plexSans.variable} ${plexMono.variable}`}>
+      <body className="flex min-h-dvh flex-col font-sans">
+        <header className="border-b-2 border-ink">
+          <div className="mx-auto flex max-w-6xl items-stretch justify-between px-4">
+            <Link href="/" className="flex items-center gap-3 py-4 pr-6 sm:border-r border-rule">
+              <span aria-hidden className="grid size-9 place-items-center border-2 border-ink font-display text-xl font-semibold leading-none">₱</span>
+              <span className="leading-tight">
+                <span className="block font-display text-xl font-semibold tracking-tight">PayRecord</span>
+                <span className="eyebrow block">Est. 2026 · Manila</span>
+              </span>
             </Link>
-            <nav aria-label="Main" className="flex items-center gap-1 text-sm">
-              {nav.map((n) => (
-                <Link key={n.href} href={n.href} className="rounded-lg px-3 py-2 hover:bg-brand-soft/60 dark:hover:bg-slate-800">
+            <nav aria-label="Main" className="flex items-center gap-5 font-mono text-[13px] uppercase tracking-[0.14em]">
+              {nav.map((n, i) => (
+                <Link key={n.href} href={n.href} className="hidden py-4 hover:text-stamp sm:block">
+                  <span className="mr-1.5 text-ink-3">{String(i + 1).padStart(2, '0')}</span>
                   {n.label}
                 </Link>
               ))}
-              <Link href="/download" className="ml-2 rounded-lg bg-brand px-3 py-2 font-medium text-white hover:bg-brand-dark">
-                Get the app
+              <Link href="/download" className="my-3 bg-ink px-3 py-2 text-paper hover:bg-stamp">
+                Get v{rel.version}
               </Link>
             </nav>
           </div>
         </header>
+
         <main className="flex-1">{children}</main>
-        <footer className="border-t border-line/70 dark:border-slate-800">
-          <div className="mx-auto grid max-w-5xl gap-6 px-4 py-10 text-sm text-muted dark:text-slate-400 sm:grid-cols-3">
+
+        <footer className="mt-24 border-t-2 border-dashed border-rule">
+          <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-[1.4fr_1fr_1fr]">
             <div>
-              <p className="font-semibold text-ink dark:text-slate-100">PayRecord</p>
-              <p className="mt-2">Recordkeeping for sellers who get paid through GCash and GoTyme. Not affiliated with, endorsed by, or verified by GCash, GoTyme, or any bank.</p>
+              <p className="font-display text-2xl font-semibold">PayRecord</p>
+              <p className="mt-3 max-w-sm text-sm leading-6 text-ink-2">
+                Recordkeeping for sellers who get paid through GCash and GoTyme. We never touch the money. Not affiliated with, endorsed by, or verified by GCash, GoTyme, or any bank.
+              </p>
             </div>
-            <div className="flex flex-col gap-2">
-              <Link href="/privacy">Privacy policy</Link>
-              <Link href="/terms">Terms of use</Link>
-              <Link href="/support">Support & account deletion</Link>
+            <div className="text-sm">
+              <p className="eyebrow mb-3">Legal</p>
+              <ul className="space-y-2">
+                <li><Link className="ul" href="/privacy">Privacy policy</Link></li>
+                <li><Link className="ul" href="/terms">Terms of use</Link></li>
+                <li><Link className="ul" href="/support">Support &amp; account deletion</Link></li>
+              </ul>
             </div>
-            <div className="flex flex-col gap-2">
-              <Link href="/updates">Release updates</Link>
-              <Link href="/download">Downloads</Link>
-              <a href="https://github.com" rel="noreferrer">Source & status</a>
+            <div className="text-sm">
+              <p className="eyebrow mb-3">Product</p>
+              <ul className="space-y-2">
+                <li><Link className="ul" href="/updates">Release notes</Link></li>
+                <li><Link className="ul" href="/download">Downloads</Link></li>
+                <li><a className="ul" href="https://github.com/danrave1234/pay_record/releases" rel="noreferrer">GitHub releases</a></li>
+              </ul>
             </div>
+          </div>
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 pb-8 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3">
+            <span>*** Thank you for keeping records ***</span>
+            <span>v{rel.version} · {rel.date}</span>
           </div>
         </footer>
       </body>

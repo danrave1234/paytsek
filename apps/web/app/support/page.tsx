@@ -13,25 +13,31 @@ const faq = [
 
 export default function Support() {
   return (
-    <section className="mx-auto max-w-3xl px-4 py-14">
-      <h1 className="text-3xl font-semibold tracking-tight">Support</h1>
-      <p className="mt-2 text-muted dark:text-slate-300">Email <a className="underline" href="mailto:support@payrecord.ph">support@payrecord.ph</a>. Include your workspace name and app version (Settings → bottom of screen). Never send your MPIN, OTP or wallet password — we will never ask for them.</p>
+    <section className="mx-auto max-w-3xl px-4 py-16">
+      <p className="eyebrow">Help desk</p>
+      <h1 className="mt-3 font-display text-4xl font-semibold tracking-tight sm:text-5xl">Support</h1>
+      <p className="mt-5 leading-7 text-ink-2">
+        Email <a className="ul" href="mailto:support@payrecord.ph">support@payrecord.ph</a>. Include your workspace name and app version (Settings → bottom of screen). Never send your MPIN, OTP or wallet password — we will never ask for them.
+      </p>
 
-      <h2 className="mt-10 text-xl font-semibold">Delete your account or data</h2>
-      <ol className="mt-3 list-decimal space-y-2 pl-6 text-sm">
+      <h2 className="mt-12 border-t-2 border-ink pt-6 font-display text-2xl font-semibold">Delete your account or data</h2>
+      <ol className="mt-4 list-decimal space-y-2 pl-6 text-[15px] leading-7">
         <li>Open PayRecord → Settings → Privacy &amp; data.</li>
         <li>Tap <em>Export my personal data</em> if you want a copy first.</li>
         <li>Tap <em>Delete my account</em> and type DELETE. Sole workspace owners must transfer ownership or delete the workspace first.</li>
-        <li>If you can no longer sign in, email <a className="underline" href="mailto:support@payrecord.ph?subject=Account%20deletion">support@payrecord.ph</a> from the account email and we will complete the deletion within 30 days.</li>
+        <li>If you can no longer sign in, email <a className="ul" href="mailto:support@payrecord.ph?subject=Account%20deletion">support@payrecord.ph</a> from the account email and we will complete the deletion within 30 days.</li>
       </ol>
-      <p className="mt-3 text-sm text-muted dark:text-slate-300">Deletion removes your profile, memberships and personal data. Business records you created remain with the workspace without your name, as required for the owner&apos;s recordkeeping.</p>
+      <p className="mt-4 text-sm leading-6 text-ink-2">Deletion removes your profile, memberships and personal data. Business records you created remain with the workspace without your name, as required for the owner&apos;s recordkeeping.</p>
 
-      <h2 className="mt-10 text-xl font-semibold">Frequently asked</h2>
-      <dl className="mt-4 space-y-5">
-        {faq.map((f) => (
-          <div key={f.q} className="rounded-xl border border-line p-4 dark:border-slate-800">
-            <dt className="font-medium">{f.q}</dt>
-            <dd className="mt-1.5 text-sm text-muted dark:text-slate-300">{f.a}</dd>
+      <h2 className="mt-12 border-t-2 border-ink pt-6 font-display text-2xl font-semibold">Frequently asked</h2>
+      <dl className="mt-2">
+        {faq.map((f, i) => (
+          <div key={f.q} className="grid gap-2 border-b border-dashed border-rule py-5 sm:grid-cols-[3.5rem_1fr]">
+            <span className="font-mono text-sm text-ink-3">Q{String(i + 1).padStart(2, '0')}</span>
+            <div>
+              <dt className="font-display text-lg font-semibold leading-snug">{f.q}</dt>
+              <dd className="mt-2 text-[15px] leading-7 text-ink-2">{f.a}</dd>
+            </div>
           </div>
         ))}
       </dl>

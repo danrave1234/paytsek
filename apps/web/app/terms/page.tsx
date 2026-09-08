@@ -4,9 +4,10 @@ export const metadata: Metadata = { title: 'Terms of use' };
 
 export default function Terms() {
   return (
-    <article className="mx-auto max-w-3xl px-4 py-14 text-[15px] leading-7 [&_h2]:mt-8 [&_h2]:text-xl [&_h2]:font-semibold [&_ul]:list-disc [&_ul]:pl-6">
-      <h1 className="text-3xl font-semibold tracking-tight">Terms of use</h1>
-      <p className="text-muted dark:text-slate-300">Last updated 8 September 2026.</p>
+    <article className="mx-auto max-w-3xl px-4 py-16 text-[15px] leading-7 [&_h2]:mt-10 [&_h2]:border-t [&_h2]:border-rule [&_h2]:pt-6 [&_h2]:font-display [&_h2]:text-2xl [&_h2]:font-semibold [&_p]:mt-3 [&_ul]:mt-3 [&_ul]:list-disc [&_ul]:pl-6 [&_li]:mt-1 [&_a]:underline [&_a]:decoration-rule [&_a]:decoration-2 [&_a]:underline-offset-4">
+      <p className="eyebrow">Legal · 02</p>
+      <h1 className="mt-3 font-display text-4xl font-semibold tracking-tight sm:text-5xl">Terms of use</h1>
+      <p className="text-ink-2">Last updated 8 September 2026.</p>
 
       <h2>What PayRecord is</h2>
       <p>PayRecord is recordkeeping software. It stores payment proofs you capture and, where you enable it, incoming-payment notification evidence from your own Android phone, and shows whether the two agree. It is not a payment processor, wallet, escrow, bank, or fraud-prevention service, and it does not move money.</p>

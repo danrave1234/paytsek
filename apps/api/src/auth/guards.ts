@@ -2,7 +2,7 @@ import { CanActivate, ExecutionContext, Injectable, SetMetadata } from '@nestjs/
 import { Reflector } from '@nestjs/core';
 import { WORKSPACE_HEADER, type MembershipRole } from '@payrecord/contracts';
 import type { Request } from 'express';
-import { jwtVerify } from 'jose';
+import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import { ApiException } from '../common/errors';
 import { loadEnv } from '../config/env';
 import { DbService } from '../db/db.service';
@@ -33,10 +33,36 @@ export type AuthedRequest = Request & {
   collector?: CollectorContext;
 };
 
-/** Verifies the Supabase Auth access token (HS256). */
+/**
+ * Verifies the Supabase Auth access token. Projects created with asymmetric
+ * signing keys (ES256/RS256) are verified against the project's JWKS; legacy
+ * projects with a shared HS256 secret are verified with `SUPABASE_JWT_SECRET`.
+ */
 @Injectable()
 export class UserAuthGuard implements CanActivate {
-  private readonly secret = new TextEncoder().encode(loadEnv().SUPABASE_JWT_SECRET);
+  private readonly secret: Uint8Array | null;
+  private readonly jwks: JWTVerifyGetKey;
+
+  constructor() {
+    const env = loadEnv();
+    this.secret = env.SUPABASE_JWT_SECRET ? new TextEncoder().encode(env.SUPABASE_JWT_SECRET) : null;
+    this.jwks = createRemoteJWKSet(new URL('/auth/v1/.well-known/jwks.json', env.SUPABASE_URL));
+  }
+
+  private async verify(token: string) {
+    const alg = (() => {
+      try {
+        return JSON.parse(Buffer.from(token.split('.')[0] ?? '', 'base64url').toString('utf8')).alg as string | undefined;
+      } catch {
+        return undefined;
+      }
+    })();
+    if (alg === 'HS256') {
+      if (!this.secret) throw new Error('HS256 token but SUPABASE_JWT_SECRET is not configured');
+      return jwtVerify(token, this.secret, { algorithms: ['HS256'] });
+    }
+    return jwtVerify(token, this.jwks, { algorithms: ['ES256', 'RS256'] });
+  }
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
     const req = ctx.switchToHttp().getRequest<AuthedRequest>();
@@ -44,7 +70,7 @@ export class UserAuthGuard implements CanActivate {
     const [scheme, token] = header.split(' ');
     if (scheme !== 'Bearer' || !token) throw new ApiException('UNAUTHENTICATED', 'Missing bearer token');
     try {
-      const { payload } = await jwtVerify(token, this.secret, { algorithms: ['HS256'] });
+      const { payload } = await this.verify(token);
       if (typeof payload.sub !== 'string') throw new Error('no sub');
       if (payload.aud && payload.aud !== 'authenticated' && !(Array.isArray(payload.aud) && payload.aud.includes('authenticated'))) {
         throw new Error('bad aud');

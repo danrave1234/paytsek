@@ -7,8 +7,8 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/main.js",
-    "start:dev": "tsx watch src/main.ts",
-    "worker": "tsx src/worker.ts",
+    "start:dev": "node --watch --env-file=../../.env -r ts-node/register/transpile-only src/main.ts",
+    "worker": "node --env-file=../../.env -r ts-node/register/transpile-only src/worker.ts",
     "test": "vitest run",
     "lint": "tsc -p tsconfig.json --noEmit"
   },
@@ -29,6 +29,7 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
+    "ts-node": "^10.9.2",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"
