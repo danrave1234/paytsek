@@ -27,6 +27,19 @@ jobs:
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
+      # An empty EXPO_TOKEN makes expo-github-action *skip* authentication and
+      # report success, so the run only fails later at `eas build` with a
+      # misleading "no account" error. Fail here instead, with the reason.
+      - name: Check EXPO_TOKEN is set
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "::error::EXPO_TOKEN is empty or unset. Set it with:"
+            echo "::error::  gh secret set EXPO_TOKEN --repo ${{ github.repository }} --body <token>"
+            echo "::error::Generate one at https://expo.dev/settings/access-tokens"
+            exit 1
+          fi
+          echo "EXPO_TOKEN is present (${#EXPO_TOKEN} characters)."
+
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
