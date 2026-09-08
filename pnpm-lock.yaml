@@ -184,6 +184,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@payrecord/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@payrecord/receipt-parsers':
+        specifier: workspace:*
+        version: link:../../packages/receipt-parsers
       next:
         specifier: ^16.3.3
         version: 16.3.4(@types/node@22.20.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
