@@ -3,11 +3,14 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   FLOW_REGISTRY,
+  NOTIFICATION_ADAPTERS,
+  PROVIDER_PACKAGES,
+  adapterForPackage,
   autoMatchFlowsForReceivingProvider,
   extractReceiptFields,
   findMoneyCandidates,
   formatCentavos,
-  namespacesComparable,
+  autoMatchFlow,
   normalizeReference,
   parseManilaDateTime,
   parseMoneyExact,
@@ -96,10 +99,157 @@ describe('capability registry', () => {
   });
 
   it('never invents cross-provider reference mapping', () => {
-    expect(namespacesComparable('GOTYME_REF_NO', 'GCASH_REF_NO', 'GCASH').comparable).toBe(false);
-    expect(namespacesComparable('GCASH_REF_NO', 'GCASH_REF_NO', 'GCASH').comparable).toBe(true);
-    expect(namespacesComparable(null, 'GCASH_REF_NO', 'GCASH').comparable).toBe(false);
+    const gcashToGcash = {
+      receiptProvider: 'GCASH',
+      receivingProvider: 'GCASH',
+      rail: 'EXPRESS_SEND',
+      receiptNamespace: 'GCASH_REF_NO',
+      notificationNamespace: 'GCASH_REF_NO',
+    } as const;
+
+    expect(autoMatchFlow(gcashToGcash).comparable).toBe(true);
+    expect(autoMatchFlow({ ...gcashToGcash, receiptProvider: 'GOTYME', receiptNamespace: 'GOTYME_REF_NO' }).comparable).toBe(false);
+    expect(autoMatchFlow({ ...gcashToGcash, receiptNamespace: null }).reason).toBe('MISSING_REFERENCE');
     expect(autoMatchFlowsForReceivingProvider('GOTYME')).toEqual([]);
+  });
+
+  it('resolves the flow by rail, so an untested rail cannot borrow an enabled one', () => {
+    const base = {
+      receiptProvider: 'GCASH',
+      receivingProvider: 'GCASH',
+      receiptNamespace: 'GCASH_REF_NO',
+      notificationNamespace: 'GCASH_REF_NO',
+    } as const;
+
+    expect(autoMatchFlow({ ...base, rail: 'EXPRESS_SEND' }).flowId).toBe('gcash-to-gcash.express-send');
+    expect(autoMatchFlow({ ...base, rail: 'QR_P2P' })).toMatchObject({
+      comparable: true,
+      flowId: 'gcash-to-gcash.qr-p2p',
+    });
+    // Merchant QR shares the namespace but its notification carries no
+    // reference, so it must never borrow an enabled rail's rule.
+    expect(autoMatchFlow({ ...base, rail: 'QR_MERCHANT' })).toMatchObject({
+      comparable: false,
+      flowId: 'gcash-to-gcash.qr-merchant',
+      reason: 'FLOW_NOT_ENABLED',
+    });
+    // A rail with no registered flow is never guessed at.
+    expect(autoMatchFlow({ ...base, rail: 'PESONET' }).reason).toBe('UNKNOWN_FLOW');
+    expect(autoMatchFlow({ ...base, rail: null }).reason).toBe('UNKNOWN_FLOW');
+  });
+
+  it('records Maya but never auto-matches it without a verified sample', () => {
+    expect(autoMatchFlowsForReceivingProvider('MAYA')).toEqual([]);
+    expect(
+      autoMatchFlow({
+        receiptProvider: 'MAYA',
+        receivingProvider: 'MAYA',
+        rail: 'QR_P2P',
+        receiptNamespace: 'MAYA_REF_NO',
+        notificationNamespace: 'MAYA_REF_NO',
+      }).comparable,
+    ).toBe(false);
+    expect(
+      autoMatchFlow({
+        receiptProvider: 'MAYA',
+        receivingProvider: 'GCASH',
+        rail: 'INSTAPAY',
+        receiptNamespace: 'MAYA_REF_NO',
+        notificationNamespace: 'GCASH_REF_NO',
+      }).comparable,
+    ).toBe(false);
+  });
+});
+
+describe('wallet coverage', () => {
+  const WALLETS = ['GCASH', 'GOTYME', 'MAYA', 'MARIBANK'] as const;
+
+  it('registers one notification adapter per supported wallet', () => {
+    expect(NOTIFICATION_ADAPTERS.map((a) => a.provider).sort()).toEqual([...WALLETS].sort());
+  });
+
+  it('resolves every allowlisted package to its adapter', () => {
+    for (const wallet of WALLETS) {
+      for (const pkg of PROVIDER_PACKAGES[wallet]) {
+        expect(adapterForPackage(pkg)?.provider).toBe(wallet);
+      }
+    }
+  });
+
+  it('rejects unsupported wallets as UNKNOWN_TEMPLATE, not UNKNOWN_PACKAGE', () => {
+    // The Kotlin parser reports UNKNOWN_TEMPLATE for these, and only that
+    // reason is eligible for opt-in shape capture — so the two must agree.
+    for (const wallet of ['GOTYME', 'MAYA', 'MARIBANK'] as const) {
+      const res = parseNotification({
+        packageName: PROVIDER_PACKAGES[wallet][0]!,
+        title: 'Anything',
+        text: 'You have received PHP 1,250.00',
+        bigText: null,
+        textLines: [],
+        isGroupSummary: false,
+      });
+      expect(res).toEqual({ ok: false, reason: 'UNKNOWN_TEMPLATE' });
+    }
+  });
+
+  it('rejects a wallet that is not on the allowlist at all', () => {
+    const res = parseNotification({
+      packageName: 'com.example.otherbank',
+      title: 'You have received PHP 1,250.00',
+      text: null,
+      bigText: null,
+      textLines: [],
+      isGroupSummary: false,
+    });
+    expect(res).toEqual({ ok: false, reason: 'UNKNOWN_PACKAGE' });
+  });
+});
+
+describe('MariBank recording support', () => {
+  it('detects both the MariBank and legacy SeaBank brands', () => {
+    for (const brand of ['MariBank', 'SeaBank']) {
+      const r = extractReceiptFields(`${brand}
+Transfer Successful
+Amount PHP 480.00
+Reference No. MB99887766
+Sent to Aling Nena`);
+      expect(r.fields.receiptProvider).toBe('MARIBANK');
+      expect(r.fields.referenceNamespace).toBe('MARIBANK_REF_NO');
+      expect(r.fields.amountCentavos).toBe(48000);
+    }
+  });
+
+  it('never auto-matches MariBank without a verified sample', () => {
+    expect(autoMatchFlowsForReceivingProvider('MARIBANK')).toEqual([]);
+    expect(
+      autoMatchFlow({
+        receiptProvider: 'MARIBANK',
+        receivingProvider: 'MARIBANK',
+        rail: 'QR_P2P',
+        receiptNamespace: 'MARIBANK_REF_NO',
+        notificationNamespace: 'MARIBANK_REF_NO',
+      }),
+    ).toMatchObject({ comparable: false, reason: 'FLOW_NOT_ENABLED' });
+  });
+});
+
+describe('Maya recording support', () => {
+  it('detects the Maya brand and files the reference in its own namespace', () => {
+    const r = extractReceiptFields('Maya\nPayment Successful\nAmount ₱1,250.00\nReference No. MYA123456789\nSent to Aling Nena');
+    expect(r.fields.receiptProvider).toBe('MAYA');
+    expect(r.fields.referenceNamespace).toBe('MAYA_REF_NO');
+    expect(r.fields.referenceValue).toBe('MYA123456789');
+    expect(r.fields.amountCentavos).toBe(125000);
+  });
+
+  it('stays unknown when a confirmation names two wallets outside the header', () => {
+    const r = extractReceiptFields('Payment Successful\nAmount ₱100.00\nFrom Maya wallet\nSent to GCash account');
+    expect(r.fields.receiptProvider).toBeNull();
+  });
+
+  it('normalizes a Maya reference only within MAYA_REF_NO', () => {
+    expect(normalizeReference('MAYA_REF_NO', 'mya 1234 5678')?.value).toBe('MYA12345678');
+    expect(normalizeReference('MAYA_REF_NO', 'abc')).toBeNull();
   });
 });
 
