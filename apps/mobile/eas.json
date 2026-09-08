@@ -1,0 +1,42 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "base": {
+      "node": "22.14.0",
+      "credentialsSource": "local",
+      "pnpm": "11.9.0",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://fymjaminsjsfiihkzith.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_eHGjm08XiVwacRd9djfjIw_JRJRAr7w"
+      }
+    },
+    "development": {
+      "extends": "base",
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "ios": { "simulator": true },
+      "env": { "EXPO_PUBLIC_API_URL": "http://10.0.2.2:3000" }
+    },
+    "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": { "EXPO_PUBLIC_API_URL": "https://api.payrecord.ph" }
+    },
+    "production": {
+      "extends": "base",
+      "autoIncrement": true,
+      "android": { "buildType": "app-bundle" },
+      "env": { "EXPO_PUBLIC_API_URL": "https://api.payrecord.ph" }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
+
+

@@ -29,11 +29,14 @@ export const RELEASES: Release[] = [
   },
 ];
 
+/** GitHub Releases: the release-android workflow attaches a signed APK to every v* tag. */
+export const GITHUB_RELEASES_URL = 'https://github.com/danrave1234/pay_record/releases';
+
 export const DOWNLOADS = {
   android: {
     playStoreUrl: process.env.NEXT_PUBLIC_PLAY_STORE_URL || null,
-    /** Direct APK for closed beta testers (signed release build). */
-    apkUrl: process.env.NEXT_PUBLIC_ANDROID_APK_URL || null,
+    /** Direct APK for beta testers (signed release build). Defaults to the latest GitHub release. */
+    apkUrl: process.env.NEXT_PUBLIC_ANDROID_APK_URL || `${GITHUB_RELEASES_URL}/latest`,
     minOs: 'Android 8.0 (API 26) or newer',
   },
   ios: {

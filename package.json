@@ -16,6 +16,9 @@
     "api:worker": "pnpm --filter @payrecord/api run worker",
     "mobile:start": "pnpm --filter @payrecord/mobile run start",
     "db:migrate": "supabase db push",
+    "db:migrate:direct": "node supabase/apply-migrations.mjs",
+    "db:check": "node supabase/check-db.mjs",
+    "db:smoke": "node supabase/smoke-auth.mjs",
     "db:reset": "supabase db reset"
   },
   "devDependencies": {
