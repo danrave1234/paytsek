@@ -75,7 +75,7 @@ export default function SignIn() {
         <Button mode="contained" loading={busy} disabled={busy} onPress={() => void submit()} style={{ minHeight: TOUCH_TARGET }}>{mode === 'signin' ? 'Sign in' : 'Create account'}</Button>
       )}
       <Text variant="bodySmall" style={{ marginTop: 16, opacity: 0.7 }}>
-        PayRecord never asks for your GCash/GoTyme MPIN, OTP, or wallet login. It only records receipts and, with your permission, reads payment notifications on your own Android phone.
+        PayRecord never asks for your GCash, GoTyme or Maya MPIN, OTP, or wallet login. It only records the payment confirmations you scan and, with your permission, reads payment notifications on your own Android phone.
       </Text>
     </Screen>
   );

@@ -4,12 +4,13 @@ import React, { useEffect, useState } from 'react';
 import { FlatList, View } from 'react-native';
 import { Card, Chip, Searchbar, Text, useTheme } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { EmptyState, ErrorState, Loading, Notice, StateChip, SyncChip } from '@/components/ui';
+import { EmptyState, ErrorState, Loading, Notice, ScreenTitle, StateChip, SyncChip } from '@/components/ui';
 import { listDrafts, type Draft } from '@/lib/drafts';
 import { manilaTime, peso } from '@/lib/format';
 import { useRecords } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import { OfflineError } from '@/lib/api';
+import { RADIUS, SPACING } from '@/theme';
 
 const FILTERS: { key: EvidenceState | 'ALL'; label: string }[] = [
   { key: 'ALL', label: 'All' },
@@ -46,9 +47,16 @@ export default function Records() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
-      <View style={{ padding: 16, gap: 10 }}>
-        <Text variant="headlineSmall">Records</Text>
-        <Searchbar placeholder="Reference, customer, note, sender" value={q} onChangeText={setQ} />
+      <View style={{ padding: SPACING.lg, gap: SPACING.md }}>
+        <ScreenTitle title="Records" />
+        <Searchbar
+          placeholder="Reference, customer, note, sender"
+          value={q}
+          onChangeText={setQ}
+          elevation={0}
+          style={{ backgroundColor: theme.colors.elevation.level2, borderRadius: RADIUS.md }}
+          inputStyle={{ minHeight: 0 }}
+        />
         <FlatList horizontal showsHorizontalScrollIndicator={false} data={FILTERS} keyExtractor={(f) => f.key} contentContainerStyle={{ gap: 8 }}
           renderItem={({ item }) => <Chip selected={filter === item.key} onPress={() => setFilter(item.key)} showSelectedCheck={false}>{item.label}</Chip>} />
         {offline ? <Notice kind="warning">Offline — showing last synced list. Evidence states may be stale.</Notice> : null}
@@ -62,12 +70,12 @@ export default function Records() {
         onEndReached={() => { if (query.data?.nextCursor && !query.isFetching) setCursor(query.data.nextCursor); }}
         ListHeaderComponent={drafts.length ? (
           <View style={{ gap: 10, marginBottom: 6 }}>
-            <Text variant="titleSmall">On this phone (not yet synced)</Text>
+            <Text variant="titleSmall" style={{ color: theme.colors.onSurfaceVariant, fontWeight: '700' }}>On this phone (not yet synced)</Text>
             {drafts.map((d) => (
               <Card key={d.clientRecordId} mode="outlined">
                 <Card.Content style={{ gap: 6 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text variant="titleMedium">{peso(d.request.corrected.amountCentavos)}</Text>
+                    <Text variant="titleMedium" style={{ fontWeight: '700', letterSpacing: -0.3 }}>{peso(d.request.corrected.amountCentavos)}</Text>
                     <SyncChip status={d.syncStatus} quotaBlocked={d.quotaBlocked} />
                   </View>
                   <Text variant="bodySmall" style={{ opacity: 0.7 }}>{manilaTime(d.createdAt)} · {d.request.corrected.referenceValue ?? 'no reference'}</Text>
@@ -82,7 +90,7 @@ export default function Records() {
           <Card mode="outlined" onPress={() => router.push(`/record/${item.id}`)} accessibilityRole="button">
             <Card.Content style={{ gap: 6 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text variant="titleMedium">{peso(item.amountCentavos)}</Text>
+                <Text variant="titleMedium" style={{ fontWeight: '700', letterSpacing: -0.3 }}>{peso(item.amountCentavos)}</Text>
                 <StateChip state={item.evidenceState} compact />
               </View>
               <Text variant="bodySmall" style={{ opacity: 0.8 }}>

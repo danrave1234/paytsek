@@ -169,7 +169,7 @@ export default function Scan() {
             Receipt shows fee {fields.feeCentavos !== null ? peso(fields.feeCentavos) : '—'} · total charged {fields.totalChargedCentavos !== null ? peso(fields.totalChargedCentavos) : '—'} (kept separate from the amount received).
           </Text>
         ) : null}
-        <TextInput label="Reference number" mode="outlined" value={fields.referenceValue ?? ''} onChangeText={(v) => setFields({ ...fields, referenceValue: v || null, referenceNamespace: v ? (fields.referenceNamespace ?? (fields.receiptProvider === 'GOTYME' ? 'GOTYME_REF_NO' : 'GCASH_REF_NO')) : null })} autoCapitalize="characters" />
+        <TextInput label="Reference number" mode="outlined" value={fields.referenceValue ?? ''} onChangeText={(v) => setFields({ ...fields, referenceValue: v || null, referenceNamespace: v ? (fields.referenceNamespace ?? (fields.receiptProvider === 'GOTYME' ? 'GOTYME_REF_NO' : fields.receiptProvider === 'MAYA' ? 'MAYA_REF_NO' : 'GCASH_REF_NO')) : null })} autoCapitalize="characters" />
         <TextInput label="Sender (payer) name — as printed" mode="outlined" value={fields.payerName ?? ''} onChangeText={(v) => setFields({ ...fields, payerName: v || null })} />
         <TextInput label="Recipient (you) — as printed" mode="outlined" value={fields.payeeName ?? ''} onChangeText={(v) => setFields({ ...fields, payeeName: v || null })} />
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>

@@ -52,7 +52,7 @@ export default function Privacy() {
           <Row label="Export files" value="24 hours" />
         </Card.Content>
       </Card>
-      <Notice kind="info">A notification match means PayRecord saw a matching notification on your phone. It is not a confirmation from GCash, GoTyme or any bank.</Notice>
+      <Notice kind="info">A notification match means PayRecord saw a matching notification on your phone. It is not a confirmation from GCash, GoTyme, Maya or any bank.</Notice>
       <Button mode="outlined" onPress={() => void exportData()}>Export my personal data</Button>
       {isOwner ? <Button mode="outlined" textColor="#B3261E" onPress={() => setDialog('workspace')}>Delete workspace "{workspace?.name}"</Button> : null}
       <Button mode="outlined" textColor="#B3261E" onPress={() => setDialog('account')}>Delete my account</Button>
