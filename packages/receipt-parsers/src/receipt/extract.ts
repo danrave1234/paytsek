@@ -39,21 +39,27 @@ const PHONE_RE = /(?:\+?63|0)\s?9\d{2}[\s-]?\d{3}[\s-]?\d{4}/;
 
 const GCASH_BRAND = /\bGCash\b|\bExpress\s+Send\b|\bGlobe\s+Fintech\b/i;
 const GOTYME_BRAND = /\bGoTyme\b|\bGo\s*Tyme\b/i;
+const MAYA_BRAND = /\bMaya\b|\bPayMaya\b|\bVoyager\s+Innovations\b/i;
+/** MariBank PH is the rebranded SeaBank Philippines; confirmations may say either. */
+const MARIBANK_BRAND = /\bMariBank\b|\bMari\s+Bank\b|\bSeaBank\b|\bSea\s+Bank\b/i;
+
+const BRANDS: readonly (readonly [Provider, RegExp])[] = [
+  ['GCASH', GCASH_BRAND],
+  ['GOTYME', GOTYME_BRAND],
+  ['MAYA', MAYA_BRAND],
+  ['MARIBANK', MARIBANK_BRAND],
+];
 
 function detectProvider(lines: string[]): Provider | null {
-  const text = lines.join('\n');
-  const gcash = GCASH_BRAND.test(text);
-  const gotyme = GOTYME_BRAND.test(text);
-  if (gcash && !gotyme) return 'GCASH';
-  if (gotyme && !gcash) return 'GOTYME';
-  if (gcash && gotyme) {
-    // A transfer receipt often names the destination wallet too (e.g. GoTyme -> GCash).
+  const matching = (scope: string) => BRANDS.filter(([, re]) => re.test(scope)).map(([provider]) => provider);
+
+  const whole = matching(lines.join('\n'));
+  if (whole.length === 1) return whole[0]!;
+  if (whole.length > 1) {
+    // A confirmation often names the destination wallet too (e.g. GoTyme -> GCash).
     // The issuing app's brand is on the header; only trust the first two lines.
-    const header = lines.slice(0, 2).join('\n');
-    const h1 = GCASH_BRAND.test(header);
-    const h2 = GOTYME_BRAND.test(header);
-    if (h1 && !h2) return 'GCASH';
-    if (h2 && !h1) return 'GOTYME';
+    const header = matching(lines.slice(0, 2).join('\n'));
+    if (header.length === 1) return header[0]!;
   }
   return null; // ambiguous or neither -> unknown, never guessed
 }
@@ -81,6 +87,8 @@ function detectStatus(text: string): ReceiptStatus {
 function namespaceFor(provider: Provider | null, rail: PaymentRail | null): ReferenceNamespace | null {
   if (provider === 'GCASH') return rail === 'EXPRESS_SEND' ? 'GCASH_REF_NO' : 'GCASH_REF_NO';
   if (provider === 'GOTYME') return 'GOTYME_REF_NO';
+  if (provider === 'MAYA') return 'MAYA_REF_NO';
+  if (provider === 'MARIBANK') return 'MARIBANK_REF_NO';
   return null;
 }
 

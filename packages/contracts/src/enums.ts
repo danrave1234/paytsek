@@ -53,9 +53,23 @@ export type DeviceCapability = z.infer<typeof DeviceCapability>;
 export const DevicePlatform = z.enum(['ANDROID', 'IOS']);
 export type DevicePlatform = z.infer<typeof DevicePlatform>;
 
-/** Launch providers. Recording is supported for both; automatic matching is per tested flow. */
-export const Provider = z.enum(['GCASH', 'GOTYME']);
+/** Launch providers. Recording is supported for all of them; automatic matching is per tested flow. */
+export const Provider = z.enum(['GCASH', 'GOTYME', 'MAYA', 'MARIBANK']);
 export type Provider = z.infer<typeof Provider>;
+
+/** Brand spelling as the providers write it. Use everywhere users can see it. */
+export const PROVIDER_LABELS: Record<Provider, string> = {
+  GCASH: 'GCash',
+  GOTYME: 'GoTyme',
+  MAYA: 'Maya',
+  MARIBANK: 'MariBank',
+};
+
+/** Stable display order for pickers and marketing lists. */
+export const PROVIDERS: readonly { value: Provider; label: string }[] = Provider.options.map((value) => ({
+  value,
+  label: PROVIDER_LABELS[value],
+}));
 
 /** Payment rail as printed on a receipt or described by a notification. */
 export const PaymentRail = z.enum([
@@ -78,6 +92,8 @@ export const ReferenceNamespace = z.enum([
   'GCASH_REF_NO',
   'GCASH_EXPRESS_SEND_REF',
   'GOTYME_REF_NO',
+  'MAYA_REF_NO',
+  'MARIBANK_REF_NO',
   'INSTAPAY_TRACE_NO',
   'PESONET_TRACE_NO',
   'UNKNOWN',
