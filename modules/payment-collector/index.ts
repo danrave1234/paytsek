@@ -23,7 +23,7 @@ export interface CollectorStatus {
 }
 
 export interface DetectedProviderApp {
-  provider: 'GCASH' | 'GOTYME';
+  provider: 'GCASH' | 'GOTYME' | 'MAYA' | 'MARIBANK';
   packageName: string;
   versionName: string | null;
   versionCode: number | null;
@@ -37,7 +37,25 @@ export interface CollectorConfig {
   credential: string;
   deviceId: string;
   /** Providers the owner bound this phone to; only these packages are read. */
-  enabledProviders: Array<'GCASH' | 'GOTYME'>;
+  enabledProviders: Array<'GCASH' | 'GOTYME' | 'MAYA' | 'MARIBANK'>;
+}
+
+/**
+ * A notification shape PayRecord did not recognise, captured only when the
+ * owner opts in. Values are redacted on the phone before storage: digits
+ * become '#', letters become 'a'/'A'. Only UNKNOWN_TEMPLATE rejections are
+ * eligible — OTP and security messages are never stored.
+ */
+export interface TemplateSample {
+  id: number;
+  packageName: string;
+  provider: 'GCASH' | 'GOTYME' | 'MAYA' | 'MARIBANK';
+  title: string | null;
+  text: string | null;
+  bigText: string | null;
+  lines: string[];
+  appVersionName: string | null;
+  capturedAt: string;
 }
 
 interface NativeModule {
@@ -54,6 +72,11 @@ interface NativeModule {
   reportHealth(): Promise<boolean>;
   /** Deduplicated recovery: enumerate currently active notifications after reconnect. Not history. */
   recoverActiveNotifications(): Promise<number>;
+  setCaptureUnknownTemplates(enabled: boolean): Promise<void>;
+  isCaptureUnknownTemplates(): Promise<boolean>;
+  listTemplateSamples(): Promise<TemplateSample[]>;
+  exportTemplateSamples(): Promise<string>;
+  clearTemplateSamples(): Promise<void>;
 }
 
 let native: NativeModule | null = null;
@@ -89,4 +112,12 @@ export const PaymentCollector = {
   flushNow: (): Promise<{ attempted: number; acknowledged: number }> => native?.flushNow() ?? Promise.resolve({ attempted: 0, acknowledged: 0 }),
   reportHealth: (): Promise<boolean> => native?.reportHealth() ?? Promise.resolve(false),
   recoverActiveNotifications: (): Promise<number> => native?.recoverActiveNotifications() ?? Promise.resolve(0),
+
+  /** Unknown-format capture. Android only; a no-op elsewhere. */
+  setCaptureUnknownTemplates: (enabled: boolean): Promise<void> =>
+    native?.setCaptureUnknownTemplates(enabled) ?? Promise.resolve(),
+  isCaptureUnknownTemplates: (): Promise<boolean> => native?.isCaptureUnknownTemplates() ?? Promise.resolve(false),
+  listTemplateSamples: (): Promise<TemplateSample[]> => native?.listTemplateSamples() ?? Promise.resolve([]),
+  exportTemplateSamples: (): Promise<string> => native?.exportTemplateSamples() ?? Promise.resolve('{"samples":[]}'),
+  clearTemplateSamples: (): Promise<void> => native?.clearTemplateSamples() ?? Promise.resolve(),
 };

@@ -8,5 +8,7 @@
     <package android:name="com.globe.gcash.android" />
     <package android:name="com.gotyme.gotymebank" />
     <package android:name="ph.gotyme.app" />
+    <package android:name="com.paymaya" />
+    <package android:name="ph.seabank.seabank" />
   </queries>
 </manifest>

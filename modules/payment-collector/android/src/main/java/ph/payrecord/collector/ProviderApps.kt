@@ -26,6 +26,11 @@ object ProviderApps {
     "com.globe.gcash.android" to "GCASH",
     "com.gotyme.gotymebank" to "GOTYME",
     "ph.gotyme.app" to "GOTYME",
+    // Maya is identifiable but has no notification adapter yet, so its
+    // notifications are dropped by NotificationParser rather than uploaded.
+    "com.paymaya" to "MAYA",
+    // MariBank PH kept SeaBank's package through the 2025 rebrand.
+    "ph.seabank.seabank" to "MARIBANK",
   )
 
   /**
