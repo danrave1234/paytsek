@@ -1,88 +1,241 @@
 @import "tailwindcss";
 
 /*
- * PayRecord web — "paper ledger" identity.
- * Warm receipt paper, ink black, one rubber-stamp red. Display serif for
- * headlines, monospace for anything that looks like it came off a thermal
- * printer. Brand blue from the mobile app is kept only as a small accent.
+ * PayRecord web — screen-first identity.
+ *
+ * The product is about phone screens: the confirmation a customer shows you,
+ * and the notification your own phone receives. So the site is built from
+ * device frames, real UI and data type — not paper, ledgers or stamps.
+ *
+ * Neutral cool greys carry the page; the app's brand blue is the only accent
+ * that means "PayRecord"; status colours mean exactly one thing each and are
+ * always paired with a label.
+ *
+ * Component classes live in @layer components so plain utilities
+ * (e.g. `pill text-ok`) still override them.
  */
 @theme {
-  --color-paper: #f4efe6;
-  --color-paper-2: #ebe4d6;
-  --color-paper-3: #ded5c2;
-  --color-ink: #17150f;
-  --color-ink-2: #4a4638;
-  --color-ink-3: #8a846f;
-  --color-rule: #c9bfa8;
-  --color-stamp: #c8321f;
-  --color-stamp-soft: #f6d9d2;
+  --color-bg: #ffffff;
+  --color-bg-2: #f5f7fa;
+  --color-bg-3: #e9edf3;
+  --color-ink: #0b0f17;
+  --color-ink-2: #48515f;
+  --color-ink-3: #7c8697;
+  --color-line: #e2e7ee;
+  --color-line-2: #f0f3f7;
+
   --color-brand: #0b5fff;
-  --color-ok: #1f5c3a;
-  --color-ok-soft: #d9e8dc;
-  --color-warn: #7a4d00;
-  --color-warn-soft: #f3e2b8;
-  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
-  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --color-brand-2: #0847c4;
+  --color-brand-soft: #e7efff;
+
+  --color-ok: #0f6b46;
+  --color-ok-soft: #dcf2e7;
+  --color-warn: #8a5a00;
+  --color-warn-soft: #fdefd2;
+  --color-danger: #b3261e;
+  --color-danger-soft: #fbe4e2;
+
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --shadow-card: 0 1px 2px rgba(11, 15, 23, 0.05), 0 1px 3px rgba(11, 15, 23, 0.04);
+  --shadow-raised: 0 2px 4px rgba(11, 15, 23, 0.04), 0 12px 28px -12px rgba(11, 15, 23, 0.22);
+  --shadow-device: 0 4px 8px rgba(11, 15, 23, 0.06), 0 32px 64px -24px rgba(11, 15, 23, 0.38);
 }
 
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 6rem;
+  -webkit-text-size-adjust: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
 
 body {
-  @apply bg-paper text-ink antialiased;
-  background-image:
-    radial-gradient(1200px 600px at 10% -10%, rgba(255, 255, 255, 0.55), transparent 60%),
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  @apply bg-bg text-ink antialiased;
 }
 
-::selection { background: var(--color-stamp); color: var(--color-paper); }
+::selection { background: var(--color-brand); color: #fff; }
 
-/* Ruled-paper backdrop for sections */
-.ruled {
-  background-image: repeating-linear-gradient(to bottom, transparent 0 31px, rgba(74, 70, 56, 0.16) 31px 32px);
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
-/* A thermal receipt: paper strip with perforated (zig-zag) bottom edge */
-.receipt {
-  @apply relative bg-[#fbf8f1] text-ink font-mono text-[13px] leading-6;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06), 0 18px 40px -20px rgba(23, 21, 15, 0.45);
+@layer components {
+  /* ---- Text roles ------------------------------------------------------ */
+
+  /* Small technical label; also used for data keys and table headers. */
+  .eyebrow {
+    @apply font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-3;
+  }
+
+  /* Display headline. Tight tracking is what keeps a grotesque from reading
+     as a default system font at large sizes. */
+  .h-display {
+    @apply font-sans font-semibold;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+
+  .h-section {
+    @apply font-sans font-semibold;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+  }
+
+  /* Reference numbers, amounts, versions — anything the user might compare
+     character by character. */
+  .data {
+    @apply font-mono tabular-nums;
+    font-feature-settings: "ss01";
+  }
+
+  .ul {
+    @apply underline decoration-line decoration-2 underline-offset-4 transition-colors;
+  }
+  .ul:hover { @apply text-brand decoration-brand; }
+
+  /* Highlighted phrase in a headline: a brand rule under each line of the
+     phrase. Painted as a background so it repeats on every line fragment —
+     an absolutely-positioned pseudo-element only draws on the first one —
+     and sits below the baseline so descenders stay clear. */
+  .marked {
+    background: linear-gradient(var(--color-brand), var(--color-brand)) no-repeat;
+    background-size: 100% 0.065em;
+    background-position: 0 100%;
+    padding-bottom: 0.06em;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  /* ---- Buttons --------------------------------------------------------- */
+
+  .btn-primary,
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 text-[15px] font-medium transition-colors;
+    min-height: 48px;
+  }
+  .btn-primary { @apply bg-brand text-white; }
+  .btn-primary:hover { @apply bg-brand-2; }
+  .btn-secondary { @apply border border-line bg-bg text-ink; }
+  .btn-secondary:hover { @apply border-ink-3 bg-bg-2; }
+
+  .btn-ghost-dark {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/25 px-5 text-[15px] font-medium text-white transition-colors;
+    min-height: 48px;
+  }
+  .btn-ghost-dark:hover { @apply border-white/60 bg-white/10; }
+
+  /* ---- Surfaces -------------------------------------------------------- */
+
+  .card {
+    @apply relative rounded-2xl border border-line bg-bg;
+    box-shadow: var(--shadow-card);
+  }
+
+  .card-raised {
+    @apply relative rounded-2xl border border-line bg-bg;
+    box-shadow: var(--shadow-raised);
+  }
+
+  /* Fine measurement grid, used behind device art. Reads as a calibration
+     surface rather than decoration. */
+  .tick-grid {
+    background-image:
+      linear-gradient(rgba(11, 15, 23, 0.055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(11, 15, 23, 0.055) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  /* ---- Status pill ----------------------------------------------------- */
+
+  /* Replaces colour-only badges: soft ground, strong text, leading dot. */
+  .pill {
+    @apply inline-flex items-center gap-2 rounded-full px-3 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.1em];
+  }
+  .pill::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: currentColor;
+    flex: none;
+  }
+
+  /* ---- Data table ------------------------------------------------------ */
+
+  .matrix { border-collapse: collapse; width: 100%; }
+  .matrix th,
+  .matrix td { border-bottom: 1px solid var(--color-line); padding: 1rem 0.75rem; text-align: left; vertical-align: top; }
+  .matrix th { @apply font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-3; }
+  .matrix th:first-child,
+  .matrix td:first-child { padding-left: 0; }
+  .matrix th:last-child,
+  .matrix td:last-child { padding-right: 0; }
+  .matrix tbody tr:last-child td { border-bottom: 0; }
+
+  /* Three columns do not fit a phone: stack each row into a block. */
+  @media (max-width: 639px) {
+    .matrix thead { display: none; }
+    .matrix tr { display: block; border-bottom: 1px solid var(--color-line); padding: 1rem 0; }
+    .matrix tr:last-child { border-bottom: 0; }
+    .matrix td { display: block; border-bottom: 0; padding: 0; }
+    .matrix td + td { margin-top: 0.5rem; }
+  }
+
+  /* ---- Device frames --------------------------------------------------- */
+
+  .phone {
+    @apply relative bg-ink;
+    border-radius: 2.25rem;
+    padding: 0.5rem;
+    box-shadow: var(--shadow-device), inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  }
+  .phone-screen {
+    @apply relative overflow-hidden bg-white;
+    border-radius: 1.85rem;
+  }
+
+  /* ---- Dark band ------------------------------------------------------- */
+
+  .band-dark {
+    @apply bg-ink text-white;
+    background-image: radial-gradient(900px 420px at 12% 0%, rgba(11, 95, 255, 0.16), transparent 62%);
+  }
+  .band-dark .eyebrow { @apply text-white/45; }
+
+  /* ---- Long-form legal / prose ----------------------------------------- */
+
+  .prose { @apply text-[15.5px] leading-8 text-ink-2; }
+  /* The block already carries its own top spacing. */
+  .prose > :first-child { @apply mt-0; }
+  .prose h2 {
+    @apply mt-12 border-t border-line pt-8 font-sans text-[1.4rem] font-semibold text-ink;
+    letter-spacing: -0.02em;
+  }
+  /* The page masthead already closes with a rule. */
+  .prose > h2:first-child { @apply mt-10 border-t-0 pt-0; }
+  .prose p { @apply mt-4; }
+  .prose strong { @apply font-semibold text-ink; }
+  .prose ul { @apply mt-4 space-y-2 pl-0; }
+  .prose ul > li { @apply relative pl-6; }
+  .prose ul > li::before {
+    content: "";
+    position: absolute;
+    left: 0.15rem;
+    top: 0.85em;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--color-line);
+  }
+  .prose ol { @apply mt-4 list-decimal space-y-2.5 pl-6; }
+  .prose ol > li::marker { @apply font-mono text-ink-3; }
+  .prose a { @apply underline decoration-line decoration-2 underline-offset-4 transition-colors; }
+  .prose a:hover { @apply text-brand decoration-brand; }
 }
-.receipt::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -10px;
-  height: 10px;
-  background: linear-gradient(135deg, #fbf8f1 50%, transparent 50%) 0 0 / 10px 10px,
-    linear-gradient(225deg, #fbf8f1 50%, transparent 50%) 0 0 / 10px 10px;
-  background-repeat: repeat-x;
-}
-.receipt .dots {
-  border-bottom: 1px dashed var(--color-rule);
-}
-
-/* Rubber stamp */
-.stamp {
-  @apply inline-block rotate-[-6deg] border-[3px] border-stamp px-3 py-1 font-mono text-xs font-bold uppercase tracking-[0.2em] text-stamp;
-  border-radius: 4px;
-  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='80'><filter id='g'><feTurbulence baseFrequency='0.8' numOctaves='3'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 -1.4 1.9'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
-  mask-size: 200px 80px;
-}
-
-/* Ledger table rows */
-.ledger { border-collapse: collapse; width: 100%; }
-.ledger td, .ledger th { border-bottom: 1px solid var(--color-rule); padding: 0.9rem 0.25rem; vertical-align: top; }
-.ledger th { @apply text-left font-mono text-[11px] uppercase tracking-[0.18em] text-ink-3; }
-.ledger tr:last-child td { border-bottom: 2px solid var(--color-ink); }
-
-/* Section label like a form field header */
-.eyebrow { @apply font-mono text-[11px] uppercase tracking-[0.22em] text-ink-3; }
-
-/* Underline link, ink-colored */
-.ul { @apply underline decoration-rule decoration-2 underline-offset-4 hover:decoration-ink; }
-
-/* Ink button */
-.btn-ink, .btn-ghost { @apply inline-flex items-center gap-2 border-2 border-ink px-5 py-3 font-medium transition-colors; }
-.btn-ink { @apply bg-ink text-paper hover:bg-stamp hover:border-stamp; }
-.btn-ghost { @apply bg-transparent hover:bg-paper-2; }

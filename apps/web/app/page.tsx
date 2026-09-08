@@ -1,156 +1,316 @@
 import Link from 'next/link';
+import { CertaintyScale } from '@/components/certainty-scale';
+import { ProofScene } from '@/components/proof-scene';
+import { CheckFigure, FileFigure, ScanFigure } from '@/components/step-figures';
+import { PROVIDER_SUPPORT } from '@/lib/providers';
 import { latest } from '@/lib/releases';
 
+/** The three steps, drawn as a sequence with a figure at each stage. */
 const steps = [
-  { n: '01', title: 'Scan the customer\u2019s receipt', body: 'Camera, screenshot import, or share sheet. Text is read on the phone with on-device OCR. The image is never uploaded just to read it.' },
-  { n: '02', title: 'Keep an organized record', body: 'Amount, reference, sender and recipient are stored as separate fields, together with the original OCR and every correction. Search, filter, export CSV.' },
-  { n: '03', title: 'Match against your own phone', body: 'The Android phone that receives GCash notifications reports incoming payments. A record becomes \u201cNotification matched\u201d only when reference and amount agree exactly.' },
+  {
+    n: '01',
+    kicker: 'Capture',
+    title: 'Scan the confirmation screen',
+    body: 'Point the camera at the customer’s phone, import their screenshot, or take it straight from the share sheet. The text is read on your phone — the image is never uploaded just to read it.',
+    figure: <ScanFigure />,
+  },
+  {
+    n: '02',
+    kicker: 'Record',
+    title: 'File it as a real record',
+    body: 'Amount, reference, sender and recipient become separate fields, stored alongside the original text and every correction you make. Nothing is overwritten, so you can always see what the screen actually said.',
+    figure: <FileFigure />,
+  },
+  {
+    n: '03',
+    kicker: 'Check',
+    title: 'Match it against your own phone',
+    body: 'The Android phone that receives your payment notifications reports what actually landed. A record only becomes “Notification matched” when the reference and amount agree exactly — never on amount and time alone.',
+    figure: <CheckFigure />,
+  },
 ];
 
-const states = [
-  { label: 'Unverified', desc: 'Proof recorded. No notification association yet.', cls: 'border-ink-3 text-ink-2' },
-  { label: 'Review needed', desc: 'Candidates or a conflict that needs a person.', cls: 'border-warn text-warn' },
-  { label: 'Notif. matched', desc: 'Exact reference and amount agreed. Not a provider confirmation.', cls: 'border-ok text-ok' },
-  { label: 'Confirmed', desc: 'Owner checked the wallet directly and signed off.', cls: 'border-stamp text-stamp' },
+const setups = [
+  { tag: 'A', title: 'One Android phone', body: 'Scans confirmations and collects your notifications. Nothing to pair.' },
+  {
+    tag: 'B',
+    title: 'iPhone + Android payment phone',
+    body: 'iPhone at the counter, Android payment phone anywhere with internet. Paired with a 5-minute code — no Bluetooth, no shared Wi-Fi.',
+  },
+  {
+    tag: 'C',
+    title: 'All-iPhone team',
+    body: 'Recording and manual confirmation, clearly labelled. iOS cannot read other apps’ notifications and we never pretend it can.',
+  },
 ];
 
-function Receipt() {
-  return (
-    <div className="receipt mx-auto w-full max-w-[320px] px-6 pt-6 pb-8" aria-hidden>
-      <p className="text-center text-[11px] uppercase tracking-[0.25em] text-ink-3">payrecord · record slip</p>
-      <p className="mt-1 text-center font-semibold">*** RECORD #00417 ***</p>
-      <p className="dots pb-3 text-center text-[11px]">2026-09-08 · 14:32 · Manila</p>
-      <dl className="mt-3 space-y-1">
-        <div className="flex justify-between"><dt className="text-ink-3">SOURCE</dt><dd>GCash receipt</dd></div>
-        <div className="flex justify-between"><dt className="text-ink-3">REF</dt><dd>3021 8845 1129</dd></div>
-        <div className="flex justify-between"><dt className="text-ink-3">FROM</dt><dd>M*A L.</dd></div>
-        <div className="flex justify-between"><dt className="text-ink-3">TO</dt><dd>Your store</dd></div>
-        <div className="dots flex justify-between pb-3"><dt className="text-ink-3">AMOUNT</dt><dd className="font-semibold">₱ 1,250.00</dd></div>
-      </dl>
-      <dl className="mt-3 space-y-1">
-        <div className="flex justify-between"><dt className="text-ink-3">NOTIF</dt><dd>GCash · 14:31</dd></div>
-        <div className="flex justify-between"><dt className="text-ink-3">NOTIF REF</dt><dd>3021 8845 1129</dd></div>
-        <div className="dots flex justify-between pb-3"><dt className="text-ink-3">NOTIF AMT</dt><dd>₱ 1,250.00</dd></div>
-      </dl>
-      <div className="mt-5 flex items-center justify-between">
-        <span className="text-[11px] text-ink-3">STATE</span>
-        <span className="stamp border-ok text-ok">matched</span>
-      </div>
-      <p className="mt-6 text-center text-[10px] leading-4 text-ink-3">
-        Evidence, not verification. PayRecord does not hold funds and is not GCash, GoTyme, or a bank.
-      </p>
-      <div className="mt-4 flex justify-center gap-[2px]">
-        {Array.from({ length: 42 }, (_, i) => (
-          <span key={i} className="block h-6 bg-ink" style={{ width: i % 3 === 0 ? 2 : 1, opacity: i % 5 === 0 ? 0.45 : 1 }} />
-        ))}
-      </div>
-    </div>
-  );
-}
+const refusals: [string, string][] = [
+  ['Show wallet balances', 'We never see your balance, your history, or your credentials — only the notifications you allow.'],
+  ['Verify with the provider', 'No authenticated provider integration exists here. Claiming one would be a lie.'],
+  ['Upload OTPs or promos', 'Security prompts, outgoing payments and marketing are dropped on the phone, before anything is uploaded.'],
+  ['Collect GPS or contacts', 'No location, no contacts, no hardware identifiers. Devices use an app-generated ID.'],
+  ['Guarantee against fraud', 'A matched record is evidence you can show and audit, not a fraud shield.'],
+  ['Pretend to be a wallet', 'PayRecord is independent and is not affiliated with GCash, GoTyme, Maya, or any bank.'],
+];
 
 export default function Home() {
   const rel = latest();
+
   return (
     <>
-      {/* Hero */}
-      <section className="mx-auto grid max-w-6xl gap-12 px-4 pt-14 pb-20 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:pt-24">
-        <div>
-          <p className="eyebrow">Now in beta · v{rel.version} · {rel.date}</p>
-          <h1 className="mt-5 font-display text-[2.6rem] font-semibold leading-[1.02] tracking-tight sm:text-6xl">
-            Every payment gets a <em className="not-italic underline decoration-stamp decoration-[6px] underline-offset-[10px]">paper trail</em>.
-          </h1>
-          <p className="mt-7 max-w-xl text-lg leading-8 text-ink-2">
-            PayRecord is a recordkeeper for Philippine sellers paid through GCash and GoTyme. Scan the customer&apos;s receipt, file it, and let your own payment phone tell you when the money really landed. Customers keep paying your existing QR or number. We never touch the money.
-          </p>
-          <div className="mt-9 flex flex-wrap items-center gap-4">
-            <Link href="/download" className="btn-ink">Download for Android <span aria-hidden>→</span></Link>
-            <Link href="/updates" className="ul font-mono text-sm uppercase tracking-[0.14em]">Read the release notes</Link>
-          </div>
-          <p className="mt-8 font-mono text-xs leading-6 text-ink-3">
-            Never asks for your MPIN, OTP, or wallet login.<br />
-            iPhone app records &amp; confirms; only Android can read notifications.
-          </p>
-        </div>
-        <div className="relative pt-4 lg:pt-0">
-          <div className="absolute inset-x-8 -top-2 bottom-8 -rotate-2 bg-paper-3/70 lg:inset-x-6" aria-hidden />
-          <Receipt />
-        </div>
-      </section>
-
-      {/* How it works — ledger table */}
-      <section className="border-y-2 border-ink bg-paper-2/60">
-        <div className="mx-auto max-w-6xl px-4 py-16">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <h2 className="font-display text-3xl font-semibold tracking-tight sm:text-4xl">How a record is made</h2>
-            <p className="eyebrow">Three entries, one line each</p>
-          </div>
-          <table className="ledger mt-8">
-            <thead>
-              <tr><th className="w-14">No.</th><th className="w-1/3">Entry</th><th>Particulars</th></tr>
-            </thead>
-            <tbody>
-              {steps.map((s) => (
-                <tr key={s.n}>
-                  <td className="font-mono text-ink-3">{s.n}</td>
-                  <td className="font-display text-xl font-semibold leading-snug">{s.title}</td>
-                  <td className="text-[15px] leading-7 text-ink-2">{s.body}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Evidence states */}
-      <section className="mx-auto max-w-6xl px-4 py-20">
-        <div className="grid gap-10 lg:grid-cols-[0.8fr_1.2fr]">
+      {/* ═══════════════════════════════════════════════════════════════ Hero */}
+      <section className="relative overflow-hidden">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-40 -top-52 size-[42rem] rounded-full opacity-70 blur-3xl"
+          style={{ background: 'radial-gradient(circle, rgba(11,95,255,0.14), transparent 65%)' }}
+        />
+        <div className="relative mx-auto grid max-w-6xl items-center gap-14 px-4 pb-20 pt-10 sm:px-6 lg:grid-cols-[1fr_1fr] lg:gap-12 lg:pb-24 lg:pt-16">
           <div>
-            <p className="eyebrow">Evidence states</p>
-            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight sm:text-4xl">Stamps that say only what is known</h2>
-            <p className="mt-4 leading-7 text-ink-2">No unconditional &ldquo;verified&rdquo; badge, no invented confidence percentages. Each record carries exactly one of four stamps and the reason for it.</p>
+            <p className="eyebrow flex flex-wrap items-center gap-x-2.5 gap-y-1">
+              <span className="inline-block size-1.5 rounded-full bg-brand" aria-hidden />
+              Now in beta
+              <span aria-hidden className="text-line">/</span>
+              <span className="data">v{rel.version}</span>
+              <span aria-hidden className="text-line">/</span>
+              <span className="data">{rel.date}</span>
+            </p>
+
+            <h1 className="h-display mt-6 text-[clamp(2.5rem,6.5vw,4.1rem)] leading-[1.04]">
+              Trust the payment, <span className="marked">not the screenshot</span>.
+            </h1>
+
+            <p className="mt-7 max-w-xl text-[16px] leading-7 text-ink-2 sm:text-[17.5px] sm:leading-8">
+              Customers pay your GCash, GoTyme or Maya QR and show you a confirmation screen. PayRecord files that
+              confirmation as a proper record, then checks it against the incoming-payment notification on your own phone —
+              so you know what actually landed. <span className="text-ink">We never touch the money.</span>
+            </p>
+
+            <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              <Link href="/download" className="btn-primary">
+                Download for Android <span aria-hidden>→</span>
+              </Link>
+              <Link href="#how" className="btn-secondary">
+                See how it works
+              </Link>
+            </div>
           </div>
-          <ul className="grid gap-x-8 gap-y-8 sm:grid-cols-2">
-            {states.map((s) => (
-              <li key={s.label} className="border-t border-rule pt-5">
-                <span className={`stamp ${s.cls}`}>{s.label}</span>
-                <p className="mt-4 text-sm leading-6 text-ink-2">{s.desc}</p>
+
+          <div className="mx-auto w-full max-w-[540px] lg:mx-0">
+            <ProofScene />
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════ The problem
+          Narrow measure, big type, tinted ground: the one moment on the page
+          that is purely an argument, so it gets its own weight and rhythm. */}
+      <section className="border-y border-line bg-bg-2">
+        <div className="mx-auto max-w-3xl px-4 py-20 text-center sm:px-6 lg:py-28">
+          <p className="eyebrow">Why this exists</p>
+          <p className="h-display mt-6 text-[clamp(1.9rem,5vw,3.2rem)] leading-[1.1]">
+            A screenshot is not a payment. It is a picture of one.
+          </p>
+          <p className="mx-auto mt-7 max-w-xl text-pretty text-[17px] leading-8 text-ink-2">
+            Anyone can edit an amount, resend an old confirmation, or show you one addressed to somebody else. At a busy
+            counter you have seconds to decide, and the only thing that actually proves money arrived is your own phone.
+          </p>
+
+          <ul className="mx-auto mt-11 grid max-w-2xl gap-3 text-left sm:grid-cols-3">
+            {[
+              ['Edited', 'An amount changed in a photo editor in under a minute.'],
+              ['Reused', 'A real confirmation from last week, shown again today.'],
+              ['Misread', 'A genuine payment — sent to a different account entirely.'],
+            ].map(([k, v]) => (
+              <li key={k} className="rounded-xl border border-line bg-bg px-4 py-4">
+                <p className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-danger">{k}</p>
+                <p className="mt-2 text-[13.5px] leading-6 text-ink-2">{v}</p>
               </li>
             ))}
           </ul>
         </div>
       </section>
 
-      {/* Two columns: works across phones / what we don't do */}
-      <section className="ruled border-y border-rule">
-        <div className="mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:grid-cols-2">
-          <div>
-            <p className="eyebrow">Setups that work</p>
-            <ul className="mt-4 space-y-4 text-[15px] leading-8">
-              <li><span className="mr-3 font-mono text-ink-3">a.</span>One Android phone scans and collects notifications.</li>
-              <li><span className="mr-3 font-mono text-ink-3">b.</span>iPhone at the counter, Android payment phone anywhere with internet — paired with a 5-minute code.</li>
-              <li><span className="mr-3 font-mono text-ink-3">c.</span>All-iPhone team: recording and manual confirmation, clearly labelled. iOS cannot read other apps&apos; notifications and PayRecord never pretends it can.</li>
-            </ul>
+      {/* ═══════════════════════════════════════════════ How it works (sequence)
+          Alternating rows joined by a numbered rail, so the three steps read
+          as one process instead of three parallel features. */}
+      <section id="how" className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
+        <div className="max-w-2xl">
+          <p className="eyebrow">The flow</p>
+          <h2 className="h-section mt-3 text-[clamp(1.9rem,4.5vw,2.9rem)] leading-tight">
+            Three steps, and one of them is not yours to fake
+          </h2>
+        </div>
+
+        <ol className="mt-16 space-y-20 lg:space-y-28">
+          {steps.map((s, i) => (
+            <li key={s.n} className="relative grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+              {/* Connector between steps, desktop only. */}
+              {i < steps.length - 1 ? (
+                <span
+                  aria-hidden
+                  className="absolute left-[calc(1.25rem-1px)] top-14 hidden h-[calc(100%+7rem)] w-px bg-gradient-to-b from-line to-transparent lg:block"
+                />
+              ) : null}
+
+              <div className={i % 2 === 1 ? 'lg:order-2' : undefined}>
+                <div className="flex items-center gap-4">
+                  <span className="data relative z-10 grid size-10 shrink-0 place-items-center rounded-full border border-line bg-bg text-[13px] font-semibold text-brand-2">
+                    {s.n}
+                  </span>
+                  <span className="eyebrow">{s.kicker}</span>
+                </div>
+                <h3 className="mt-6 text-[clamp(1.4rem,3vw,1.9rem)] font-semibold leading-tight tracking-[-0.03em] lg:pl-14">
+                  {s.title}
+                </h3>
+                <p className="mt-4 max-w-lg text-[15.5px] leading-8 text-ink-2 lg:pl-14">{s.body}</p>
+              </div>
+
+              <div className={i % 2 === 1 ? 'lg:order-1' : undefined}>{s.figure}</div>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      {/* ═════════════════════════════════════════════════════ Certainty scale */}
+      <section className="border-y border-line bg-bg-2">
+        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
+          <div className="grid gap-14 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
+            <div className="lg:sticky lg:top-28 lg:self-start">
+              <p className="eyebrow">Evidence states</p>
+              <h2 className="h-section mt-3 text-[clamp(1.9rem,4.5vw,2.9rem)] leading-tight">
+                How sure we are, and where that stops
+              </h2>
+              <p className="mt-6 leading-8 text-ink-2">
+                Every record sits at exactly one point on this scale, and carries the reason it got there. The scale has a
+                hard ceiling, and the app says so rather than rounding up.
+              </p>
+              <Link href="/support" className="ul mt-6 inline-block text-[15px]">
+                Read how matching decides
+              </Link>
+            </div>
+
+            <CertaintyScale />
           </div>
+        </div>
+      </section>
+
+      {/* ═════════════════════════════════════════════════════ Wallet support */}
+      <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
+        <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
           <div>
-            <p className="eyebrow">Things we refuse to do</p>
-            <ul className="mt-4 space-y-4 text-[15px] leading-8">
-              <li><span className="mr-3 font-mono text-stamp">×</span>Show wallet balances, verify with banks, or guarantee against fraud.</li>
-              <li><span className="mr-3 font-mono text-stamp">×</span>Upload OTPs, security prompts, promos, or outgoing payments — dropped on the phone.</li>
-              <li><span className="mr-3 font-mono text-stamp">×</span>Collect GPS, contacts, or hardware identifiers.</li>
-              <li><span className="mr-3 font-mono text-stamp">×</span>Pretend to be GCash, GoTyme, or any bank.</li>
+            <p className="eyebrow">Wallet support</p>
+            <h2 className="h-section mt-3 text-[clamp(1.9rem,4.5vw,2.9rem)] leading-tight">
+              What each wallet can actually do today
+            </h2>
+            <p className="mt-6 leading-8 text-ink-2">
+              Recording works everywhere. Automatic matching is switched on per tested payment flow, only once real
+              notification samples prove the reference on the customer&apos;s screen is the same identifier your phone
+              receives.
+            </p>
+            <p className="mt-4 text-[14px] leading-7 text-ink-3">
+              This table is generated from the app&apos;s own capability registry, so it cannot claim more than the code does.
+            </p>
+          </div>
+
+          <div className="card overflow-hidden">
+            <table className="matrix">
+              <thead>
+                <tr className="bg-bg-2">
+                  <th className="w-[26%] !pl-6">Wallet</th>
+                  <th className="w-[24%]">Recording</th>
+                  <th className="!pr-6">Automatic matching</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PROVIDER_SUPPORT.map((p) => (
+                  <tr key={p.name}>
+                    <td className="!pl-6 text-[15px] font-semibold tracking-[-0.02em]">{p.name}</td>
+                    <td>
+                      <span className="pill bg-ok-soft text-ok">Supported</span>
+                    </td>
+                    <td className="!pr-6">
+                      <span className={`pill ${p.autoMatch ? 'bg-ok-soft text-ok' : 'bg-warn-soft text-warn'}`}>
+                        {p.autoMatch ? 'Enabled' : 'Not yet'}
+                      </span>
+                      <p className="mt-2.5 text-[13.5px] leading-6 text-ink-2">{p.note}</p>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════ Setups (deliberately quiet)
+          Secondary information: compact type, no cards, so it reads as a
+          footnote to the flow rather than a fourth headline act. */}
+      <section className="border-t border-line">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:py-16">
+          <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
+            <div>
+              <p className="eyebrow">Setups that work</p>
+              <h3 className="mt-3 text-[1.35rem] font-semibold leading-snug tracking-[-0.03em]">
+                One phone, two phones, or a counter full of iPhones
+              </h3>
+            </div>
+            <ul className="grid gap-x-10 gap-y-6 sm:grid-cols-3">
+              {setups.map((s) => (
+                <li key={s.tag}>
+                  <p className="data text-[11px] text-ink-3">{s.tag}</p>
+                  <h4 className="mt-2 text-[15px] font-semibold leading-snug tracking-[-0.02em]">{s.title}</h4>
+                  <p className="mt-2 text-[13.5px] leading-6 text-ink-2">{s.body}</p>
+                </li>
+              ))}
             </ul>
           </div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="mx-auto max-w-6xl px-4 pt-20">
-        <div className="flex flex-wrap items-center justify-between gap-6 border-2 border-ink p-8">
-          <div>
-            <p className="font-display text-2xl font-semibold sm:text-3xl">Start the paper trail today.</p>
-            <p className="mt-1 text-ink-2">Free plan includes the remote payment-phone workflow.</p>
+      {/* ═════════════════════════════════════════════════════ Refusals (dark) */}
+      <section className="band-dark">
+        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
+          <div className="max-w-2xl">
+            <p className="eyebrow">The fine print, up front</p>
+            <h2 className="h-section mt-3 text-[clamp(1.9rem,4.5vw,2.9rem)] leading-tight text-white">
+              Six things we refuse to do
+            </h2>
+            <p className="mt-6 leading-8 text-white/60">
+              Most of what goes wrong with payment apps is over-promising. Here is what PayRecord will never claim.
+            </p>
           </div>
-          <Link href="/download" className="btn-ink">Get the app</Link>
+
+          <ul className="mt-14 grid gap-x-10 gap-y-9 sm:grid-cols-2 lg:grid-cols-3">
+            {refusals.map(([title, body], i) => (
+              <li key={title} className="border-t border-white/15 pt-5">
+                <p className="data text-[11px] tracking-[0.16em] text-white/30">{String(i + 1).padStart(2, '0')} / 06</p>
+                <h3 className="mt-3 text-[1.05rem] font-semibold leading-snug tracking-[-0.02em] text-white">{title}</h3>
+                <p className="mt-2.5 text-[14.5px] leading-6 text-white/60">{body}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════════════════════════════ CTA */}
+      <section className="mx-auto max-w-6xl px-4 pt-20 sm:px-6 lg:pt-28">
+        <div className="card-raised flex flex-wrap items-center justify-between gap-8 p-8 sm:p-10">
+          <div className="max-w-xl">
+            <h2 className="h-section text-[clamp(1.5rem,3.5vw,2.1rem)] leading-tight">Start checking your payments.</h2>
+            <p className="mt-3 leading-7 text-ink-2">
+              The free plan includes the remote payment-phone workflow, CSV export, and the full evidence trail. No card, no
+              wallet access.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/download" className="btn-primary">
+              Get the app <span aria-hidden>→</span>
+            </Link>
+            <Link href="/support" className="btn-secondary">
+              Read the FAQ
+            </Link>
+          </div>
         </div>
       </section>
     </>
