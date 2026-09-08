@@ -8,6 +8,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'PayRecord',
   slug: 'payrecord',
+  owner: 'danrave1234',
   scheme: 'payrecord',
   version: '0.1.0',
   orientation: 'portrait',
@@ -50,7 +51,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-sqlite',
     ['expo-camera', { cameraPermission: 'PayRecord uses the camera to capture a customer\u2019s payment receipt.' }],
     ['expo-image-picker', { photosPermission: 'PayRecord can import a saved receipt screenshot.' }],
-    ['expo-build-properties', { android: { minSdkVersion: 26, compileSdkVersion: 36, targetSdkVersion: 36 }, ios: { deploymentTarget: '16.0' } }],
+    ['expo-build-properties', { android: { minSdkVersion: 26, compileSdkVersion: 36, targetSdkVersion: 36 }, ios: { deploymentTarget: '16.4' } }],
     // Local modules: NotificationListenerService (Android) + ML Kit OCR (both) + iOS share extension.
     '../../modules/payment-collector/app.plugin.js',
     '../../modules/receipt-ocr/app.plugin.js',
@@ -58,7 +59,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ],
   experiments: { typedRoutes: true },
   extra: {
-    eas: { projectId: process.env.EAS_PROJECT_ID ?? '' },
+    eas: { projectId: process.env.EAS_PROJECT_ID ?? '2017b542-34ff-4454-8c47-201c6c2911a2' },
     apiUrl: process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000',
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',

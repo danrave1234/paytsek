@@ -42,3 +42,11 @@ Thumbs.db
 # next.js
 .next/
 out/
+
+# Android signing (never commit)
+apps/mobile/credentials/
+apps/mobile/credentials.json
+apps/mobile/android/
+
+# vercel
+.vercel

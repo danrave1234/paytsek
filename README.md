@@ -34,14 +34,19 @@ docs                      Architecture, testing, runbooks, provider matrix, stor
 pnpm install
 pnpm -r --filter ./packages/** run build      # contracts + parsers -> dist
 
-# Database
-supabase start                                 # local Postgres/Auth/Storage
-supabase db reset                              # applies supabase/migrations
+# Database (hosted Supabase project, no CLI needed)
+Copy-Item .env.example .env                    # fill SUPABASE_URL, SUPABASE_ANON_KEY (sb_publishable_...),
+                                               # SUPABASE_SERVICE_ROLE_KEY (sb_secret_...), DATABASE_URL, COLLECTOR_TOKEN_HASH_SECRET
+pnpm db:migrate:direct                         # applies supabase/migrations over DATABASE_URL (tables, RLS, private buckets)
+pnpm db:check                                  # prints applied migrations, tables, buckets, RLS policy count
 
-# API
-Copy-Item .env.example .env                    # fill SUPABASE_*, DATABASE_URL, COLLECTOR_TOKEN_HASH_SECRET
+# Database (local Supabase CLI alternative)
+supabase start; supabase db reset              # local Postgres/Auth/Storage + migrations
+
+# API (reads ../../.env via node --env-file)
 pnpm api:dev                                   # http://localhost:3000/v1/health
 pnpm api:worker                                # separate process: reconciliation, exports, retention
+pnpm db:smoke                                  # creates a confirmed test user, signs in, calls the API with the token
 
 # Mobile (development build, not Expo Go)
 Copy-Item apps/mobile/.env.example apps/mobile/.env
@@ -68,7 +73,7 @@ Documented, never faked. Without them the corresponding capability is visibly di
 
 | Input | Effect when missing |
 | --- | --- |
-| `SUPABASE_*`, `DATABASE_URL`, `COLLECTOR_TOKEN_HASH_SECRET` | API refuses to start (env validation) |
+| `SUPABASE_*`, `DATABASE_URL`, `COLLECTOR_TOKEN_HASH_SECRET` | API refuses to start (env validation). `SUPABASE_JWT_SECRET` is only needed for legacy HS256 projects; ES256 projects are verified via JWKS |
 | `EXPO_PUBLIC_SUPABASE_*` | App shows a "not configured" screen, no demo data |
 | `REVENUECAT_SECRET_API_KEY`, store product IDs, public SDK keys | Purchases disabled; server never grants paid capacity |
 | Real GoTyme / merchant-QR notification samples | Those flows stay "recording + manual confirmation only" in the flow registry |

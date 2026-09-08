@@ -22,7 +22,8 @@ export const EnvSchema = z.object({
   SUPABASE_ANON_KEY: z.string().min(10),
   /** Server only. Never sent to clients. */
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(10),
-  SUPABASE_JWT_SECRET: z.string().min(16),
+  /** Legacy HS256 secret; optional when the project uses asymmetric signing keys (JWKS). */
+  SUPABASE_JWT_SECRET: z.string().optional().default(''),
   DATABASE_URL: z.string().min(10),
   DATABASE_POOL_MAX: int(10),
 
