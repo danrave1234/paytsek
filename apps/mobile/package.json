@@ -11,7 +11,8 @@
     "doctor": "npx expo-doctor",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "echo \"mobile: unit tests live in packages/*; device E2E in docs/testing.md\" && exit 0"
+    "test": "echo \"mobile: unit tests live in packages/*; device E2E in docs/testing.md\" && exit 0",
+    "eas-build-post-install": "cd ../.. && pnpm --filter @payrecord/contracts run build && pnpm --filter @payrecord/receipt-parsers run build"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",
@@ -55,7 +56,9 @@
   },
   "expo": {
     "doctor": {
-      "reactNativeDirectoryCheck": { "listUnknownPackages": false }
+      "reactNativeDirectoryCheck": {
+        "listUnknownPackages": false
+      }
     }
   }
 }
