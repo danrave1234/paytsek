@@ -15,18 +15,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
-    version: '0.1.0',
-    date: '2026-09-08',
+    version: '0.1.1',
+    date: '2026-09-09',
     channel: 'beta',
     highlights: [
-      'Scan or import the customer’s GCash, GoTyme or Maya payment confirmation; text is read on your phone (no cloud OCR).',
-      'Records show honest evidence states: Unverified, Review needed, Notification matched, Confirmed manually.',
-      'Pair a remote Android payment phone with a 5-minute single-use code — no Bluetooth or same Wi-Fi needed.',
-      'Automatic matching only on exact reference + exact amount for tested GCash Express Send flows; everything else goes to Review.',
+      'Scan or import the customer’s GCash, GoTyme, Maya or MariBank payment confirmation; the text is read on your phone (no cloud OCR).',
+      'Records carry honest evidence states: Unverified, Review needed, Notification matched, Confirmed manually.',
+      'Pair a remote Android payment phone with a 5-minute single-use code — no Bluetooth or shared Wi-Fi needed.',
+      'Automatic matching requires an exact reference and exact amount on a tested flow: GCash Express Send and GCash personal QR. Everything else goes to Review.',
       'Owner-only incoming inbox, team invites, CSV export, and full account/workspace deletion.',
-      'Maya added as a receiving wallet: recording and manual confirmation. Automatic matching stays off until real Maya notification samples are verified.',
+      'Unknown formats: opt in on the payment phone to collect redacted notification shapes, so a wallet that cannot auto-match yet can be supported.',
     ],
-    notes: 'Notification matching is enabled for tested GCash flows only. GoTyme and Maya notifications are not parsed yet — no verified samples — so payments to those wallets are recorded and confirmed manually.',
+    notes: 'Notification matching is enabled for tested GCash flows only. GoTyme, Maya and MariBank notifications are not parsed yet — no verified samples exist — so payments to those wallets are recorded and confirmed manually.',
   },
 ];
 
