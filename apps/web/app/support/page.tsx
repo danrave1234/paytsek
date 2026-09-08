@@ -1,46 +1,166 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import type { ReactNode } from 'react';
+import { PageHeader } from '@/components/page-header';
 
 export const metadata: Metadata = { title: 'Support', description: 'Help, FAQ and account deletion for PayRecord.' };
 
-const faq = [
-  { q: 'A payment shows "Unverified" but the customer paid. Is it lost?', a: 'No. Unverified only means no notification association exists yet. Check that the Android payment phone is on, connected, and has Notification Access enabled (Settings → Devices & health). Owners can also confirm manually after checking the wallet.' },
-  { q: 'Why didn\u2019t a payment auto-match even though the amount and time agree?', a: 'By design. Amount plus time alone never confirms a payment automatically because several customers can pay the same amount at the same time. Automatic matching requires the same reference number on both the receipt and the notification for a supported flow. Everything else goes to Review where you decide.' },
-  { q: 'Can my iPhone read GCash notifications?', a: 'No. iOS does not allow apps to read other apps\u2019 notifications, and PayRecord does not claim otherwise. Use the iPhone to scan and review and pair an Android phone that receives your GCash notifications, or use manual confirmation.' },
-  { q: 'Which providers auto-match?', a: 'GCash → GCash Express Send is enabled based on tested templates. GoTyme notifications are not parsed yet (no verified samples); GoTyme receipts can still be recorded and confirmed manually. See Updates for changes.' },
-  { q: 'Does PayRecord see my GCash balance or MPIN?', a: 'Never. It only reads incoming-payment notifications you allow, and never asks for wallet credentials, MPIN, or OTPs.' },
-  { q: 'What happens when I reach my monthly record limit?', a: 'Existing records, matching, exports and notifications keep working. New scans are kept on your phone as clearly labeled drafts until you top up a record pack or the month resets.' },
+/** Grouped so people can find their own situation instead of reading it all. */
+const groups = [
+  {
+    id: 'payments',
+    title: 'A payment looks wrong',
+    lead: 'The most common reason to open this page.',
+    faq: [
+      {
+        q: 'A payment shows "Unverified" but the customer paid. Is it lost?',
+        a: 'No. Unverified only means no notification has been associated yet. Check that the Android payment phone is on, connected, and still has Notification Access enabled — Settings → Devices & health will tell you. An owner can also confirm manually after checking the wallet app directly.',
+      },
+      {
+        q: 'Why didn’t a payment auto-match, even though the amount and time agree?',
+        a: 'By design. Amount plus time alone never confirms a payment, because several customers can pay the same amount at the same moment. Automatic matching needs the same reference number on both the customer’s confirmation screen and your notification, on a supported flow. Everything else goes to Review, where you decide.',
+      },
+      {
+        q: 'What happens when I reach my monthly record limit?',
+        a: 'Existing records, matching, exports and notifications keep working. New scans are kept on your phone as clearly labelled drafts until you top up a record pack or the month resets.',
+      },
+    ],
+  },
+  {
+    id: 'phones',
+    title: 'Phones and wallets',
+    lead: 'What each device and wallet can actually do.',
+    faq: [
+      {
+        q: 'Can my iPhone read GCash notifications?',
+        a: 'No. iOS does not allow apps to read other apps’ notifications, and PayRecord does not claim otherwise. Use the iPhone to scan and review, and pair an Android phone that receives your payment notifications — or use manual confirmation.',
+      },
+      {
+        q: 'Which wallets auto-match?',
+        a: 'GCash → GCash Express Send is enabled based on tested templates. GoTyme and Maya notifications are not parsed yet, because no verified samples exist; payments to those wallets can still be recorded and confirmed manually. The support table on the home page is generated from the app’s own capability registry, so it is always current.',
+      },
+      {
+        q: 'Does PayRecord see my balance or MPIN?',
+        a: 'Never. It only reads the incoming-payment notifications you allow, and never asks for wallet credentials, MPIN, or OTPs. Nobody from PayRecord will ever ask you for them either.',
+      },
+    ],
+  },
+];
+
+const deleteSteps: ReactNode[] = [
+  <>
+    Open PayRecord → <strong className="font-semibold text-ink">Settings → Privacy &amp; data</strong>.
+  </>,
+  <>
+    Tap <em>Export my personal data</em> if you want a copy first. The download link is valid for 24 hours.
+  </>,
+  <>
+    Tap <em>Delete my account</em> and type DELETE. Sole workspace owners must transfer ownership or delete the workspace
+    first, so business records are never silently orphaned.
+  </>,
+  <>
+    Cannot sign in any more? Email{' '}
+    <a className="ul" href="mailto:support@payrecord.ph?subject=Account%20deletion">
+      support@payrecord.ph
+    </a>{' '}
+    from the account address and we will complete the deletion within 30 days.
+  </>,
 ];
 
 export default function Support() {
   return (
-    <section className="mx-auto max-w-3xl px-4 py-16">
-      <p className="eyebrow">Help desk</p>
-      <h1 className="mt-3 font-display text-4xl font-semibold tracking-tight sm:text-5xl">Support</h1>
-      <p className="mt-5 leading-7 text-ink-2">
-        Email <a className="ul" href="mailto:support@payrecord.ph">support@payrecord.ph</a>. Include your workspace name and app version (Settings → bottom of screen). Never send your MPIN, OTP or wallet password — we will never ask for them.
-      </p>
+    <section className="mx-auto max-w-5xl px-4 py-14 sm:px-6 lg:py-20">
+      <PageHeader
+        eyebrow="Help desk"
+        title="Support"
+        lead={
+          <>
+            Email{' '}
+            <a className="ul" href="mailto:support@payrecord.ph">
+              support@payrecord.ph
+            </a>{' '}
+            with your workspace name and app version (Settings → bottom of the screen).{' '}
+            <span className="text-ink">Never send your MPIN, OTP or wallet password</span> — we will never ask for them.
+          </>
+        }
+      />
 
-      <h2 className="mt-12 border-t-2 border-ink pt-6 font-display text-2xl font-semibold">Delete your account or data</h2>
-      <ol className="mt-4 list-decimal space-y-2 pl-6 text-[15px] leading-7">
-        <li>Open PayRecord → Settings → Privacy &amp; data.</li>
-        <li>Tap <em>Export my personal data</em> if you want a copy first.</li>
-        <li>Tap <em>Delete my account</em> and type DELETE. Sole workspace owners must transfer ownership or delete the workspace first.</li>
-        <li>If you can no longer sign in, email <a className="ul" href="mailto:support@payrecord.ph?subject=Account%20deletion">support@payrecord.ph</a> from the account email and we will complete the deletion within 30 days.</li>
-      </ol>
-      <p className="mt-4 text-sm leading-6 text-ink-2">Deletion removes your profile, memberships and personal data. Business records you created remain with the workspace without your name, as required for the owner&apos;s recordkeeping.</p>
-
-      <h2 className="mt-12 border-t-2 border-ink pt-6 font-display text-2xl font-semibold">Frequently asked</h2>
-      <dl className="mt-2">
-        {faq.map((f, i) => (
-          <div key={f.q} className="grid gap-2 border-b border-dashed border-rule py-5 sm:grid-cols-[3.5rem_1fr]">
-            <span className="font-mono text-sm text-ink-3">Q{String(i + 1).padStart(2, '0')}</span>
-            <div>
-              <dt className="font-display text-lg font-semibold leading-snug">{f.q}</dt>
-              <dd className="mt-2 text-[15px] leading-7 text-ink-2">{f.a}</dd>
-            </div>
-          </div>
+      {/* ── Triage: send people to the right place before they start reading ── */}
+      <nav aria-label="Jump to" className="mt-12 grid gap-4 sm:grid-cols-3">
+        {[
+          ...groups.map((g) => ({ href: `#${g.id}`, title: g.title, lead: g.lead })),
+          { href: '#delete', title: 'Delete my account', lead: 'Export first, then remove everything.' },
+        ].map((c) => (
+          <Link
+            key={c.href}
+            href={c.href}
+            className="card group px-5 py-5 transition-colors hover:border-brand/40 hover:bg-brand-soft/30"
+          >
+            <p className="text-[15px] font-semibold leading-snug tracking-[-0.02em] transition-colors group-hover:text-brand-2">
+              {c.title}
+            </p>
+            <p className="mt-1.5 text-[13px] leading-6 text-ink-3">{c.lead}</p>
+          </Link>
         ))}
-      </dl>
+      </nav>
+
+      {/* ── FAQ, grouped ──────────────────────────────────────────────────── */}
+      {groups.map((g) => (
+        <div key={g.id} id={g.id} className="mt-20 scroll-mt-28">
+          <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-line pb-5">
+            <h2 className="h-section text-[clamp(1.5rem,3.5vw,2rem)] leading-tight">{g.title}</h2>
+            <p className="eyebrow">
+              {g.faq.length} question{g.faq.length === 1 ? '' : 's'}
+            </p>
+          </div>
+
+          <dl>
+            {g.faq.map((f, i) => (
+              <div key={f.q} className="grid gap-x-6 gap-y-3 border-b border-line py-7 sm:grid-cols-[3rem_1fr]">
+                <p className="data text-[13px] text-brand">{String(i + 1).padStart(2, '0')}</p>
+                <div>
+                  <dt className="text-[1.1rem] font-semibold leading-snug tracking-[-0.02em]">{f.q}</dt>
+                  <dd className="mt-3 max-w-2xl text-[15px] leading-8 text-ink-2">{f.a}</dd>
+                </div>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ))}
+
+      {/* ── Account deletion: a store requirement, so it gets real weight ─── */}
+      <div id="delete" className="mt-20 scroll-mt-28">
+        <div className="card-raised overflow-hidden">
+          <div className="border-b border-line bg-bg-2 px-7 py-6 sm:px-9">
+            <h2 className="h-section text-[clamp(1.5rem,3.5vw,2rem)] leading-tight">Delete your account or data</h2>
+            <p className="mt-3 max-w-2xl text-[15px] leading-7 text-ink-2">
+              You can do this yourself from inside the app. Export a copy first if you want to keep your records.
+            </p>
+          </div>
+
+          <div className="px-7 py-7 sm:px-9">
+            <ol className="space-y-5">
+              {deleteSteps.map((step, i) => (
+                <li key={i} className="flex gap-4">
+                  <span className="data mt-0.5 grid size-6 shrink-0 place-items-center rounded-md bg-bg-2 text-[11px] font-semibold text-ink-3">
+                    {i + 1}
+                  </span>
+                  <p className="text-[14.5px] leading-7 text-ink-2">{step}</p>
+                </li>
+              ))}
+            </ol>
+
+            <p className="mt-7 border-t border-line pt-6 text-[13.5px] leading-7 text-ink-3">
+              Deletion removes your profile, memberships and personal data. Business records you created stay with the
+              workspace without your name attached, as the owner needs them for their own recordkeeping. See the{' '}
+              <Link className="ul" href="/privacy">
+                privacy policy
+              </Link>{' '}
+              for exact retention periods.
+            </p>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
