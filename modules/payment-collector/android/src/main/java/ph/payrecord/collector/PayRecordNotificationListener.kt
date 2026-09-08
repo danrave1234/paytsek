@@ -66,6 +66,23 @@ class PayRecordNotificationListener : NotificationListenerService() {
     val parsed = when (result) {
       is NotificationParser.Result.Rejected -> {
         if (result.reason == "UNKNOWN_TEMPLATE") prefs.unknownTemplateCount = prefs.unknownTemplateCount + 1
+        // Opt-in only, and only for shapes we failed to recognise — never for
+        // anything classified as OTP/security, outgoing, promo or failed.
+        if (prefs.captureUnknownTemplates && TemplateSamples.isCaptureEligible(result.reason)) {
+          runCatching {
+            TemplateSamples.insert(
+              context = this,
+              packageName = sbn.packageName,
+              provider = provider,
+              title = title,
+              text = text,
+              bigText = bigText,
+              lines = lines,
+              appVersionName = appInfo.versionName,
+              capturedAt = Iso.of(System.currentTimeMillis()),
+            )
+          }
+        }
         return
       }
       is NotificationParser.Result.Accepted -> result.event

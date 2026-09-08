@@ -19,6 +19,33 @@ import java.util.Locale
  * content-free counter.
  */
 object NotificationParser {
+  /**
+   * Rails a notification can legitimately name. Anything else stays UNKNOWN
+   * rather than being guessed from the fact that money arrived; the flow is
+   * resolved server-side from the customer's confirmation.
+   */
+  private val RAIL_INSTAPAY = Regex("""\bInstaPay\b""", RegexOption.IGNORE_CASE)
+  private val RAIL_PESONET = Regex("""\bPESONet\b""", RegexOption.IGNORE_CASE)
+  private val RAIL_EXPRESS_SEND = Regex("""\bExpress\s+Send\b""", RegexOption.IGNORE_CASE)
+
+  private fun railNamedIn(text: String): String = when {
+    RAIL_INSTAPAY.containsMatchIn(text) -> "INSTAPAY"
+    RAIL_PESONET.containsMatchIn(text) -> "PESONET"
+    RAIL_EXPRESS_SEND.containsMatchIn(text) -> "EXPRESS_SEND"
+    else -> "UNKNOWN"
+  }
+
+  /**
+   * Wallets with a verified incoming-payment template. Keep in sync with
+   * packages/receipt-parsers/src/notifications/index.ts — every other supported
+   * wallet has a registered adapter there that fails closed the same way.
+   *
+   * To add one: capture redacted real samples (Settings → Unknown formats),
+   * implement the template here and in the TS adapter in lockstep, bump both
+   * parser versions, then update the flow registry and support matrix.
+   */
+  private val TEMPLATED_PROVIDERS = setOf("GCASH")
+
   const val GCASH_PARSER_ID = "gcash.incoming.v1"
   const val GCASH_PARSER_VERSION = "1"
 
@@ -73,7 +100,12 @@ object NotificationParser {
   fun parse(input: Input): Result {
     if (input.isGroupSummary) return Result.Rejected("GROUP_SUMMARY")
     val provider = ProviderApps.providerFor(input.packageName) ?: return Result.Rejected("UNKNOWN_PACKAGE")
-    if (provider != "GCASH") return Result.Rejected("UNKNOWN_TEMPLATE") // GoTyme: no verified template yet (fail closed)
+    // One entry per supported wallet, mirroring NOTIFICATION_ADAPTERS on the
+    // TypeScript side. A wallet with no verified template is listed and fails
+    // closed, rather than being excluded by an inequality — that keeps the two
+    // parsers agreeing on the reject reason, which is what makes a rejection
+    // eligible for opt-in shape capture.
+    if (!TEMPLATED_PROVIDERS.contains(provider)) return Result.Rejected("UNKNOWN_TEMPLATE")
 
     val text = listOfNotNull(input.title, input.bigText ?: input.text).plus(input.textLines).filter { it.isNotBlank() }.joinToString("\n")
     if (text.isBlank()) return Result.Rejected("UNKNOWN_TEMPLATE")
@@ -110,7 +142,7 @@ object NotificationParser {
         provider = "GCASH",
         parserId = GCASH_PARSER_ID,
         parserVersion = GCASH_PARSER_VERSION,
-        paymentRail = "EXPRESS_SEND",
+        paymentRail = railNamedIn(text),
         amountCentavos = amount,
         referenceNamespace = if (ref != null) "GCASH_REF_NO" else "UNKNOWN",
         referenceValue = ref,
