@@ -19,13 +19,14 @@ export const RELEASES: Release[] = [
     date: '2026-09-08',
     channel: 'beta',
     highlights: [
-      'Scan or import a GCash / GoTyme receipt; text is read on your phone (no cloud OCR).',
+      'Scan or import the customer’s GCash, GoTyme or Maya payment confirmation; text is read on your phone (no cloud OCR).',
       'Records show honest evidence states: Unverified, Review needed, Notification matched, Confirmed manually.',
       'Pair a remote Android payment phone with a 5-minute single-use code — no Bluetooth or same Wi-Fi needed.',
       'Automatic matching only on exact reference + exact amount for tested GCash Express Send flows; everything else goes to Review.',
       'Owner-only incoming inbox, team invites, CSV export, and full account/workspace deletion.',
+      'Maya added as a receiving wallet: recording and manual confirmation. Automatic matching stays off until real Maya notification samples are verified.',
     ],
-    notes: 'GoTyme notification matching is disabled until real notification samples are verified; GoTyme receipts can still be recorded and confirmed manually.',
+    notes: 'Notification matching is enabled for tested GCash flows only. GoTyme and Maya notifications are not parsed yet — no verified samples — so payments to those wallets are recorded and confirmed manually.',
   },
 ];
 
