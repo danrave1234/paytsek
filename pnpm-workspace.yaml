@@ -1,0 +1,18 @@
+packages:
+  - apps/*
+  - packages/*
+  - modules/*
+
+# pnpm 11: explicit approval of dependencies allowed to run install scripts.
+allowBuilds:
+  '@nestjs/core': true
+  esbuild: true
+  sharp: true
+
+minimumReleaseAgeExclude:
+  - '@supabase/auth-js@2.116.0'
+  - '@supabase/functions-js@2.116.0'
+  - '@supabase/postgrest-js@2.116.0'
+  - '@supabase/realtime-js@2.116.0'
+  - '@supabase/storage-js@2.116.0'
+  - '@supabase/supabase-js@2.116.0'

@@ -1,0 +1,136 @@
+{
+  "$schema": "../fixture-schema.json",
+  "provider": "GCASH",
+  "platform": "ANDROID",
+  "packageName": "com.globe.gcash.android",
+  "provenance": "SYNTHETIC",
+  "observedAppVersion": null,
+  "note": "SYNTHETIC fixtures modeled on the user-described Express Send sample (amount + masked sender + masked phone). They do NOT demonstrate real GCash notification coverage. Replace/extend with REDACTED_REAL_SAMPLE entries before enabling a flow for production auto-match.",
+  "cases": [
+    {
+      "id": "express-send-incoming-with-ref",
+      "flowId": "gcash-to-gcash.express-send",
+      "expect": "ACCEPT",
+      "input": {
+        "title": "GCash",
+        "text": "You have received PHP 1,250.00 of GCash from JU•N D. (+63 9•• ••• 1234) on Sep 08, 2026 1:05 AM. Ref. No. 1234567890123.",
+        "bigText": null,
+        "textLines": [],
+        "isGroupSummary": false
+      },
+      "expected": {
+        "amountCentavos": 125000,
+        "referenceNamespace": "GCASH_REF_NO",
+        "referenceValue": "1234567890123",
+        "payerMaskedName": "JU•N D.",
+        "payerMaskedPhone": "+63 9•• ••• 1234",
+        "providerDescribedAt": "2026-09-07T17:05:00.000Z"
+      }
+    },
+    {
+      "id": "express-send-incoming-no-ref",
+      "flowId": "gcash-to-gcash.express-send",
+      "expect": "ACCEPT",
+      "input": {
+        "title": "GCash",
+        "text": "You have received ₱500.00 from MA•IA S. (0917•••5678). Your new balance is ₱12,340.50.",
+        "bigText": null,
+        "textLines": [],
+        "isGroupSummary": false
+      },
+      "expected": {
+        "amountCentavos": 50000,
+        "referenceNamespace": "UNKNOWN",
+        "referenceValue": null,
+        "payerMaskedName": "MA•IA S.",
+        "payerMaskedPhone": "0917•••5678",
+        "providerDescribedAt": null
+      }
+    },
+    {
+      "id": "outgoing-express-send",
+      "expect": "REJECT",
+      "reason": "OUTGOING_PAYMENT",
+      "input": {
+        "title": "GCash",
+        "text": "You have sent PHP 1,250.00 to JU•N D. Ref. No. 9876543210987.",
+        "bigText": null,
+        "textLines": [],
+        "isGroupSummary": false
+      }
+    },
+    {
+      "id": "otp",
+      "expect": "REJECT",
+      "reason": "OTP_OR_SECURITY",
+      "input": {
+        "title": "GCash",
+        "text": "Your GCash OTP is 123456. Do not share this code with anyone.",
+        "bigText": null,
+        "textLines": [],
+        "isGroupSummary": false
+      }
+    },
+    {
+      "id": "promo",
+      "expect": "REJECT",
+      "reason": "PROMOTION",
+      "input": {
+        "title": "GCash",
+        "text": "Get ₱50 cashback when you pay with GCash this weekend! Tap to learn more.",
+        "bigText": null,
+        "textLines": [],
+        "isGroupSummary": false
+      }
+    },
+    {
+      "id": "pending",
+      "expect": "REJECT",
+      "reason": "FAILED_OR_PENDING",
+      "input": {
+        "title": "GCash",
+        "text": "Your transfer of PHP 1,250.00 is pending. We will notify you once completed.",
+        "bigText": null,
+        "textLines": [],
+        "isGroupSummary": false
+      }
+    },
+    {
+      "id": "group-summary",
+      "expect": "REJECT",
+      "reason": "GROUP_SUMMARY",
+      "input": {
+        "title": "GCash",
+        "text": "3 new messages",
+        "bigText": null,
+        "textLines": ["You have received PHP 100.00 from A.", "You have received PHP 200.00 from B."],
+        "isGroupSummary": true
+      }
+    },
+    {
+      "id": "unknown-template",
+      "expect": "REJECT",
+      "reason": "UNKNOWN_TEMPLATE",
+      "input": {
+        "title": "GCash",
+        "text": "Your GCash account statement for August is ready.",
+        "bigText": null,
+        "textLines": [],
+        "isGroupSummary": false
+      }
+    },
+    {
+      "id": "wrong-package-lookalike",
+      "expect": "REJECT",
+      "reason": "UNKNOWN_PACKAGE",
+      "packageNameOverride": "com.example.fakegcash",
+      "input": {
+        "title": "GCash",
+        "text": "You have received PHP 1,250.00 from JU•N D.",
+        "bigText": null,
+        "textLines": [],
+        "isGroupSummary": false
+      }
+    }
+  ]
+}

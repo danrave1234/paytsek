@@ -1,0 +1,13 @@
+{
+  "$comment": "MCP servers for AI coding agents (Claude Code, Cursor, Codex, VS Code). Both use OAuth on first use; no secrets are stored here. See docs/agent-tooling.md.",
+  "mcpServers": {
+    "expo": {
+      "type": "http",
+      "url": "https://mcp.expo.dev/mcp"
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?read_only=true&features=database,docs,debugging"
+    }
+  }
+}

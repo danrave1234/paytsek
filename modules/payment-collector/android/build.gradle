@@ -1,0 +1,30 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+group = 'ph.payrecord.collector'
+version = '0.1.0'
+
+def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace 'ph.payrecord.collector'
+  defaultConfig {
+    versionCode 1
+    versionName '0.1.0'
+  }
+  lintOptions { abortOnError false }
+}
+
+dependencies {
+  // Reliable background upload with constraints + backoff (persisted across reboots).
+  implementation 'androidx.work:work-runtime-ktx:2.10.0'
+  // Keystore-backed encryption for credential + sensitive outbox columns.
+  implementation 'androidx.security:security-crypto:1.1.0-alpha06'
+  implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0'
+  implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+  testImplementation 'junit:junit:4.13.2'
+}
