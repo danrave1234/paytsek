@@ -1,0 +1,86 @@
+{
+  "provenance": "SYNTHETIC",
+  "note": "SYNTHETIC OCR text modeled on common GCash/GoTyme success-screen layouts. Not real customer data. Add REDACTED_REAL_SAMPLE entries (with app version and platform) before treating any layout as verified.",
+  "cases": [
+    {
+      "id": "gcash-express-send-success",
+      "platform": "ANDROID",
+      "observedAppVersion": null,
+      "ocrText": "Sent via Express Send\n₱1,250.00\nAmount ₱1,250.00\nTotal Amount Sent ₱1,250.00\nSent to\nMARIA SANTOS +63 917 123 4567\nRef No. 1234 567 890123\nSep 08, 2026 1:05 AM\nGCash",
+      "expected": {
+        "receiptProvider": "GCASH",
+        "paymentRail": "EXPRESS_SEND",
+        "amountCentavos": 125000,
+        "totalChargedCentavos": 125000,
+        "referenceNamespace": "GCASH_REF_NO",
+        "referenceValue": "1234567890123",
+        "payeeName": "MARIA SANTOS",
+        "payeePhone": "+63 917 123 4567",
+        "payerName": null,
+        "receiptTransactionAt": "2026-09-07T17:05:00.000Z",
+        "receiptTransactionPrecision": "MINUTE",
+        "receiptStatus": "SUCCESS"
+      }
+    },
+    {
+      "id": "gcash-express-send-with-fee",
+      "platform": "IOS",
+      "observedAppVersion": null,
+      "ocrText": "GCash\nSent via Express Send\nAmount PHP 2,000.00\nService Fee PHP 15.00\nTotal Amount Sent PHP 2,015.00\nSent to JUAN DELA CRUZ 0917 555 1234\nRef. No. 9876543210987\n09/08/2026 2:30 PM",
+      "expected": {
+        "receiptProvider": "GCASH",
+        "paymentRail": "EXPRESS_SEND",
+        "amountCentavos": 200000,
+        "feeCentavos": 1500,
+        "totalChargedCentavos": 201500,
+        "referenceValue": "9876543210987",
+        "payeeName": "JUAN DELA CRUZ",
+        "payerName": null,
+        "receiptTransactionAt": "2026-09-08T06:30:00.000Z",
+        "receiptStatus": "SUCCESS"
+      }
+    },
+    {
+      "id": "gotyme-transfer-success",
+      "platform": "ANDROID",
+      "observedAppVersion": null,
+      "ocrText": "GoTyme Bank\nTransfer successful\nAmount ₱750.50\nTo Maria Santos\nGCash 09171234567\nReference No. GT-20260908-ABC123\n08 Sep 2026, 13:10",
+      "expected": {
+        "receiptProvider": "GOTYME",
+        "amountCentavos": 75050,
+        "referenceNamespace": "GOTYME_REF_NO",
+        "referenceValue": "GT-20260908-ABC123",
+        "payeeName": "Maria Santos",
+        "receiptTransactionAt": "2026-09-08T05:10:00.000Z",
+        "receiptStatus": "SUCCESS"
+      }
+    },
+    {
+      "id": "unreadable",
+      "platform": "ANDROID",
+      "observedAppVersion": null,
+      "ocrText": "S3nt v1a\n1 2S0\nRe No\n",
+      "expected": {
+        "receiptProvider": null,
+        "amountCentavos": null,
+        "referenceValue": null,
+        "payeeName": null,
+        "payerName": null,
+        "receiptTransactionAt": null,
+        "receiptStatus": "UNKNOWN"
+      },
+      "expectLowReadability": true
+    },
+    {
+      "id": "gcash-failed",
+      "platform": "ANDROID",
+      "observedAppVersion": null,
+      "ocrText": "GCash\nTransaction Failed\nAmount ₱300.00\nSent to PEDRO REYES\nRef No. 1111222233334\nSep 08, 2026 3:00 PM",
+      "expected": {
+        "receiptProvider": "GCASH",
+        "amountCentavos": 30000,
+        "receiptStatus": "FAILED"
+      }
+    }
+  ]
+}
