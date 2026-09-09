@@ -3,6 +3,7 @@ import { AuthModule } from './auth/auth.module';
 import { BillingModule } from './billing/billing.controller';
 import { DbModule } from './db/db.module';
 import { IngestionModule } from './ingestion/ingestion.controller';
+import { CronController } from './jobs/cron.controller';
 import { WorkerService } from './jobs/worker.service';
 import { MatchingModule } from './matching/matching.module';
 import { OperationsModule } from './operations/operations.controller';
@@ -26,6 +27,7 @@ import { WorkspacesModule } from './workspaces/workspaces.controller';
     BillingModule,
     OperationsModule,
   ],
+  controllers: [CronController],
   providers: [WorkerService],
 })
 export class AppModule {}

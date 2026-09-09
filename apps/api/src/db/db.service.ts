@@ -14,9 +14,16 @@ export class DbService implements OnModuleDestroy {
 
   constructor() {
     const env = loadEnv();
+    // Every warm serverless instance keeps its own pool, and there can be many
+    // at once, so a per-instance max sized for a single long-running server
+    // would exhaust Postgres connections under load. Vercel sets VERCEL=1.
+    // Pair this with Supabase's pooled connection string (port 6543), not the
+    // direct one (5432) -- see docs/run-and-release.md.
+    const serverless = process.env.VERCEL === '1';
     this.pool = new Pool({
       connectionString: env.DATABASE_URL,
-      max: env.DATABASE_POOL_MAX,
+      max: serverless ? 1 : env.DATABASE_POOL_MAX,
+      idleTimeoutMillis: serverless ? 10_000 : undefined,
       application_name: 'payrecord-api',
       statement_timeout: 15_000,
     });

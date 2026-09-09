@@ -41,6 +41,13 @@ export const EnvSchema = z.object({
   WORKER_POLL_INTERVAL_MS: int(2000),
   WORKER_LEASE_SECONDS: int(60),
   WORKER_MAX_ATTEMPTS: int(8),
+  /**
+   * Shared secret for the serverless cron entrypoint. Vercel sends it as
+   * `Authorization: Bearer <CRON_SECRET>`. Empty disables the endpoint
+   * entirely, so a misconfigured deploy fails closed rather than exposing
+   * job execution to the internet.
+   */
+  CRON_SECRET: z.string().optional().default(''),
 
   REVENUECAT_SECRET_API_KEY: z.string().optional().default(''),
   REVENUECAT_WEBHOOK_AUTH_HEADER: z.string().optional().default(''),
