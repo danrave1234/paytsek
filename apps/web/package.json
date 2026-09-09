@@ -5,7 +5,7 @@
   "description": "PayRecord public website: product info, release updates, downloads, privacy, terms, support.",
   "scripts": {
     "dev": "next dev -p 3001",
-    "build": "next build",
+    "build": "pnpm --filter @payrecord/contracts run build && pnpm --filter @payrecord/receipt-parsers run build && next build",
     "start": "next start -p 3001",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
