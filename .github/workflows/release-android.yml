@@ -86,7 +86,21 @@ jobs:
         run: |
           eas build --platform android --profile preview --non-interactive --wait --json > build.json
           cat build.json
-          echo "APK_URL=$(node -p "JSON.parse(require('fs').readFileSync('build.json','utf8'))[0].artifacts.buildUrl")" >> "$GITHUB_ENV"
+          # `eas build:view` labels these "Application Archive URL" and "Build
+          # Artifacts URL", i.e. applicationArchiveUrl / buildArtifactsUrl.
+          # buildUrl is the legacy name, so accept any of them and fail loudly
+          # rather than exporting an empty APK_URL that curl would then 404 on.
+          node -e '
+            const b = JSON.parse(require("fs").readFileSync("build.json", "utf8"))[0];
+            const a = (b && b.artifacts) || {};
+            const url = a.applicationArchiveUrl || a.buildUrl || a.buildArtifactsUrl;
+            if (!url) {
+              console.error("No artifact URL in build.json. artifacts =", JSON.stringify(a));
+              process.exit(1);
+            }
+            require("fs").appendFileSync(process.env.GITHUB_ENV, `APK_URL=${url}\n`);
+            console.log("Resolved artifact URL");
+          '
 
       - name: Download APK
         # A second, stable-named copy so payrecord.ph/download/android can link
