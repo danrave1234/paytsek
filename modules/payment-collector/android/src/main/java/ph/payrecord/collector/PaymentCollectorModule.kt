@@ -8,6 +8,8 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class CollectorConfigRecord : Record {
   @Field var apiBaseUrl: String = ""
@@ -148,7 +150,7 @@ class PaymentCollectorModule : Module() {
         .url(prefs.apiBaseUrl!!.trimEnd('/') + "/v1/collector/health")
         .header("Authorization", "Collector " + prefs.credential!!)
         .header("x-payrecord-api-version", "v1")
-        .post(okhttp3.RequestBody.create(okhttp3.MediaType.parse("application/json"), body.toString()))
+        .post(body.toString().toRequestBody("application/json".toMediaType()))
         .build()
       try { okhttp3.OkHttpClient().newCall(req).execute().use { it.isSuccessful } } catch (_: Throwable) { false }
     }
