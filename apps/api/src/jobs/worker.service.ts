@@ -55,6 +55,45 @@ export class WorkerService {
     this.stopping = true;
   }
 
+  /**
+   * One bounded pass over the queue, for a serverless cron invocation where
+   * `runForever` cannot be used. Stops on whichever comes first: no work left,
+   * `maxJobs`, or `budgetMs`. The budget defaults below Vercel's free-tier
+   * 10s function limit so the invocation returns rather than being killed
+   * mid-job -- a killed invocation would leave the lease held until it expires.
+   */
+  async drain({ maxJobs = 25, budgetMs = 8_000 }: { maxJobs?: number; budgetMs?: number } = {}): Promise<{
+    processed: number;
+    timedOut: boolean;
+  }> {
+    const startedAt = Date.now();
+    let processed = 0;
+
+    while (processed < maxJobs) {
+      const remaining = budgetMs - (Date.now() - startedAt);
+      if (remaining <= 0) return { processed, timedOut: true };
+
+      const leased = await this.jobs.lease(this.workerId, Math.min(10, maxJobs - processed), this.env.WORKER_LEASE_SECONDS);
+      if (leased.length === 0) break;
+
+      for (const job of leased) {
+        if (Date.now() - startedAt >= budgetMs) return { processed, timedOut: true };
+        await this.runOne(job);
+        processed += 1;
+      }
+    }
+    return { processed, timedOut: false };
+  }
+
+  /**
+   * Periodic maintenance that `runForever` folds into its loop. As a cron
+   * entrypoint it needs its own schedule; the dedupe key keeps repeated calls
+   * from queueing duplicates.
+   */
+  async enqueueMaintenance(): Promise<void> {
+    await this.jobs.enqueue('PURGE_RETENTION', {}, 'purge:periodic');
+  }
+
   /** Process one job (also usable from tests / one-shot CLI). */
   async runOne(job: JobRow): Promise<void> {
     try {
