@@ -1,19 +1,20 @@
 {
-  "name": "@payrecord/web",
+  "name": "@paytsek/web",
   "version": "0.1.0",
   "private": true,
-  "description": "PayRecord public website: product info, release updates, downloads, privacy, terms, support.",
+  "description": "PayTsek public website: product info, release updates, downloads, privacy, terms, support.",
   "scripts": {
     "dev": "next dev -p 3001",
-    "build": "pnpm --filter @payrecord/contracts run build && pnpm --filter @payrecord/receipt-parsers run build && next build",
+    "build": "pnpm --filter @paytsek/contracts run build && pnpm --filter @paytsek/receipt-parsers run build && next build",
     "start": "next start -p 3001",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "test": "echo \"web: static content; verified by next build\" && exit 0"
   },
   "dependencies": {
-    "@payrecord/contracts": "workspace:*",
-    "@payrecord/receipt-parsers": "workspace:*",
+    "@paytsek/contracts": "workspace:*",
+    "@paytsek/receipt-parsers": "workspace:*",
+    "@supabase/supabase-js": "^2.57.4",
     "next": "^16.3.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
