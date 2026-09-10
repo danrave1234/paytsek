@@ -176,20 +176,9 @@ describe('wallet coverage', () => {
     }
   });
 
-  it('rejects unsupported wallets as UNKNOWN_TEMPLATE, not UNKNOWN_PACKAGE', () => {
-    // The Kotlin parser reports UNKNOWN_TEMPLATE for these, and only that
-    // reason is eligible for opt-in shape capture — so the two must agree.
-    for (const wallet of ['GOTYME', 'MAYA', 'MARIBANK'] as const) {
-      const res = parseNotification({
-        packageName: PROVIDER_PACKAGES[wallet][0]!,
-        title: 'Anything',
-        text: 'You have received PHP 1,250.00',
-        bigText: null,
-        textLines: [],
-        isGroupSummary: false,
-      });
-      expect(res).toEqual({ ok: false, reason: 'UNKNOWN_TEMPLATE' });
-    }
+  it('fails closed for a known wallet when its title and body do not both match', () => {
+    const res = parseNotification({ packageName: PROVIDER_PACKAGES.MAYA[0]!, title: 'Anything', text: 'You have received PHP 1,250.00', bigText: null, textLines: [], isGroupSummary: false });
+    expect(res).toEqual({ ok: false, reason: 'UNKNOWN_TEMPLATE' });
   });
 
   it('rejects a wallet that is not on the allowlist at all', () => {
@@ -284,16 +273,22 @@ describe('GCash notification adapter (SYNTHETIC fixtures)', () => {
     });
   }
 
-  it('fails closed for GoTyme (no real sample available)', () => {
-    const r = parseNotification({
-      packageName: 'com.gotyme.gotymebank',
-      title: 'GoTyme',
-      text: 'You received ₱100.00 from Someone',
-      bigText: null,
-      textLines: [],
-      isGroupSummary: false,
-    });
-    expect(r).toEqual({ ok: false, reason: 'UNKNOWN_TEMPLATE' });
+  it('accepts the supplied GoTyme, Maya and MariBank incoming templates only', () => {
+    const cases = [
+      { packageName: 'com.gotyme.gotymebank', title: 'Transfer received', text: 'You received P1,250.00 from A. Santos. Your available balance is P9,000.00.', expected: { provider: 'GOTYME', amountCentavos: 125000, payerMaskedName: 'A. Santos', paymentRail: 'UNKNOWN' } },
+      { packageName: 'com.paymaya', title: 'Money received ↙️', text: 'You received 500.00 in your wallet via InstaPay', expected: { provider: 'MAYA', amountCentavos: 50000, paymentRail: 'INSTAPAY' } },
+      { packageName: 'ph.seabank.seabank', title: 'Successful Incoming Transfer', text: "You've received PHP 780.50 from bank with account ending 1234", expected: { provider: 'MARIBANK', amountCentavos: 78050, paymentRail: 'UNKNOWN' } },
+    ];
+    for (const c of cases) {
+      const r = parseNotification({ ...c, bigText: null, textLines: [], isGroupSummary: false });
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.event).toMatchObject(c.expected);
+    }
+  });
+
+  it('rejects an outgoing lookalike before it can match an incoming template', () => {
+    const r = parseNotification({ packageName: 'com.gotyme.gotymebank', title: 'Transfer received', text: 'You have sent P1,250.00 to A. Santos.', bigText: null, textLines: [], isGroupSummary: false });
+    expect(r).toEqual({ ok: false, reason: 'OUTGOING_PAYMENT' });
   });
 
   it('never accepts an unknown package even with a perfect template', () => {
