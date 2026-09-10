@@ -4,8 +4,6 @@ interface Extra {
   apiUrl: string;
   supabaseUrl: string;
   supabaseAnonKey: string;
-  revenueCatApiKeyAndroid: string;
-  revenueCatApiKeyIos: string;
   sentryDsn: string;
 }
 
@@ -15,8 +13,6 @@ export const env: Extra = {
   apiUrl: extra.apiUrl ?? 'http://localhost:3000',
   supabaseUrl: extra.supabaseUrl ?? '',
   supabaseAnonKey: extra.supabaseAnonKey ?? '',
-  revenueCatApiKeyAndroid: extra.revenueCatApiKeyAndroid ?? '',
-  revenueCatApiKeyIos: extra.revenueCatApiKeyIos ?? '',
   sentryDsn: extra.sentryDsn ?? '',
 };
 

@@ -1,4 +1,4 @@
-import { PROVIDER_LABELS, type Provider } from '@payrecord/contracts';
+import { PROVIDER_LABELS, type Provider } from '@paytsek/contracts';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Platform, Share, View } from 'react-native';
 import { Button, Card, Switch, Text, useTheme } from 'react-native-paper';
@@ -39,7 +39,7 @@ export default function Samples() {
 
   const share = async () => {
     const json = await PaymentCollector.exportTemplateSamples();
-    await Share.share({ message: json, title: 'PayRecord notification shapes' });
+    await Share.share({ message: json, title: 'PayTsek notification shapes' });
   };
 
   const clear = async () => {
@@ -69,12 +69,12 @@ export default function Samples() {
     <Screen>
       <ScreenTitle
         title="Unknown formats"
-        subtitle="Help add support for a wallet PayRecord cannot match yet"
+        subtitle="Help add support for a wallet PayTsek cannot match yet"
       />
 
       <Notice kind="info">
         Values are removed on this phone before anything is saved: digits become #, letters become a. Only notifications
-        PayRecord failed to recognise are kept — never OTPs or security messages. Nothing is uploaded; you choose when to
+        PayTsek failed to recognise are kept — never OTPs or security messages. Nothing is uploaded; you choose when to
         share it.
       </Notice>
 

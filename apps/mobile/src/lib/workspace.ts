@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 
-const KEY = 'payrecord.activeWorkspaceId';
+const KEY = 'paytsek.activeWorkspaceId';
 let cached: string | null | undefined;
 
 /** Every action explicitly selects one workspace; the selection is persisted per device. */

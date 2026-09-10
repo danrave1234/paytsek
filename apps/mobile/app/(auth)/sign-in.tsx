@@ -1,5 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
+import * as Linking from 'expo-linking';
 import { Controller, useForm } from 'react-hook-form';
 import { Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Button, HelperText, Icon, Text, TextInput, useTheme } from 'react-native-paper';
@@ -26,6 +28,7 @@ const COPY: Record<Mode, { title: string; subtitle: string; cta: string }> = {
 
 export default function SignIn() {
   const theme = useTheme();
+  const router = useRouter();
   const [mode, setMode] = useState<Mode>('signin');
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -42,6 +45,27 @@ export default function SignIn() {
     setMessage(null);
   };
 
+  const completeGoogleSignIn = useCallback(async (url: string) => {
+    const redirectTo = Linking.createURL('auth/callback');
+    if (!url.startsWith(redirectTo)) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const { error } = await supabase().auth.exchangeCodeForSession(url);
+      if (error) throw error;
+    } catch (e) {
+      setMessage({ kind: 'error', text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  // Google returns to the app through the registered paytsek:// scheme.
+  useEffect(() => {
+    const subscription = Linking.addEventListener('url', ({ url }) => void completeGoogleSignIn(url));
+    return () => subscription.remove();
+  }, [completeGoogleSignIn]);
+
   const submit = handleSubmit(async ({ email, password }) => {
     setBusy(true);
     setMessage(null);
@@ -51,7 +75,7 @@ export default function SignIn() {
         const { error } = await auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
-        const { error } = await auth.signUp({ email, password, options: { emailRedirectTo: 'payrecord://auth/callback' } });
+        const { error } = await auth.signUp({ email, password, options: { emailRedirectTo: 'paytsek://auth/callback' } });
         if (error) throw error;
         setMessage({ kind: 'info', text: 'Check your email to verify your account, then sign in.' });
         setMode('signin');
@@ -67,9 +91,33 @@ export default function SignIn() {
     const email = getValues('email');
     if (!email) return setMessage({ kind: 'error', text: 'Enter your email address first.' });
     setBusy(true);
-    const { error } = await supabase().auth.resetPasswordForEmail(email, { redirectTo: 'payrecord://auth/callback' });
+    const { error } = await supabase().auth.resetPasswordForEmail(email, { redirectTo: 'paytsek://auth/callback' });
     setBusy(false);
     setMessage(error ? { kind: 'error', text: error.message } : { kind: 'info', text: 'Password reset email sent.' });
+  };
+
+  const signInWithGoogle = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const redirectTo = Linking.createURL('auth/callback');
+      const { data, error } = await supabase().auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+          queryParams: { prompt: 'select_account' },
+        },
+      });
+      if (error) throw error;
+      if (!data.url) throw new Error('Google sign-in could not be started.');
+      await Linking.openURL(data.url);
+      setMessage({ kind: 'info', text: 'Continue in Google. You will return to PayTsek when sign-in is complete.' });
+    } catch (e) {
+      setMessage({ kind: 'error', text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const copy = COPY[mode];
@@ -101,6 +149,7 @@ export default function SignIn() {
             </Text>
           </View>
 
+          {Platform.OS === 'android' ? <Button icon="cellphone-link" onPress={() => router.push('/pair/collector')} style={{ marginBottom: SPACING.lg }}>Set up main phone with a pairing code</Button> : null}
           {/* Form -------------------------------------------------------- */}
           <Controller
             control={control}
@@ -196,10 +245,31 @@ export default function SignIn() {
             {copy.cta}
           </Button>
 
+          {mode !== 'reset' ? (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginTop: SPACING.xl }}>
+                <View style={{ height: 1, flex: 1, backgroundColor: theme.colors.outlineVariant }} />
+                <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>OR</Text>
+                <View style={{ height: 1, flex: 1, backgroundColor: theme.colors.outlineVariant }} />
+              </View>
+              <Button
+                mode="outlined"
+                icon="google"
+                loading={busy}
+                disabled={busy}
+                onPress={() => void signInWithGoogle()}
+                style={{ marginTop: SPACING.lg, minHeight: TOUCH_TARGET, justifyContent: 'center' }}
+                contentStyle={{ minHeight: TOUCH_TARGET }}
+              >
+                Continue with Google
+              </Button>
+            </>
+          ) : null}
+
           {/* Mode switch — one link, not a segmented control ------------- */}
           <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: SPACING.xl }}>
             <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-              {mode === 'signin' ? 'New to PayRecord?' : 'Already have an account?'}
+              {mode === 'signin' ? 'New to PayTsek?' : 'Already have an account?'}
             </Text>
             <Button mode="text" compact onPress={() => go(mode === 'signin' ? 'signup' : 'signin')}>
               {mode === 'signin' ? 'Create an account' : 'Sign in'}
@@ -221,7 +291,7 @@ export default function SignIn() {
           >
             <Icon source="shield-check-outline" size={18} color={theme.colors.onSurfaceVariant} />
             <Text variant="bodySmall" style={{ flex: 1, color: theme.colors.onSurfaceVariant, lineHeight: 18 }}>
-              PayRecord never asks for your GCash, GoTyme, Maya or MariBank MPIN, OTP, or wallet login.
+              PayTsek never asks for your GCash, GoTyme, Maya or MariBank MPIN, OTP, or wallet login.
             </Text>
           </View>
         </ScrollView>

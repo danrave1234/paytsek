@@ -26,7 +26,7 @@ export default function RecordDetail() {
   const [reason, setReason] = useState('');
   const [msg, setMsg] = useState<{ kind: 'info' | 'error' | 'warning'; text: string } | null>(null);
 
-  if (rec.isLoading) return <Screen scroll={false}><Loading /></Screen>;
+  if (rec.isLoading) return <Screen scroll={false}><Loading variant="detail" label="Loading record" /></Screen>;
   if (rec.error || !rec.data) return <Screen scroll={false}><ErrorState error={rec.error} retry={() => void rec.refetch()} /></Screen>;
   const r = rec.data;
   const canConfirm = isOwner || (workspace && r.createdByUserId);

@@ -9,17 +9,31 @@ import type {
   SourceSummary,
   UsageSummary,
   WorkspaceSummary,
-} from '@payrecord/contracts';
+} from '@paytsek/contracts';
 import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 
 /** One query client; server state is the system of record (no duplicate stores). */
 export const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 15_000, retry: 1, refetchOnReconnect: true, refetchOnWindowFocus: true },
+    queries: { staleTime: 60_000, gcTime: 10 * 60_000, retry: 1, refetchOnReconnect: true, refetchOnWindowFocus: true, refetchIntervalInBackground: false },
     mutations: { retry: 0 },
   },
 });
+
+/** Mounted tabs keep cached data, but only the visible route polls. */
+function useVisiblePolling(interval: number) {
+  const [visible, setVisible] = useState(false);
+  useFocusEffect(useCallback(() => { setVisible(true); return () => setVisible(false); }, []));
+  return visible ? interval : false;
+}
+
+/** Clear expendable memory only; durable unsynced receipts live in SQLite. */
+export function clearInactiveCache() {
+  queryClient.removeQueries({ type: 'inactive', predicate: (query) => query.state.fetchStatus === 'idle' });
+}
 
 export const keys = {
   workspaces: ['workspaces'] as const,
@@ -34,13 +48,13 @@ export const keys = {
   candidates: (id: string) => ['candidates', id] as const,
 };
 
-export const useWorkspaces = () => useQuery({ queryKey: keys.workspaces, queryFn: () => api<WorkspaceSummary[]>('/v1/workspaces', { noWorkspace: true }) });
-export const useHome = () => useQuery({ queryKey: keys.home, queryFn: () => api<HomeSummary>('/v1/home'), refetchInterval: 30_000 });
-export const useSources = () => useQuery({ queryKey: keys.sources, queryFn: () => api<SourceSummary[]>('/v1/sources') });
-export const useDevices = () => useQuery({ queryKey: keys.devices, queryFn: () => api<DeviceSummary[]>('/v1/devices'), refetchInterval: 30_000 });
-export const useMembers = () => useQuery({ queryKey: keys.members, queryFn: () => api<MemberSummary[]>('/v1/workspaces/current/members') });
-export const useUsage = () => useQuery({ queryKey: keys.usage, queryFn: () => api<UsageSummary>('/v1/billing/usage') });
-export const useInbox = () => useQuery({ queryKey: keys.inbox, queryFn: () => api<OwnerInboxEvent[]>('/v1/inbox?unlinkedOnly=true&limit=100') });
+export const useWorkspaces = () => useQuery({ queryKey: keys.workspaces, queryFn: ({ signal }) => api<WorkspaceSummary[]>('/v1/workspaces', { noWorkspace: true, signal }) });
+export const useHome = () => useQuery({ queryKey: keys.home, queryFn: ({ signal }) => api<HomeSummary>('/v1/home', { signal }), refetchInterval: useVisiblePolling(60_000) });
+export const useSources = () => useQuery({ queryKey: keys.sources, queryFn: ({ signal }) => api<SourceSummary[]>('/v1/sources', { signal }), staleTime: 5 * 60_000 });
+export const useDevices = () => useQuery({ queryKey: keys.devices, queryFn: ({ signal }) => api<DeviceSummary[]>('/v1/devices', { signal }), refetchInterval: useVisiblePolling(60_000) });
+export const useMembers = () => useQuery({ queryKey: keys.members, queryFn: ({ signal }) => api<MemberSummary[]>('/v1/workspaces/current/members', { signal }) });
+export const useUsage = () => useQuery({ queryKey: keys.usage, queryFn: ({ signal }) => api<UsageSummary>('/v1/billing/usage', { signal }) });
+export const useInbox = () => useQuery({ queryKey: keys.inbox, queryFn: ({ signal }) => api<OwnerInboxEvent[]>('/v1/inbox?unlinkedOnly=true&limit=100', { signal }) });
 
 export function useRecords(filters: { q?: string; state?: string[]; sourceId?: string; staffUserId?: string; from?: string; to?: string; cursor?: string }) {
   const qs = new URLSearchParams();
@@ -52,11 +66,11 @@ export function useRecords(filters: { q?: string; state?: string[]; sourceId?: s
   if (filters.to) qs.set('to', filters.to);
   if (filters.cursor) qs.set('cursor', filters.cursor);
   qs.set('limit', '30');
-  return useQuery({ queryKey: keys.records(filters), queryFn: () => api<ListRecordsResponse>(`/v1/records?${qs.toString()}`) });
+  return useQuery({ queryKey: keys.records(filters), queryFn: ({ signal }) => api<ListRecordsResponse>(`/v1/records?${qs.toString()}`, { signal }) });
 }
 
-export const useRecord = (id: string) => useQuery({ queryKey: keys.record(id), queryFn: () => api<RecordDetail>(`/v1/records/${id}`), enabled: !!id });
-export const useCandidates = (id: string) => useQuery({ queryKey: keys.candidates(id), queryFn: () => api<CandidatesResponse>(`/v1/records/${id}/candidates`), enabled: !!id, refetchInterval: 20_000 });
+export const useRecord = (id: string) => useQuery({ queryKey: keys.record(id), queryFn: ({ signal }) => api<RecordDetail>(`/v1/records/${id}`, { signal }), enabled: !!id });
+export const useCandidates = (id: string) => useQuery({ queryKey: keys.candidates(id), queryFn: ({ signal }) => api<CandidatesResponse>(`/v1/records/${id}/candidates`, { signal }), enabled: !!id, refetchInterval: useVisiblePolling(30_000) });
 
 /** Invalidate everything that a record-state change can affect. */
 export function useInvalidateRecord() {

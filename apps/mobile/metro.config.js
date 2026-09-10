@@ -1,5 +1,5 @@
 // Metro config for a pnpm monorepo: watch the workspace root and resolve
-// hoisted node_modules so @payrecord/* packages and local modules load.
+// hoisted node_modules so @paytsek/* packages and local modules load.
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 
@@ -10,5 +10,9 @@ const config = getDefaultConfig(projectRoot);
 config.watchFolders = [workspaceRoot];
 config.resolver.nodeModulesPaths = [path.resolve(projectRoot, 'node_modules'), path.resolve(workspaceRoot, 'node_modules')];
 config.resolver.disableHierarchicalLookup = false;
+config.resolver.extraNodeModules = {
+  '@paytsek/contracts': path.resolve(workspaceRoot, 'packages/contracts'),
+  '@paytsek/receipt-parsers': path.resolve(workspaceRoot, 'packages/receipt-parsers'),
+};
 
 module.exports = config;
