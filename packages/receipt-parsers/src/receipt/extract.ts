@@ -1,4 +1,4 @@
-import type { PaymentRail, Provider, ReceiptFields, ReceiptStatus, ReferenceNamespace } from '@payrecord/contracts';
+import type { PaymentRail, Provider, ReceiptFields, ReceiptStatus, ReferenceNamespace } from '@paytsek/contracts';
 import { findMoneyCandidates } from '../money';
 import { normalizeReference } from '../reference';
 import { parseManilaDateTime } from '../time';

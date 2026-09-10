@@ -15,7 +15,7 @@ export const CreatePairingSessionResponse = z.object({
   pairingSessionId: uuid,
   /** Single-use short code; server stores only its hash. Expires in 5 minutes. */
   code: z.string().min(8).max(16),
-  /** Encoded as QR by the owner app: payrecord://pair?c=<code> */
+  /** Encoded as QR by the owner app: paytsek://pair?c=<code> */
   qrPayload: z.string(),
   expiresAt: z.string().datetime(),
 });

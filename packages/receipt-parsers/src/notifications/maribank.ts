@@ -1,29 +1,17 @@
+import { findMoneyCandidates } from '../money';
 import { PROVIDER_PACKAGES } from '../registry';
+import { classifyNegative } from './filters';
+import { joinNotificationText, normalizeForHash } from './types';
 import type { NotificationAdapter, NotificationParseResult, NotificationText } from './types';
 
-export const MARIBANK_PARSER_ID = 'maribank.incoming.unsupported';
-export const MARIBANK_PARSER_VERSION = '0';
+export const MARIBANK_PARSER_ID = 'maribank.incoming.v1';
+export const MARIBANK_PARSER_VERSION = '1';
 
 /**
- * MariBank notification collection is NOT supported yet: no redacted real
- * incoming-payment notification sample is available, and fabricating a payload
- * format is prohibited. This adapter fails closed for every input.
- *
- * MariBank Philippines is the rebranded SeaBank Philippines (BSP digital
- * banking licence, 2025), which is why the package allowlist still carries the
- * SeaBank identifier.
- *
- * Registering it matters even while it rejects everything: without an adapter a
- * MariBank notification is rejected as UNKNOWN_PACKAGE here but as
- * UNKNOWN_TEMPLATE by the Kotlin parser, and only the latter is eligible for
- * opt-in shape capture — so the two sides must agree.
- *
- * To enable: capture redacted real samples (Settings → Unknown formats), add
- * fixtures under tests/fixtures/maribank/ with provenance
- * REDACTED_REAL_SAMPLE, implement the template here and in
- * NotificationParser.kt in lockstep, bump both versions, and update the flow
- * registry + provider support matrix.
+ * MariBank exposes only the sender bank and account suffix, not a payer
+ * identity. This creates payment evidence, never a fabricated payer.
  */
+const RECEIVED = /^You(?:'|’)ve received\s+(?:₱|PHP|P)\s?((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)\s+from bank with account ending\s+\d{4}\.?$/i;
 export const maribankAdapter: NotificationAdapter = {
   provider: 'MARIBANK',
   parserId: MARIBANK_PARSER_ID,
@@ -32,6 +20,19 @@ export const maribankAdapter: NotificationAdapter = {
   parse(input: NotificationText): NotificationParseResult {
     if (input.isGroupSummary) return { ok: false, reason: 'GROUP_SUMMARY' };
     if (!this.packages.includes(input.packageName)) return { ok: false, reason: 'UNKNOWN_PACKAGE' };
-    return { ok: false, reason: 'UNKNOWN_TEMPLATE' };
+    const text = joinNotificationText(input);
+    const body = (input.bigText ?? input.text ?? '').replace(/\s+/g, ' ').trim();
+    if (!/^successful incoming transfer$/i.test(input.title?.trim() ?? '')) return { ok: false, reason: 'UNKNOWN_TEMPLATE' };
+    const negative = classifyNegative(text);
+    if (negative) return { ok: false, reason: negative };
+    const match = RECEIVED.exec(body);
+    if (!match?.[1]) return { ok: false, reason: 'UNKNOWN_TEMPLATE' };
+    const amountCentavos = findMoneyCandidates(`PHP ${match[1]}`)[0]?.centavos;
+    if (!amountCentavos) return { ok: false, reason: 'NO_AMOUNT' };
+    return { ok: true, event: {
+      provider: 'MARIBANK', parserId: MARIBANK_PARSER_ID, parserVersion: MARIBANK_PARSER_VERSION,
+      paymentRail: 'UNKNOWN', currency: 'PHP', amountCentavos, referenceNamespace: 'UNKNOWN', referenceValue: null,
+      payerMaskedName: null, payerMaskedPhone: null, providerDescribedAt: null, normalizedText: normalizeForHash(text),
+    } };
   },
 };

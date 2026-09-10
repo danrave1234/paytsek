@@ -1,4 +1,4 @@
-import type { TimePrecision } from '@payrecord/contracts';
+import type { TimePrecision } from '@paytsek/contracts';
 
 /** Asia/Manila has no DST; fixed UTC+8. */
 const MANILA_OFFSET_MINUTES = 8 * 60;

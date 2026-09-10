@@ -1,4 +1,4 @@
-import type { PaymentRail, Provider, ReferenceNamespace } from '@payrecord/contracts';
+import type { PaymentRail, Provider, ReferenceNamespace } from '@paytsek/contracts';
 
 export const REGISTRY_VERSION = '1';
 
@@ -104,11 +104,11 @@ export const FLOW_REGISTRY: readonly FlowCapability[] = [
     receivingProvider: 'MAYA',
     rail: 'QR_P2P',
     receiptReferenceNamespace: 'MAYA_REF_NO',
-    notificationReferenceNamespace: 'MAYA_REF_NO',
-    referenceNamespacesComparable: true,
+    notificationReferenceNamespace: null,
+    referenceNamespacesComparable: false,
     autoMatchEnabled: false,
-    disabledReason: 'No Maya incoming-payment notification sample captured yet; recording and manual confirmation only.',
-    evidence: 'NONE',
+    disabledReason: 'Incoming template is recognized, but it contains no comparable reference. Review required.',
+    evidence: 'REDACTED_REAL_SAMPLE',
     observedAppVersions: [],
   },
   {
@@ -156,11 +156,11 @@ export const FLOW_REGISTRY: readonly FlowCapability[] = [
     receivingProvider: 'MARIBANK',
     rail: 'QR_P2P',
     receiptReferenceNamespace: 'MARIBANK_REF_NO',
-    notificationReferenceNamespace: 'MARIBANK_REF_NO',
-    referenceNamespacesComparable: true,
+    notificationReferenceNamespace: null,
+    referenceNamespacesComparable: false,
     autoMatchEnabled: false,
-    disabledReason: 'No MariBank incoming-payment notification sample captured yet; recording and manual confirmation only.',
-    evidence: 'NONE',
+    disabledReason: 'Incoming template is recognized, but it contains no comparable reference. Review required.',
+    evidence: 'REDACTED_REAL_SAMPLE',
     observedAppVersions: [],
   },
   {
@@ -182,11 +182,11 @@ export const FLOW_REGISTRY: readonly FlowCapability[] = [
     receivingProvider: 'GOTYME',
     rail: 'BANK_TRANSFER',
     receiptReferenceNamespace: 'GOTYME_REF_NO',
-    notificationReferenceNamespace: 'GOTYME_REF_NO',
-    referenceNamespacesComparable: true,
+    notificationReferenceNamespace: null,
+    referenceNamespacesComparable: false,
     autoMatchEnabled: false,
-    disabledReason: 'No GoTyme incoming-payment notification sample available; recording and manual confirmation only.',
-    evidence: 'NONE',
+    disabledReason: 'Incoming template is recognized, but it contains no comparable reference. Review required.',
+    evidence: 'REDACTED_REAL_SAMPLE',
     observedAppVersions: [],
   },
 ];
