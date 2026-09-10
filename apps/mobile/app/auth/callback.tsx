@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { ActivityIndicator, Button, Text, useTheme } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { supabase } from '@/lib/supabase';
+import { finishOAuth } from '@/lib/oauth';
 import { SPACING } from '@/theme';
 
 /**
@@ -20,18 +20,15 @@ export default function AuthCallback() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!url) return;
     let active = true;
 
-    void supabase().auth.exchangeCodeForSession(url).then(({ error: exchangeError }) => {
-      if (!active) return;
-      if (exchangeError) {
-        setError(exchangeError.message);
-        return;
-      }
-      // SessionProvider observes SIGNED_IN and routes to workspace setup or
-      // Scan. Replacing this route also keeps it out of the back stack.
-      router.replace('/workspaces');
+    void (async () => {
+      const callbackUrl = url ?? await Linking.getInitialURL();
+      if (!callbackUrl) throw new Error('PayTsek did not receive Google’s sign-in response. Please try again.');
+      await finishOAuth(callbackUrl);
+      if (active) router.replace('/workspaces');
+    })().catch((exchangeError: Error) => {
+      if (active) setError(exchangeError.message);
     });
 
     return () => { active = false; };

@@ -10,11 +10,6 @@
     "lint": "tsc --noEmit -p tsconfig.json",
     "test": "echo \"receipt-ocr: native module; verified in device E2E (docs/testing.md)\" && exit 0"
   },
-  "peerDependencies": {
-    "expo": "*",
-    "expo-modules-core": "*",
-    "react-native": "*"
-  },
   "devDependencies": {
     "@expo/config-plugins": "^10.0.0",
     "expo-modules-core": "~57.0.0",

@@ -41,7 +41,16 @@ let client: SupabaseClient | null = null;
 export function supabase(): SupabaseClient {
   if (!client) {
     client = createClient(env.supabaseUrl, env.supabaseAnonKey, {
-      auth: { storage: secureStorage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false },
+      auth: {
+        storage: secureStorage,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+        // Native OAuth returns through a custom scheme. PKCE gives that
+        // callback a one-time code for exchange instead of putting session
+        // tokens in the deep-link URL.
+        flowType: 'pkce',
+      },
     });
   }
   return client;

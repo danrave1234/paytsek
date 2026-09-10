@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { requireOptionalNativeModule } from 'expo-modules-core';
 
 /**
  * JS API for the Android payment collector. On iOS every method is a safe
@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
  */
 export interface CollectorStatus {
   supported: boolean;
-  /** User granted Notification Access to PayRecord in system settings. */
+  /** User granted Notification Access to PayTsek in system settings. */
   notificationAccessGranted: boolean;
   /** The listener service is currently connected to the system notification manager. */
   listenerConnected: boolean;
@@ -41,7 +41,7 @@ export interface CollectorConfig {
 }
 
 /**
- * A notification shape PayRecord did not recognise, captured only when the
+ * A notification shape PayTsek did not recognise, captured only when the
  * owner opts in. Values are redacted on the phone before storage: digits
  * become '#', letters become 'a'/'A'. Only UNKNOWN_TEMPLATE rejections are
  * eligible — OTP and security messages are never stored.
@@ -79,12 +79,9 @@ interface NativeModule {
   clearTemplateSamples(): Promise<void>;
 }
 
-let native: NativeModule | null = null;
-if (Platform.OS === 'android') {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { requireNativeModule } = require('expo-modules-core') as { requireNativeModule: (name: string) => NativeModule };
-  native = requireNativeModule('PaymentCollector');
-}
+// The Android app registers this module. iOS intentionally receives null and
+// uses the safe unsupported implementation below.
+const native = requireOptionalNativeModule<NativeModule>('PaymentCollector');
 
 const unsupportedStatus = (): CollectorStatus => ({
   supported: false,

@@ -1,17 +1,17 @@
 # Supabase CLI project config (local development). Production settings live in
 # the Supabase dashboard; secrets are never committed.
-project_id = "payrecord"
+project_id = "paytsek"
 
 [api]
 enabled = true
 port = 54321
-schemas = ["public", "storage"]
-extra_search_path = ["public"]
-max_rows = 200
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
 
 [db]
 port = 54322
-major_version = 15
+major_version = 17
 
 [db.pooler]
 enabled = false
@@ -25,12 +25,12 @@ port = 54323
 
 [storage]
 enabled = true
-file_size_limit = "25MiB"
+file_size_limit = "50MiB"
 
 [auth]
 enabled = true
-site_url = "payrecord://auth/callback"
-additional_redirect_urls = ["payrecord://auth/callback", "http://localhost:3001/auth/callback"]
+site_url = "https://www.paytsek.online"
+additional_redirect_urls = ["paytsek://auth/callback", "https://paytsek.online/auth/callback", "https://www.paytsek.online/auth/callback"]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
 refresh_token_reuse_interval = 10
@@ -39,7 +39,7 @@ enable_signup = true
 [auth.email]
 enable_signup = true
 double_confirm_changes = true
-enable_confirmations = true
+enable_confirmations = false
 # Password recovery is email-based; no SMS OTP dependency.
 
 [auth.sms]
