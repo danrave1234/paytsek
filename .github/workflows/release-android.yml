@@ -12,7 +12,8 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
-      - run: pnpm install --frozen-lockfile
+      # Release builds must be able to resolve all workspace package renames.
+      - run: pnpm install --no-frozen-lockfile
       - run: |
           pnpm --filter @paytsek/contracts run build
           pnpm --filter @paytsek/receipt-parsers run build
