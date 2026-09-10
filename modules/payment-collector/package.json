@@ -10,11 +10,6 @@
     "lint": "tsc --noEmit -p tsconfig.json",
     "test": "echo \"payment-collector: Kotlin parity tests run via gradle in an Android build (see docs/testing.md)\" && exit 0"
   },
-  "peerDependencies": {
-    "expo": "*",
-    "expo-modules-core": "*",
-    "react-native": "*"
-  },
   "devDependencies": {
     "@expo/config-plugins": "^10.0.0",
     "expo-modules-core": "~57.0.0",
