@@ -27,6 +27,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: 'ph.paytsek.app',
+    // Must increase for every public APK so Android accepts it as an upgrade.
+    versionCode: 4,
     adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#0B5FFF' },
     permissions: ['android.permission.CAMERA', 'android.permission.INTERNET', 'android.permission.POST_NOTIFICATIONS', 'android.permission.RECEIVE_BOOT_COMPLETED'],
     // Receive shared images from other apps (share sheet import).
