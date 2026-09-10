@@ -23,10 +23,10 @@ importers:
       '@nestjs/platform-express':
         specifier: ^10.4.15
         version: 10.4.22(@nestjs/common@10.4.22(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@10.4.22)
-      '@payrecord/contracts':
+      '@paytsek/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@payrecord/receipt-parsers':
+      '@paytsek/receipt-parsers':
         specifier: workspace:*
         version: link:../../packages/receipt-parsers
       '@supabase/supabase-js':
@@ -72,13 +72,16 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@expo/vector-icons':
+        specifier: ^15.1.1
+        version: 15.1.1(expo-font@57.0.3)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       '@hookform/resolvers':
         specifier: ^5.9.1
         version: 5.9.1(@sinclair/typebox@0.27.12)(react-hook-form@7.87.0(react@19.2.3))(zod@3.25.76)
-      '@payrecord/contracts':
+      '@paytsek/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@payrecord/receipt-parsers':
+      '@paytsek/receipt-parsers':
         specifier: workspace:*
         version: link:../../packages/receipt-parsers
       '@supabase/supabase-js':
@@ -153,9 +156,6 @@ importers:
       react-native-paper:
         specifier: ^5.15.3
         version: 5.15.3(react-native-safe-area-context@5.7.0(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
-      react-native-purchases:
-        specifier: ^10.9.0
-        version: 10.9.0(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       react-native-reanimated:
         specifier: 4.5.1
         version: 4.5.1(react-native-worklets@0.10.4(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
@@ -190,12 +190,15 @@ importers:
 
   apps/web:
     dependencies:
-      '@payrecord/contracts':
+      '@paytsek/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@payrecord/receipt-parsers':
+      '@paytsek/receipt-parsers':
         specifier: workspace:*
         version: link:../../packages/receipt-parsers
+      '@supabase/supabase-js':
+        specifier: ^2.57.4
+        version: 2.116.0
       next:
         specifier: ^16.3.3
         version: 16.3.4(@types/node@22.20.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -278,7 +281,7 @@ importers:
 
   packages/receipt-parsers:
     dependencies:
-      '@payrecord/contracts':
+      '@paytsek/contracts':
         specifier: workspace:*
         version: link:../contracts
     devDependencies:
@@ -1191,6 +1194,13 @@ packages:
       react-native-worklets:
         optional: true
 
+  '@expo/vector-icons@15.1.1':
+    resolution: {integrity: sha512-Iu2VkcoI5vygbtYngm7jb4ifxElNVXQYdDrYkT7UCEIiKLeWnQY0wf2ZhHZ+Wro6Sc5TaumpKUOqDRpLi5rkvw==}
+    peerDependencies:
+      expo-font: '>=14.0.4'
+      react: '*'
+      react-native: '*'
+
   '@expo/ws-tunnel@2.0.0':
     resolution: {integrity: sha512-j+JfTRdCk820J9dU0sA2SqshQIKFOMo7ED84w9MJFcebfbNQgsLztEY/SABDkGnjatrW4xGqnUhVRxSBVyCkXw==}
     peerDependencies:
@@ -1965,15 +1975,6 @@ packages:
     peerDependenciesMeta:
       '@types/react':
         optional: true
-
-  '@revenuecat/purchases-js-hybrid-mappings@18.33.1':
-    resolution: {integrity: sha512-pYKZz+w4CHQlLoU1Lp3kP9ERET9itevWwhb7P4gGcQaXpWUWPZQLiNzEtopc25J/CTn37xN/wQNm3FeIjJuOOQ==}
-
-  '@revenuecat/purchases-js@1.54.0':
-    resolution: {integrity: sha512-eYCzHLGeJ4DTMvSKjnOi2CpTTtCBAYfM/g0eYjWr5SU+oTXF8QBqpFvBFT5aEoH9/GiP9svL00gT9L7Ck7B+aQ==}
-
-  '@revenuecat/purchases-typescript-internal@18.33.1':
-    resolution: {integrity: sha512-TobtSjmMQUiPgNqcWZJfCyQgmCzhP77+KuvTZUKBcLlSTtoYTOFy5GnaOd5YPvwNHeFYL09nzgleg67n866pzw==}
 
   '@rollup/rollup-android-arm-eabi@4.63.1':
     resolution: {integrity: sha512-UZ8sUxPTiHWYX9QNdJedb1kDZSpS1t/VPWBWGSgqHNi9w3Cu6IXvu2mzbhiTiPvtrqgTQJ+zqiAq2iPIPilpaQ==}
@@ -4181,16 +4182,6 @@ packages:
       react-native: '*'
       react-native-safe-area-context: '*'
 
-  react-native-purchases@10.9.0:
-    resolution: {integrity: sha512-KPeYKTvKLi2Uyh6k73aPxlUox5JUBl03w7znT5kXTnxiu5Ydnm8q9sh89MNvEdzxB6FjV8u+dLqMx4RbVEgexA==}
-    peerDependencies:
-      react: '>= 16.6.3'
-      react-native: '>= 0.73.0'
-      react-native-web: '*'
-    peerDependenciesMeta:
-      react-native-web:
-        optional: true
-
   react-native-reanimated@4.5.1:
     resolution: {integrity: sha512-RnMvtDuR+68ig864gAvZCOdZehqhC5rFmMo0kn+ARfgVSTvFeF6IFLBVgMPUu0KwihaapEyW24WRi6nEyy1kSA==}
     peerDependencies:
@@ -6201,6 +6192,12 @@ snapshots:
       - '@types/react-dom'
     optional: true
 
+  '@expo/vector-icons@15.1.1(expo-font@57.0.3)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      expo-font: 57.0.3(expo@57.0.20)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
+      react: 19.2.3
+      react-native: 0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
+
   '@expo/ws-tunnel@2.0.0(ws@8.21.3)':
     dependencies:
       ws: 8.21.3
@@ -7162,14 +7159,6 @@ snapshots:
       react-native: 0.87.1(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.8)
     optionalDependencies:
       '@types/react': 19.2.18
-
-  '@revenuecat/purchases-js-hybrid-mappings@18.33.1':
-    dependencies:
-      '@revenuecat/purchases-js': 1.54.0
-
-  '@revenuecat/purchases-js@1.54.0': {}
-
-  '@revenuecat/purchases-typescript-internal@18.33.1': {}
 
   '@rollup/rollup-android-arm-eabi@4.63.1':
     optional: true
@@ -9749,13 +9738,6 @@ snapshots:
       react-native: 0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
       react-native-safe-area-context: 5.7.0(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       use-latest-callback: 0.2.6(react@19.2.3)
-
-  react-native-purchases@10.9.0(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3):
-    dependencies:
-      '@revenuecat/purchases-js-hybrid-mappings': 18.33.1
-      '@revenuecat/purchases-typescript-internal': 18.33.1
-      react: 19.2.3
-      react-native: 0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
 
   react-native-reanimated@4.5.1(react-native-worklets@0.10.4(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3):
     dependencies:
