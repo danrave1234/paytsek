@@ -62,6 +62,6 @@ export const ApiErrorBody = z.object({
 export type ApiErrorBody = z.infer<typeof ApiErrorBody>;
 
 export const API_VERSION = 'v1' as const;
-export const API_VERSION_HEADER = 'x-payrecord-api-version' as const;
-export const WORKSPACE_HEADER = 'x-payrecord-workspace' as const;
+export const API_VERSION_HEADER = 'x-paytsek-api-version' as const;
+export const WORKSPACE_HEADER = 'x-paytsek-workspace' as const;
 export const IDEMPOTENCY_HEADER = 'idempotency-key' as const;

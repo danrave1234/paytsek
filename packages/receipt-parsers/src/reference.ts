@@ -1,4 +1,4 @@
-import type { ReferenceNamespace } from '@payrecord/contracts';
+import type { ReferenceNamespace } from '@paytsek/contracts';
 
 export const REFERENCE_NORMALIZATION_VERSION = '1';
 

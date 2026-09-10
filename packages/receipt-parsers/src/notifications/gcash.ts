@@ -1,4 +1,4 @@
-import type { PaymentRail } from '@payrecord/contracts';
+import type { PaymentRail } from '@paytsek/contracts';
 import { findMoneyCandidates } from '../money';
 import { normalizeReference } from '../reference';
 import { PROVIDER_PACKAGES } from '../registry';

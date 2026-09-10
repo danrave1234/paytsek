@@ -5,13 +5,13 @@ import { uuid } from './pairing';
 export const UsageSummary = z.object({
   planCode: PlanCode,
   subscriptionStatus: SubscriptionStatus,
-  /** Store that owns the active subscription, for management deep links. */
-  managementPlatform: z.enum(['APP_STORE', 'PLAY_STORE']).nullable(),
+  /** Billing system that owns the active plan. */
+  managementPlatform: z.enum(['APP_STORE', 'PLAY_STORE', 'PAYMONGO']).nullable(),
   periodStart: z.string().datetime(),
   periodEnd: z.string().datetime(),
   monthlyAllowance: z.number().int(),
   monthlyUsed: z.number().int(),
-  /** Purchased credits never expire. Consumed only after the monthly allowance. */
+  /** Legacy prepaid balance. It remains usable for existing customers but is not sold. */
   prepaidCreditsRemaining: z.number().int(),
   /** Warn levels crossed for this period (0.8, 1.0). */
   warnLevelsCrossed: z.array(z.number()),
@@ -31,33 +31,28 @@ export const UsageSummary = z.object({
 export type UsageSummary = z.infer<typeof UsageSummary>;
 
 export const BillingProduct = z.object({
-  /** Internal key, e.g. SOLO_MONTHLY, TEAM_MONTHLY, PACK_500 */
+  /** Internal checkout key, e.g. STARTER_30_DAYS or BUSINESS_30_DAYS. */
   key: z.string(),
-  /** Store product identifier configured in RevenueCat. */
+  /** Stable product key, used for checkout and reconciliation. */
   storeProductId: z.string(),
   kind: z.enum(['SUBSCRIPTION', 'CONSUMABLE']),
   planCode: PlanCode.nullable(),
   records: z.number().int().nullable(),
-  /** Localized price string must come from the storefront SDK; server returns null. */
-  localizedPrice: z.null(),
+  /** Price in PHP centavos; checkout is hosted by PayMongo. */
+  priceCentavos: z.number().int().nonnegative(),
 });
 export type BillingProduct = z.infer<typeof BillingProduct>;
 
-/**
- * Client asks the server to reconcile entitlements for this workspace after a
- * purchase or restore. Server verifies with RevenueCat; a client-reported
- * success grants nothing by itself.
- */
-export const ReconcilePurchaseRequest = z.object({
-  /** RevenueCat app user id used by the SDK (server verifies it maps to the caller). */
-  revenueCatAppUserId: z.string().max(200),
+export const CreateCheckoutRequest = z.object({
+  productKey: z.enum(['STARTER_30_DAYS', 'BUSINESS_30_DAYS']),
 });
+export type CreateCheckoutRequest = z.infer<typeof CreateCheckoutRequest>;
 
-export const ReconcilePurchaseResponse = z.object({
-  usage: UsageSummary,
-  /** Whether a pending store transaction is still unverified (no capacity granted yet). */
-  pendingVerification: z.boolean(),
+export const CheckoutSession = z.object({
+  checkoutUrl: z.string().url(),
+  expiresAt: z.string().datetime(),
 });
+export type CheckoutSession = z.infer<typeof CheckoutSession>;
 
 /** Ledger row visible to the owner. */
 export const LedgerEntry = z.object({

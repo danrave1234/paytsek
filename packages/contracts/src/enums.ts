@@ -142,7 +142,7 @@ export type PairingState = z.infer<typeof PairingState>;
 export const DeviceStatus = z.enum(['ACTIVE', 'PAUSED', 'REVOKED']);
 export type DeviceStatus = z.infer<typeof DeviceStatus>;
 
-export const PlanCode = z.enum(['FREE', 'SOLO', 'TEAM']);
+export const PlanCode = z.enum(['FREE', 'STARTER', 'BUSINESS']);
 export type PlanCode = z.infer<typeof PlanCode>;
 
 export const SubscriptionStatus = z.enum([

@@ -1,4 +1,4 @@
-import type { PaymentRail, Provider, ReferenceNamespace } from '@payrecord/contracts';
+import type { PaymentRail, Provider, ReferenceNamespace } from '@paytsek/contracts';
 
 /** Raw notification text fields as exposed by Android's Notification extras. */
 export interface NotificationText {
