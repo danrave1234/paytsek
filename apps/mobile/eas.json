@@ -24,14 +24,15 @@
     "preview": {
       "extends": "base",
       "distribution": "internal",
+      "autoIncrement": true,
       "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://api.payrecord.ph" }
+      "env": { "EXPO_PUBLIC_API_URL": "https://api.paytsek.online" }
     },
     "production": {
       "extends": "base",
       "autoIncrement": true,
       "android": { "buildType": "app-bundle" },
-      "env": { "EXPO_PUBLIC_API_URL": "https://api.payrecord.ph" }
+      "env": { "EXPO_PUBLIC_API_URL": "https://api.paytsek.online" }
     }
   },
   "submit": {

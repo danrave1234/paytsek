@@ -1,10 +1,11 @@
 import type { Session } from '@supabase/supabase-js';
-import type { WorkspaceSummary } from '@payrecord/contracts';
+import type { WorkspaceSummary } from '@paytsek/contracts';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from './api';
 import { isConfigured } from './env';
 import { supabase } from './supabase';
 import { getActiveWorkspaceId, setActiveWorkspaceId } from './workspace';
+import { queryClient } from './queries';
 
 interface SessionState {
   ready: boolean;
@@ -60,6 +61,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setSession(s);
       if (s) await refreshWorkspaces();
       else {
+        queryClient.clear();
         setWorkspaces([]);
         setActiveId(null);
       }
@@ -68,11 +70,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, [configured, refreshWorkspaces]);
 
   const selectWorkspace = useCallback(async (id: string | null) => {
+    await queryClient.cancelQueries();
+    queryClient.clear();
     await setActiveWorkspaceId(id);
     setActiveId(id);
   }, []);
 
   const signOut = useCallback(async () => {
+    await queryClient.cancelQueries();
+    queryClient.clear();
     await supabase().auth.signOut();
     await setActiveWorkspaceId(null);
   }, []);

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Share } from 'react-native';
-import { Button, Card, Dialog, Portal, Text, TextInput } from 'react-native-paper';
+import { Button, Card, Dialog, Portal, Text, TextInput, useTheme } from 'react-native-paper';
 import { Notice, Row, Screen } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useIsOwner, useSession } from '@/lib/session';
 
 export default function Privacy() {
+  const theme = useTheme();
   const isOwner = useIsOwner();
   const { workspace, signOut, refreshWorkspaces, selectWorkspace } = useSession();
   const [dialog, setDialog] = useState<'account' | 'workspace' | null>(null);
@@ -14,7 +15,7 @@ export default function Privacy() {
 
   const exportData = async () => {
     const data = await api<Record<string, unknown>>('/v1/me/privacy-export', { noWorkspace: true });
-    await Share.share({ message: JSON.stringify(data, null, 2), title: 'PayRecord personal data export' });
+    await Share.share({ message: JSON.stringify(data, null, 2), title: 'PayTsek personal data export' });
   };
 
   const run = async () => {
@@ -35,7 +36,7 @@ export default function Privacy() {
   return (
     <Screen>
       <Card mode="outlined">
-        <Card.Title title="What PayRecord collects" />
+        <Card.Title title="What PayTsek collects" />
         <Card.Content style={{ gap: 6 }}>
           <Text variant="bodySmall">• Receipt images you capture or import (location EXIF removed) and the fields read from them.</Text>
           <Text variant="bodySmall">• On a paired Android payment phone only: amount, masked sender, reference (if shown) and time of positive incoming-payment notifications from the wallet apps you enabled. OTPs, security prompts, outgoing payments, promos and unknown messages are dropped on the phone and never uploaded.</Text>
@@ -47,15 +48,15 @@ export default function Privacy() {
         <Card.Content>
           <Row label="Unmatched notifications" value="7 days" />
           <Row label="Receipt images (Free)" value="30 days" />
-          <Row label="Receipt images (paid / with credits)" value="90 days" />
+          <Row label="Receipt images (paid)" value="90 days" />
           <Row label="Structured records & audit" value="12 months" />
           <Row label="Export files" value="24 hours" />
         </Card.Content>
       </Card>
-      <Notice kind="info">A notification match means PayRecord saw a matching notification on your phone. It is not a confirmation from GCash, GoTyme, Maya or any bank.</Notice>
+      <Notice kind="info">A notification match means PayTsek saw a notification on your phone. It is not a confirmation from GCash, GoTyme, Maya or any bank.</Notice>
       <Button mode="outlined" onPress={() => void exportData()}>Export my personal data</Button>
-      {isOwner ? <Button mode="outlined" textColor="#B3261E" onPress={() => setDialog('workspace')}>Delete workspace "{workspace?.name}"</Button> : null}
-      <Button mode="outlined" textColor="#B3261E" onPress={() => setDialog('account')}>Delete my account</Button>
+      {isOwner ? <Button mode="outlined" textColor={theme.colors.error} onPress={() => setDialog('workspace')}>Delete workspace "{workspace?.name}"</Button> : null}
+      <Button mode="outlined" textColor={theme.colors.error} onPress={() => setDialog('account')}>Delete my account</Button>
       {msg ? <Notice kind={msg.kind}>{msg.text}</Notice> : null}
       <Portal>
         <Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}>
@@ -66,7 +67,7 @@ export default function Privacy() {
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setDialog(null)}>Cancel</Button>
-            <Button textColor="#B3261E" disabled={confirm !== 'DELETE'} onPress={() => void run()}>Delete</Button>
+            <Button textColor={theme.colors.error} disabled={confirm !== 'DELETE'} onPress={() => void run()}>Delete</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

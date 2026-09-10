@@ -1,4 +1,4 @@
-import type { CreateRecordResponse, OwnerInboxEvent } from '@payrecord/contracts';
+import type { CreateRecordResponse, OwnerInboxEvent } from '@paytsek/contracts';
 import React, { useState } from 'react';
 import { Button, Card, Text } from 'react-native-paper';
 import { EmptyState, ErrorState, Loading, Notice, Screen } from '@/components/ui';

@@ -7,7 +7,7 @@ import { env } from './env';
  * in the native Keystore-backed store; here we only remember that this install
  * is a collector and for which workspace/source, so the UI can render health.
  */
-const KEY = 'payrecord.collectorBinding';
+const KEY = 'paytsek.collectorBinding';
 
 export interface CollectorBinding {
   workspaceId: string;

@@ -1,4 +1,4 @@
-import type { ExportJobView } from '@payrecord/contracts';
+import type { ExportJobView } from '@paytsek/contracts';
 import React, { useEffect, useState } from 'react';
 import { Linking } from 'react-native';
 import { Button, Card, Text } from 'react-native-paper';

@@ -2,7 +2,7 @@ import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-const KEY = 'payrecord.installId';
+const KEY = 'paytsek.installId';
 
 /**
  * App-generated install id (UUID v4). Never a hardware identifier (no IMEI,
