@@ -10,7 +10,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: 'paytsek',
   owner: 'danrave1234',
   scheme: 'paytsek',
-  version: '0.1.6',
+  version: '0.1.7',
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',
   icon: './assets/icon.png',
@@ -28,7 +28,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: 'ph.paytsek.app',
     // Must increase for every public APK so Android accepts it as an upgrade.
-    versionCode: 5,
+    versionCode: 6,
     adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#0B5FFF' },
     permissions: ['android.permission.CAMERA', 'android.permission.INTERNET', 'android.permission.POST_NOTIFICATIONS', 'android.permission.RECEIVE_BOOT_COMPLETED'],
     // Receive shared images from other apps (share sheet import).
@@ -54,6 +54,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ['expo-splash-screen', { image: './assets/splash.png', resizeMode: 'contain', backgroundColor: '#0B5FFF' }],
     'expo-secure-store',
     'expo-sqlite',
+    'expo-web-browser',
     ['expo-camera', { cameraPermission: 'PayTsek uses the camera to capture a customer\u2019s payment receipt.' }],
     ['expo-image-picker', { photosPermission: 'PayTsek can import a saved receipt screenshot.' }],
     ['expo-build-properties', {
