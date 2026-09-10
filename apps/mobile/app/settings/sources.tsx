@@ -1,30 +1,38 @@
-import { PROVIDERS, PROVIDER_LABELS, type Provider, type SourceSummary } from '@payrecord/contracts';
+import { PROVIDERS, PROVIDER_LABELS, type Provider, type SourceSummary } from '@paytsek/contracts';
 import { useQueryClient } from '@tanstack/react-query';
 import React, { useState } from 'react';
 import { View } from 'react-native';
-import { Button, Card, Switch, Text, TextInput } from 'react-native-paper';
+import { Button, Card, Switch, Text, useTheme } from 'react-native-paper';
 import { ErrorState, Loading, Notice, Row, Screen } from '@/components/ui';
 import { api } from '@/lib/api';
-import { autoMatchFlowsForReceivingProvider } from '@payrecord/receipt-parsers';
-import { maskPhone } from '@/lib/format';
+import { autoMatchFlowsForReceivingProvider } from '@paytsek/receipt-parsers';
 import { useSources } from '@/lib/queries';
-import { TOUCH_TARGET } from '@/theme';
+import { SPACING, TOUCH_TARGET } from '@/theme';
 
 export default function Sources() {
+  const theme = useTheme();
   const q = useSources();
   const qc = useQueryClient();
   const [provider, setProvider] = useState<Provider>('GCASH');
-  const [label, setLabel] = useState('');
-  const [identifier, setIdentifier] = useState('');
-  const [aliases, setAliases] = useState('');
   const [error, setError] = useState<string | null>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: ['sources'] });
 
   const add = async () => {
     setError(null);
     try {
-      await api('/v1/sources', { method: 'POST', body: { provider, label, declaredIdentifier: identifier, maskedDisplay: maskPhone(identifier), recipientAliases: aliases.split(',').map((s) => s.trim()).filter(Boolean), isDefault: (q.data?.length ?? 0) === 0 } });
-      setLabel(''); setIdentifier(''); setAliases('');
+      // A source identifies a wallet app on the main payment phone. It is not
+      // a customer or a wallet account name, so avoid collecting either here.
+      await api('/v1/sources', {
+        method: 'POST',
+        body: {
+          provider,
+          label: `${PROVIDER_LABELS[provider]} on main payment phone`,
+          declaredIdentifier: `main-phone:${provider}`,
+          maskedDisplay: 'Main payment phone',
+          recipientAliases: [],
+          isDefault: (q.data?.length ?? 0) === 0,
+        },
+      });
       await refresh();
     } catch (e) { setError((e as Error).message); }
   };
@@ -35,15 +43,15 @@ export default function Sources() {
 
   return (
     <Screen>
-      <Notice kind="info">Account association is owner-configured, not provider-verified. PayRecord cannot confirm which account a notification belongs to beyond the phone it came from.</Notice>
+      <Notice kind="info">A payment source is a wallet app on the main payment phone. If that phone receives a QR payment notification, PayTsek can process it. This is not a customer profile and it does not need customer-facing names.</Notice>
       {q.isLoading ? <Loading /> : q.error ? <ErrorState error={q.error} retry={() => void q.refetch()} /> : null}
       {q.data?.map((s) => (
         <Card key={s.id} mode="outlined">
-          <Card.Title title={`${s.label}${s.isDefault ? ' · default' : ''}`} subtitle={`${PROVIDER_LABELS[s.provider]} · ${s.maskedDisplay}`} />
+          <Card.Title title={`${PROVIDER_LABELS[s.provider]} notifications${s.isDefault ? ' · default' : ''}`} subtitle="Main payment phone" />
           <Card.Content>
             <Row label="Automatic matching" value={s.autoMatchFlows.length ? s.autoMatchFlows.join(', ') : 'Recording + manual confirmation only'} />
             <Row label="Payment phone" value={s.activeCollectorDeviceId ? 'Connected' : 'None'} />
-            {s.recipientAliases.length ? <Row label="Recipient aliases" value={s.recipientAliases.join(', ')} /> : null}
+            <Row label="Notification format" value={s.autoMatchFlows.length ? 'Tested matching template available' : 'No tested matching template yet'} />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 }}>
               <Text variant="bodyMedium">Pause collection</Text>
               <Switch value={s.collectionPaused} onValueChange={(v) => void patch(s, { collectionPaused: v })} />
@@ -55,19 +63,20 @@ export default function Sources() {
           </Card.Content>
           <Card.Actions>
             {!s.isDefault ? <Button onPress={() => void patch(s, { isDefault: true })}>Make default</Button> : null}
-            <Button textColor="#B3261E" onPress={() => void api(`/v1/sources/${s.id}`, { method: 'DELETE' }).then(refresh)}>Remove</Button>
+            <Button textColor={theme.colors.error} onPress={() => void api(`/v1/sources/${s.id}`, { method: 'DELETE' }).then(refresh)}>Remove</Button>
           </Card.Actions>
         </Card>
       ))}
 
-      <Text variant="titleMedium" style={{ marginTop: 8 }}>Add receiving account</Text>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
+      <Text variant="titleMedium" style={{ marginTop: SPACING.sm }}>Add wallet notification source</Text>
+      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Choose each wallet app that receives your business’s QR payments on the paired main phone. No account number or customer name is required. PayTsek only auto-matches tested formats; unknown formats stay out of matching until reviewed.</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm }}>
         {PROVIDERS.map((p) => (
           <Button
             key={p.value}
             mode={provider === p.value ? 'contained' : 'outlined'}
             onPress={() => setProvider(p.value)}
-            style={{ flex: 1 }}
+            style={{ minWidth: '45%' }}
           >
             {p.label}
           </Button>
@@ -81,11 +90,8 @@ export default function Sources() {
           still be recorded and confirmed manually.
         </Notice>
       ) : null}
-      <TextInput label="Label (e.g. Store GCash)" mode="outlined" value={label} onChangeText={setLabel} />
-      <TextInput label="Account mobile number" mode="outlined" keyboardType="phone-pad" value={identifier} onChangeText={setIdentifier} />
-      <TextInput label="Names shown on customer payment confirmations (comma separated)" mode="outlined" value={aliases} onChangeText={setAliases} />
       {error ? <Notice kind="error">{error}</Notice> : null}
-      <Button mode="contained" onPress={() => void add()} disabled={!label || identifier.replace(/\D/g, '').length < 7} style={{ minHeight: TOUCH_TARGET }}>Add account</Button>
+      <Button mode="contained" onPress={() => void add()} style={{ minHeight: TOUCH_TARGET }}>Add {PROVIDER_LABELS[provider]} source</Button>
     </Screen>
   );
 }

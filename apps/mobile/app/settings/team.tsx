@@ -1,14 +1,15 @@
 import { useQueryClient } from '@tanstack/react-query';
 import React, { useState } from 'react';
 import { Share, View } from 'react-native';
-import { Button, Card, Switch, Text, TextInput } from 'react-native-paper';
+import { Button, Card, Switch, Text, TextInput, useTheme } from 'react-native-paper';
 import { ErrorState, Loading, Notice, Screen } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useMembers } from '@/lib/queries';
 import { useSession } from '@/lib/session';
-import { TOUCH_TARGET } from '@/theme';
+import { SPACING, TOUCH_TARGET } from '@/theme';
 
 export default function Team() {
+  const theme = useTheme();
   const q = useMembers();
   const qc = useQueryClient();
   const { session } = useSession();
@@ -43,11 +44,11 @@ export default function Team() {
             </Card.Content>
           ) : null}
           {m.role === 'CASHIER' && m.userId !== session?.user.id ? (
-            <Card.Actions><Button textColor="#B3261E" onPress={() => void api(`/v1/workspaces/current/members/${m.userId}`, { method: 'DELETE' }).then(refresh)}>Remove</Button></Card.Actions>
+            <Card.Actions><Button textColor={theme.colors.error} onPress={() => void api(`/v1/workspaces/current/members/${m.userId}`, { method: 'DELETE' }).then(refresh)}>Remove</Button></Card.Actions>
           ) : null}
         </Card>
       ))}
-      <Text variant="titleMedium" style={{ marginTop: 8 }}>Invite a cashier</Text>
+      <Text variant="titleMedium" style={{ marginTop: SPACING.sm }}>Invite a cashier</Text>
       <TextInput label="Email" mode="outlined" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <Text variant="bodyMedium">Allow confirming proposed matches</Text>
@@ -59,7 +60,7 @@ export default function Team() {
         <Card mode="outlined">
           <Card.Title title="Invite created" subtitle="Share this code with the cashier (valid 7 days, single use)" />
           <Card.Content><Text selectable variant="bodyLarge">{invite.inviteToken}</Text></Card.Content>
-          <Card.Actions><Button onPress={() => void Share.share({ message: `Join my PayRecord workspace. Open PayRecord → Join with an invite and enter: ${invite.inviteToken}` })}>Share</Button></Card.Actions>
+          <Card.Actions><Button onPress={() => void Share.share({ message: `Join my PayTsek workspace. Open PayTsek → Join with an invite and enter: ${invite.inviteToken}` })}>Share</Button></Card.Actions>
         </Card>
       ) : null}
     </Screen>

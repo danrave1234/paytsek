@@ -1,4 +1,4 @@
-import { API_VERSION_HEADER, WORKSPACE_HEADER, type ApiErrorBody, type ApiErrorCode } from '@payrecord/contracts';
+import { API_VERSION_HEADER, WORKSPACE_HEADER, type ApiErrorBody, type ApiErrorCode } from '@paytsek/contracts';
 import { env } from './env';
 import { getAccessToken } from './supabase';
 import { getActiveWorkspaceId } from './workspace';
@@ -29,6 +29,7 @@ interface RequestOptions {
   /** Skip the user token (device-side pairing endpoints). */
   anonymous?: boolean;
   timeoutMs?: number;
+  signal?: AbortSignal;
 }
 
 /**
@@ -49,17 +50,23 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
     headers[WORKSPACE_HEADER] = ws;
   }
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  opts.signal?.addEventListener('abort', abort, { once: true });
+  if (opts.signal?.aborted) controller.abort();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 20_000);
   let res: Response;
+  let text: string;
   try {
     res = await fetch(`${env.apiUrl}${path}`, { method: opts.method ?? 'GET', headers, body: opts.body === undefined ? undefined : JSON.stringify(opts.body), signal: controller.signal });
-  } catch {
+    text = res.status === 204 ? '' : await res.text();
+  } catch (error) {
+    if (opts.signal?.aborted) throw error;
     throw new OfflineError();
   } finally {
     clearTimeout(timer);
+    opts.signal?.removeEventListener('abort', abort);
   }
   if (res.status === 204) return undefined as T;
-  const text = await res.text();
   const json = text ? (JSON.parse(text) as unknown) : null;
   if (!res.ok) {
     const body = (json ?? {}) as Partial<ApiErrorBody>;

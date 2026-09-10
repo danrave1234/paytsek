@@ -1,8 +1,8 @@
-import type { AcceptPairingResponse } from '@payrecord/contracts';
+import type { AcceptPairingResponse } from '@paytsek/contracts';
 import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
-import { Button, Card, Checkbox, Text, TextInput } from 'react-native-paper';
+import { Button, Card, Checkbox, Text, TextInput, useTheme } from 'react-native-paper';
 import { PaymentCollector, type CollectorStatus } from 'payment-collector';
 import { Notice, Row, Screen } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -11,6 +11,8 @@ import { getInstallId, osVersion, platform } from '@/lib/device';
 import { APP_VERSION } from '@/lib/env';
 import { lastSeen } from '@/lib/format';
 import { TOUCH_TARGET } from '@/theme';
+import { useIsOwner } from '@/lib/session';
+import { queryClient } from '@/lib/queries';
 
 type Step = 'intro' | 'code' | 'waiting' | 'consent' | 'access' | 'done';
 
@@ -21,7 +23,10 @@ type Step = 'intro' | 'code' | 'waiting' | 'consent' | 'access' | 'done';
  * user has read what is and is not collected.
  */
 export default function PairCollector() {
-  const params = useLocalSearchParams<{ c?: string }>();
+  const theme = useTheme();
+  const params = useLocalSearchParams<{ c?: string; ownerApproval?: string }>();
+  const isOwner = useIsOwner();
+  const [busy, setBusy] = useState(false);
   const [existing, setExisting] = useState<CollectorBinding | null>(null);
   const [status, setStatus] = useState<CollectorStatus | null>(null);
   const [step, setStep] = useState<Step>('intro');
@@ -52,6 +57,8 @@ export default function PairCollector() {
   }
 
   const submitCode = async () => {
+    if (busy) return;
+    setBusy(true);
     setError(null);
     try {
       const apps = await PaymentCollector.detectProviderApps();
@@ -60,8 +67,13 @@ export default function PairCollector() {
         body: { code: code.trim(), deviceInstallId: await getInstallId(), platform, appVersion: APP_VERSION, osVersion, detectedProviderApps: apps.filter((a) => a.installed).map((a) => ({ provider: a.provider, packageName: a.packageName, versionName: a.versionName ?? undefined, versionCode: a.versionCode ?? undefined, signingCertSha256: a.signingCertSha256 ?? undefined })) },
       });
       setAccepted(r);
+      if (params.ownerApproval === '1' && isOwner) {
+        await api('/v1/pairing/approve', { method: 'POST', body: { pairingSessionId: r.pairingSessionId, approve: true } });
+        void queryClient.invalidateQueries({ queryKey: ['devices'] });
+        void queryClient.invalidateQueries({ queryKey: ['sources'] });
+      }
       setStep('waiting');
-    } catch (e) { setError((e as Error).message); }
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
 
   const finishConsent = async () => {
@@ -94,7 +106,7 @@ export default function PairCollector() {
           </Card.Actions>
         </Card>
         <Text variant="bodySmall" style={{ opacity: 0.7 }}>Unknown notification formats seen: {status?.unknownTemplateCount ?? 0} (counted only; content never stored).</Text>
-        <Button textColor="#B3261E" onPress={() => void deactivateCollector().then(refresh)}>Stop collecting and unpair this phone</Button>
+        <Button textColor={theme.colors.error} onPress={() => void deactivateCollector().then(refresh)}>Stop collecting and unpair this phone</Button>
       </Screen>
     );
   }
@@ -104,8 +116,8 @@ export default function PairCollector() {
       {step === 'intro' ? (
         <>
           <Text variant="titleMedium">Before you start</Text>
-          <Text variant="bodyMedium">This phone will read GCash notifications about money you receive and send only the amount, masked sender, reference (if shown) and time to your PayRecord workspace. OTPs, outgoing payments, promos, and other apps are ignored and never uploaded.</Text>
-          <Text variant="bodyMedium">If this is your personal phone, personal payments to the same GCash account will also appear in the owner's inbox. Employees only see minimal candidate details for their own scans.</Text>
+          <Text variant="bodyMedium">Use the Android phone where your receiving wallet is installed. PayTsek reads supported incoming-payment notifications for the paired account and shares payment details with your workspace. Employee scanner phones do not need this permission.</Text>
+          <Text variant="bodyMedium">Personal payments to the same wallet source may also appear in the owner’s inbox. Employees only see limited matching details for their own scans. OTPs and unsupported messages are not payment evidence.</Text>
           <Button mode="contained" onPress={() => setStep('code')} style={{ minHeight: TOUCH_TARGET }}>I understand, enter code</Button>
         </>
       ) : null}
@@ -113,7 +125,7 @@ export default function PairCollector() {
         <>
           <TextInput label="Pairing code from the owner" mode="outlined" autoCapitalize="characters" value={code} onChangeText={setCode} />
           {error ? <Notice kind="error">{error}</Notice> : null}
-          <Button mode="contained" onPress={() => void submitCode()} disabled={code.replace(/[^A-Za-z0-9]/g, '').length < 10} style={{ minHeight: TOUCH_TARGET }}>Continue</Button>
+          <Button mode="contained" onPress={() => void submitCode()} loading={busy} disabled={busy || code.replace(/[^A-Za-z0-9]/g, '').length < 10} style={{ minHeight: TOUCH_TARGET }}>Continue</Button>
         </>
       ) : null}
       {step === 'waiting' && accepted ? (
@@ -121,7 +133,7 @@ export default function PairCollector() {
           <Card.Title title="Waiting for the owner to approve" />
           <Card.Content>
             <Row label="Workspace" value={accepted.workspaceName} />
-            <Row label="Receiving account" value={`${accepted.sourceLabel} (${accepted.provider})`} />
+            <Row label="Payment source" value={`${accepted.provider} notifications on this phone`} />
             <Row label="Role of this phone" value={accepted.requestedCapability === 'BOTH' ? 'Collect notifications + scan' : 'Collect notifications only'} />
             <Text variant="bodySmall" style={{ marginTop: 8, opacity: 0.7 }}>Ask the owner to tap Approve in their app. If this is not the workspace you expected, close this screen.</Text>
           </Card.Content>
@@ -130,7 +142,7 @@ export default function PairCollector() {
       {step === 'consent' && accepted ? (
         <>
           <Text variant="titleMedium">Approved. Confirm sharing</Text>
-          <Checkbox.Item label="I know that all incoming-payment notifications from this GCash app, including personal ones, will be visible to the workspace owner." status={consent.personal ? 'checked' : 'unchecked'} onPress={() => setConsent({ ...consent, personal: !consent.personal })} />
+          <Checkbox.Item label={`I know that supported incoming-payment notifications from ${accepted.provider}, including personal payments, will be visible to the workspace owner.`} status={consent.personal ? 'checked' : 'unchecked'} onPress={() => setConsent({ ...consent, personal: !consent.personal })} />
           <Checkbox.Item label="I understand only positive incoming-payment notifications are uploaded; OTPs, security prompts, and unknown messages are dropped on this phone." status={consent.noOtp ? 'checked' : 'unchecked'} onPress={() => setConsent({ ...consent, noOtp: !consent.noOtp })} />
           <Checkbox.Item label="I understand collection can stop if the phone is off, force-stopped, or access is revoked, and that a match is not a bank verification." status={consent.shared ? 'checked' : 'unchecked'} onPress={() => setConsent({ ...consent, shared: !consent.shared })} />
           <Button mode="contained" disabled={!consent.personal || !consent.noOtp || !consent.shared} onPress={() => void finishConsent()} style={{ minHeight: TOUCH_TARGET }}>Enable collection</Button>
@@ -139,7 +151,7 @@ export default function PairCollector() {
       {step === 'access' ? (
         <>
           <Text variant="titleMedium">Turn on notification access</Text>
-          <Text variant="bodyMedium">Android will show the system "Notification access" page. Enable PayRecord there, then come back. You can revoke it any time from the same page.</Text>
+          <Text variant="bodyMedium">Android will show the system "Notification access" page. Enable PayTsek there, then come back. You can revoke it any time from the same page.</Text>
           <Button mode="contained" onPress={() => PaymentCollector.openNotificationAccessSettings()} style={{ minHeight: TOUCH_TARGET }}>Open notification access settings</Button>
           <Button onPress={() => void refresh().then(() => setStep('intro'))}>I've enabled it</Button>
         </>

@@ -1,5 +1,5 @@
-import type { CreateRecordRequest, CreateRecordResponse, InitProofUploadResponse, SyncStatus } from '@payrecord/contracts';
-import { LOCAL_DRAFT_CAP } from '@payrecord/contracts';
+import type { CreateRecordRequest, CreateRecordResponse, InitProofUploadResponse, SyncStatus } from '@paytsek/contracts';
+import { LOCAL_DRAFT_CAP } from '@paytsek/contracts';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
 import { ApiError, OfflineError, api } from './api';
@@ -32,7 +32,7 @@ let db: SQLite.SQLiteDatabase | null = null;
 
 async function open(): Promise<SQLite.SQLiteDatabase> {
   if (db) return db;
-  db = await SQLite.openDatabaseAsync('payrecord.db');
+  db = await SQLite.openDatabaseAsync('paytsek.db');
   await db.execAsync(`
     pragma journal_mode = wal;
     create table if not exists drafts (
@@ -85,9 +85,9 @@ export async function saveDraft(draft: Omit<Draft, 'syncStatus' | 'proofId' | 'l
   return full;
 }
 
-export async function listDrafts(workspaceId: string): Promise<Draft[]> {
+export async function listDrafts(workspaceId: string, pendingOnly = false): Promise<Draft[]> {
   const d = await open();
-  const rows = await d.getAllAsync<Record<string, unknown>>(`select * from drafts where workspace_id = ? order by created_at desc`, [workspaceId]);
+  const rows = await d.getAllAsync<Record<string, unknown>>(`select * from drafts where workspace_id = ? ${pendingOnly ? "and sync_status <> 'SYNCED'" : ''} order by created_at desc`, [workspaceId]);
   return rows.map(rowToDraft);
 }
 
@@ -161,7 +161,7 @@ export async function syncDraft(draft: Draft): Promise<SyncStatus> {
 
 /** Sync everything pending for a workspace (called on resume/reconnect and after quota changes). */
 export async function syncAll(workspaceId: string): Promise<{ synced: number; pending: number }> {
-  const drafts = (await listDrafts(workspaceId)).filter((d) => d.syncStatus !== 'SYNCED');
+  const drafts = await listDrafts(workspaceId, true);
   let synced = 0;
   for (const d of drafts) {
     const s = await syncDraft(d);
@@ -179,6 +179,6 @@ export async function pruneSynced(workspaceId: string): Promise<void> {
     if (r.image_uri) {
       try { new File(r.image_uri).delete(); } catch { /* already gone */ }
     }
+    await d.runAsync(`delete from drafts where client_record_id = ? and workspace_id = ? and sync_status = 'SYNCED'`, [r.client_record_id, workspaceId]);
   }
-  await d.runAsync(`delete from drafts where workspace_id = ? and sync_status = 'SYNCED'`, [workspaceId]);
 }

@@ -1,20 +1,21 @@
-import type { CaptureOrigin, ReceiptFields } from '@payrecord/contracts';
-import { extractReceiptFields, parseMoneyExact, type ReceiptExtraction } from '@payrecord/receipt-parsers';
+import type { CaptureOrigin, ReceiptFields } from '@paytsek/contracts';
+import { extractReceiptFields, parseMoneyExact, type ReceiptExtraction } from '@paytsek/receipt-parsers';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
-import { Image, Platform, StyleSheet, View } from 'react-native';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { CaptureSurface } from '@/components/capture-surface';
+import { AppState, Image, Platform, StyleSheet, View } from 'react-native';
 import { Button, Chip, Divider, Menu, Text, TextInput, useTheme } from 'react-native-paper';
 import { ReceiptOcr } from 'receipt-ocr';
-import { Loading, Notice, Screen, SyncChip } from '@/components/ui';
+import { Loading, Notice, Screen, ScreenTitle, SyncChip } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
 import { newId } from '@/lib/device';
 import { saveDraft, stageImage, syncDraft, type Draft } from '@/lib/drafts';
 import { peso } from '@/lib/format';
 import { useInvalidateRecord, useSources } from '@/lib/queries';
 import { useSession } from '@/lib/session';
-import { TOUCH_TARGET } from '@/theme';
+import { RADIUS, SPACING, TOUCH_TARGET } from '@/theme';
 
 type Stage = 'capture' | 'processing' | 'review' | 'saved';
 
@@ -41,6 +42,25 @@ export default function Scan() {
   const [menu, setMenu] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<Draft | null>(null);
+  const [focused, setFocused] = useState(false);
+  const [foreground, setForeground] = useState(AppState.currentState === 'active');
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      setForeground(state === 'active');
+      if (state !== 'active') { setTorch(false); setCameraReady(false); }
+    });
+    return () => subscription.remove();
+  }, []);
+  const [torch, setTorch] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
+  const operation = useRef(false);
+  useFocusEffect(useCallback(() => {
+    setFocused(true);
+    return () => { setFocused(false); setTorch(false); setCameraReady(false); };
+  }, []));
 
   useEffect(() => {
     if (!sourceId && sources.data?.length) setSourceId(sources.data.find((s) => s.isDefault)?.id ?? sources.data[0]!.id);
@@ -77,27 +97,37 @@ export default function Scan() {
   }, []);
 
   const capture = async () => {
-    if (!camera) return;
-    const photo = await camera.takePictureAsync({ quality: 0.9, skipProcessing: false });
-    if (photo?.uri) await process(photo.uri, 'CAMERA');
+    if (!camera || !cameraReady || operation.current) return;
+    operation.current = true; setBusy(true);
+    try {
+      const photo = await camera.takePictureAsync({ quality: 0.9, skipProcessing: false });
+      if (photo?.uri) await process(photo.uri, 'CAMERA');
+    } catch (e) { setError(`Could not capture receipt: ${(e as Error).message}`); }
+    finally { operation.current = false; setBusy(false); }
   };
 
   const pick = async () => {
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
-    if (!res.canceled && res.assets[0]) await process(res.assets[0].uri, 'IMAGE_IMPORT');
+    if (operation.current) return;
+    operation.current = true; setBusy(true);
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+      if (!res.canceled && res.assets[0]) await process(res.assets[0].uri, 'IMAGE_IMPORT');
+    } catch (e) { setError(`Could not import image: ${(e as Error).message}`); }
+    finally { operation.current = false; setBusy(false); }
   };
 
   const reset = () => { setStage('capture'); setImageUri(null); setExtraction(null); setFields(null); setAmountText(''); setCustomer(''); setNote(''); setSaved(null); setError(null); };
 
   const save = async () => {
-    if (!workspace || !fields || !sourceId || !extraction) return;
+    if (!workspace || !fields || !sourceId || !extraction || saveLock.current) return;
     const money = parseMoneyExact(amountText.trim());
     if (!money) return setError('Enter the amount received exactly as printed, e.g. 1,250.00');
+    saveLock.current = true; setSaving(true);
     setError(null);
     const clientRecordId = newId();
     const corrected = { ...fields, amountCentavos: money.centavos, currency: 'PHP' as const };
-    const stagedUri = imageUri ? await stageImage(imageUri, clientRecordId, 'jpg') : null;
     try {
+      const stagedUri = imageUri ? await stageImage(imageUri, clientRecordId, 'jpg') : null;
       const draft = await saveDraft({
         clientRecordId,
         workspaceId: workspace.id,
@@ -127,15 +157,17 @@ export default function Scan() {
       invalidate();
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      saveLock.current = false; setSaving(false);
     }
   };
 
-  if (stage === 'processing') return <Screen scroll={false}><Loading label="Reading receipt on this phone…" /></Screen>;
+  if (stage === 'processing') return <Screen scroll={false} tabbed><Loading variant="progress" label="Reading receipt on this phone…" /></Screen>;
 
   if (stage === 'saved' && saved) {
     return (
-      <Screen>
-        <Text variant="headlineSmall">Saved</Text>
+      <Screen tabbed>
+        <ScreenTitle title="Saved" subtitle="Your payment record is ready" />
         <SyncChip status={saved.syncStatus} quotaBlocked={saved.quotaBlocked} />
         <Notice kind="info">
           Record saved as Unverified. Saving is not payment verification — matching happens on the server when a notification from your payment phone agrees.
@@ -152,16 +184,18 @@ export default function Scan() {
     const selected = sources.data?.find((s) => s.id === sourceId);
     const low = extraction.readabilityScore < 0.6;
     return (
-      <Screen>
-        <Text variant="headlineSmall">Check the receipt</Text>
+      <Screen tabbed>
+        <ScreenTitle title="Check the receipt" subtitle="Confirm the details before saving" />
         {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="contain" accessibilityLabel="Captured receipt" /> : null}
         {low ? <Notice kind="warning">Low readability — please check every field. Missing values are left blank, never guessed.</Notice> : null}
         {extraction.warnings.map((w) => <Notice key={w} kind="info">{w}</Notice>)}
         {fields.receiptStatus === 'FAILED' || fields.receiptStatus === 'PENDING' ? <Notice kind="error">This receipt shows status {fields.receiptStatus}. It can be recorded but will not auto-match.</Notice> : null}
 
-        <Menu visible={menu} onDismiss={() => setMenu(false)} anchor={<Button mode="outlined" onPress={() => setMenu(true)} icon="bank-outline" style={{ minHeight: TOUCH_TARGET }}>{selected ? `${selected.label} (${selected.provider})` : 'Choose receiving account'}</Button>}>
-          {sources.data?.map((s) => <Menu.Item key={s.id} title={`${s.label} · ${s.maskedDisplay}`} onPress={() => { setSourceId(s.id); setMenu(false); }} />)}
-        </Menu>
+        {(sources.data?.length ?? 0) > 1 ? (
+          <Menu visible={menu} onDismiss={() => setMenu(false)} anchor={<Button mode="outlined" onPress={() => setMenu(true)} icon="cellphone-message" style={{ minHeight: TOUCH_TARGET }}>{selected ? `${selected.provider} on main phone` : 'Choose payment source'}</Button>}>
+            {sources.data?.map((s) => <Menu.Item key={s.id} leadingIcon={s.id === sourceId ? 'check-circle' : 'cellphone-message'} titleStyle={s.id === sourceId ? { color: theme.colors.primary, fontWeight: '700' } : undefined} title={`${s.provider} notifications on main phone`} onPress={() => { setSourceId(s.id); setMenu(false); }} />)}
+          </Menu>
+        ) : selected ? <Notice kind="info">Using {selected.provider} notifications from the main payment phone.</Notice> : null}
 
         <TextInput label="Amount received (PHP)" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} right={<TextInput.Affix text="₱" />} />
         {fields.feeCentavos !== null || fields.totalChargedCentavos !== null ? (
@@ -172,7 +206,7 @@ export default function Scan() {
         <TextInput label="Reference number" mode="outlined" value={fields.referenceValue ?? ''} onChangeText={(v) => setFields({ ...fields, referenceValue: v || null, referenceNamespace: v ? (fields.referenceNamespace ?? (fields.receiptProvider === 'GOTYME' ? 'GOTYME_REF_NO' : fields.receiptProvider === 'MAYA' ? 'MAYA_REF_NO' : 'GCASH_REF_NO')) : null })} autoCapitalize="characters" />
         <TextInput label="Sender (payer) name — as printed" mode="outlined" value={fields.payerName ?? ''} onChangeText={(v) => setFields({ ...fields, payerName: v || null })} />
         <TextInput label="Recipient (you) — as printed" mode="outlined" value={fields.payeeName ?? ''} onChangeText={(v) => setFields({ ...fields, payeeName: v || null })} />
-        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+        <View style={{ flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' }}>
           <Chip icon="bank">{fields.receiptProvider ?? 'Provider unknown'}</Chip>
           <Chip icon="swap-horizontal">{fields.paymentRail ?? 'Rail unknown'}</Chip>
           <Chip icon="clock-outline">{fields.receiptTransactionAt ? `Time: ${fields.receiptTransactionPrecision.toLowerCase()} precision` : 'No time on receipt'}</Chip>
@@ -181,7 +215,7 @@ export default function Scan() {
         <TextInput label="Customer (optional)" mode="outlined" value={customer} onChangeText={setCustomer} />
         <TextInput label="Order / note (optional)" mode="outlined" value={note} onChangeText={setNote} />
         {error ? <Notice kind="error">{error}</Notice> : null}
-        <Button mode="contained" onPress={() => void save()} disabled={!sourceId} style={{ minHeight: TOUCH_TARGET }}>Save record</Button>
+        <Button mode="contained" onPress={() => void save()} loading={saving} disabled={!sourceId || saving} style={{ minHeight: TOUCH_TARGET }}>Save record</Button>
         <Button onPress={reset}>Retake</Button>
       </Screen>
     );
@@ -189,30 +223,19 @@ export default function Scan() {
 
   // capture
   return (
-    <Screen scroll={false} style={{ flex: 1 }}>
-      <Text variant="headlineSmall">Scan a receipt</Text>
-      {!workspace ? null : sources.data?.length === 0 ? <Notice kind="warning">No receiving account yet. The owner must add one in Settings before scans can be saved.</Notice> : null}
+    <Screen scroll={false} tabbed style={{ flex: 1 }}>
+      <ScreenTitle title="Scan" subtitle="Capture a payment proof" />
+      {!workspace ? null : sources.data?.length === 0 ? <Button compact icon="cellphone-message" mode="outlined" onPress={() => router.push('/settings/sources')}>Add payment source</Button> : null}
       {error ? <Notice kind="error">{error}</Notice> : null}
-      {perm?.granted ? (
-        <CameraView ref={setCamera} style={styles.camera} facing="back" />
-      ) : (
-        <View style={[styles.camera, { backgroundColor: theme.colors.surfaceVariant, alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
-          <Text variant="bodyMedium" style={{ textAlign: 'center' }}>Camera permission is needed to capture receipts. You can also import a screenshot.</Text>
-          <Button mode="contained-tonal" onPress={() => void requestPerm()} style={{ marginTop: 12 }}>Allow camera</Button>
-        </View>
-      )}
-      <View style={{ flexDirection: 'row', gap: 12 }}>
-        <Button mode="contained" icon="camera" onPress={() => void capture()} disabled={!perm?.granted} style={{ flex: 2, minHeight: 56 }} contentStyle={{ height: 56 }}>Capture</Button>
-        <Button mode="outlined" icon="image" onPress={() => void pick()} style={{ flex: 1, minHeight: 56 }} contentStyle={{ height: 56 }}>Import</Button>
-      </View>
-      <Text variant="bodySmall" style={{ opacity: 0.7 }}>
-        {Platform.OS === 'ios' ? 'Tip: share a screenshot to PayRecord from Photos or GCash.' : 'Tip: share a screenshot to PayRecord from any app.'} Text is read on this phone only.
-      </Text>
+      <CaptureSurface granted={!!perm?.granted} canAskAgain={perm?.canAskAgain !== false} active={focused && foreground} ready={cameraReady} busy={busy}
+        cameraRef={setCamera} onReady={() => setCameraReady(true)} torch={torch} onTorch={() => setTorch((value) => !value)}
+        onPermission={() => void requestPerm()} onCapture={() => void capture()} onImport={() => void pick()} />
+      <Text variant="bodySmall" style={{ opacity: 0.7 }}>Import a screenshot any time. Text is read on this phone only.</Text>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  camera: { flex: 1, minHeight: 320, borderRadius: 16, overflow: 'hidden' },
-  preview: { width: '100%', height: 260, borderRadius: 12, backgroundColor: '#00000010' },
+  camera: { flex: 1, minHeight: 320, borderRadius: RADIUS.lg, overflow: 'hidden' },
+  preview: { width: '100%', height: 260, borderRadius: RADIUS.md, backgroundColor: '#00000010' },
 });

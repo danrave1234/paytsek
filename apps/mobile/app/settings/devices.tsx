@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import React, { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import { Button, Card, Text } from 'react-native-paper';
+import { Button, Card, Text, useTheme } from 'react-native-paper';
 import type { CollectorStatus } from 'payment-collector';
 import { ErrorState, Loading, Notice, Row, Screen } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -11,6 +11,7 @@ import { useDevices } from '@/lib/queries';
 import { useIsOwner } from '@/lib/session';
 
 export default function Devices() {
+  const theme = useTheme();
   const q = useDevices();
   const qc = useQueryClient();
   const isOwner = useIsOwner();
@@ -66,7 +67,7 @@ export default function Devices() {
           {isOwner && d.status !== 'REVOKED' ? (
             <Card.Actions>
               <Button onPress={() => void setStatus(d.id, d.status === 'PAUSED' ? 'ACTIVE' : 'PAUSED')}>{d.status === 'PAUSED' ? 'Resume' : 'Pause'}</Button>
-              <Button textColor="#B3261E" onPress={() => void setStatus(d.id, 'REVOKED')}>Revoke</Button>
+              <Button textColor={theme.colors.error} onPress={() => void setStatus(d.id, 'REVOKED')}>Revoke</Button>
             </Card.Actions>
           ) : null}
         </Card>

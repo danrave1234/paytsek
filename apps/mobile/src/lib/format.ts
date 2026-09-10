@@ -1,5 +1,5 @@
-import { EVIDENCE_STATE_LABELS, type EvidenceState } from '@payrecord/contracts';
-import { formatCentavos } from '@payrecord/receipt-parsers';
+import { EVIDENCE_STATE_LABELS, type EvidenceState } from '@paytsek/contracts';
+import { formatCentavos } from '@paytsek/receipt-parsers';
 
 export const peso = (centavos: number): string => formatCentavos(centavos);
 
