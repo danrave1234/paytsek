@@ -15,6 +15,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.1.7',
+    date: '2026-09-11',
+    channel: 'beta',
+    highlights: [
+      'Google sign-in now completes securely inside PayTsek instead of remaining on the waiting screen.',
+      'New email-and-password accounts open immediately without a verification-email step.',
+      'A compact, rounded sign-in experience replaces the oversized scrolling form and keeps the payment-phone setup path secondary.',
+    ],
+    notes: 'Recommended authentication update. Install directly over your existing PayTsek app; your local app data is preserved.',
+  },
+  {
     version: '0.1.6',
     date: '2026-09-11',
     channel: 'beta',
