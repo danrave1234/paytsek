@@ -13,7 +13,11 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @paytsek/contracts run build && pnpm --filter @paytsek/receipt-parsers run build
+      - run: |
+          pnpm --filter @paytsek/contracts run build
+          pnpm --filter @paytsek/receipt-parsers run build
+          rm -rf apps/mobile/node_modules/@paytsek/receipt-parsers/dist
+          cp -R packages/receipt-parsers/dist apps/mobile/node_modules/@paytsek/receipt-parsers/dist
       - name: Build signed APK
         working-directory: apps/mobile
         env:
