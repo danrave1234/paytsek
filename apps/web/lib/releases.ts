@@ -15,6 +15,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.1.6',
+    date: '2026-09-11',
+    channel: 'beta',
+    highlights: [
+      'Restores production connectivity by embedding the PayTsek Supabase project and API configuration in the Android release.',
+      'Google sign-in now has both the supported OAuth callback route and the production authentication configuration it requires.',
+      'Release builds now stop before compilation if any required mobile production setting is missing.',
+    ],
+    notes: 'Required update for version 0.1.5. Install this version directly over the existing PayTsek app; no uninstall is needed.',
+  },
+  {
     version: '0.1.5',
     date: '2026-09-11',
     channel: 'beta',
