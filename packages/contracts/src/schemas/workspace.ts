@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ExportFormat, MembershipRole, PlanCode, Provider } from '../enums';
 import { uuid } from './pairing';
+import { RecordSummary } from './records';
 
 export const CreateWorkspaceRequest = z.object({
   name: z.string().min(1).max(80),
@@ -115,6 +116,8 @@ export const HomeSummary = z.object({
       notificationAccessGranted: z.boolean().nullable(),
     }),
   ),
+  /** Latest records for the mobile home feed. This avoids a second cold-load request. */
+  recentRecords: z.array(RecordSummary),
   quota: z.object({
     monthlyAllowance: z.number().int(),
     monthlyUsed: z.number().int(),

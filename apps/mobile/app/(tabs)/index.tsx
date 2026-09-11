@@ -6,11 +6,11 @@ import { Button, Icon, IconButton, Text, TouchableRipple, useTheme } from 'react
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Loading, StateChip } from '@/components/ui';
 import { listDrafts, type Draft } from '@/lib/drafts';
+import { OfflineError } from '@/lib/api';
 import { manilaTime, peso } from '@/lib/format';
-import { useHome, useRecords } from '@/lib/queries';
+import { useHome } from '@/lib/queries';
 import { useAppUpdate } from '@/lib/release-update';
 import { useSession } from '@/lib/session';
-import { OfflineError } from '@/lib/api';
 import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET } from '@/theme';
 
 type FeedItem =
@@ -28,7 +28,6 @@ export default function Home() {
   const router = useRouter();
   const params = useLocalSearchParams<{ savedAmount?: string }>();
   const { workspace } = useSession();
-  const records = useRecords({});
   const home = useHome();
   const update = useAppUpdate();
   const [drafts, setDrafts] = useState<Draft[]>([]);
@@ -40,9 +39,9 @@ export default function Home() {
 
   useFocusEffect(useCallback(() => {
     refreshLocal();
-  }, [refreshLocal, records.dataUpdatedAt]));
+  }, [refreshLocal, home.dataUpdatedAt]));
 
-  const remote = records.data?.items ?? [];
+  const remote = home.data?.recentRecords ?? [];
   const remoteIds = new Set(remote.map((record) => record.id));
   const feed: FeedItem[] = [
     ...drafts
@@ -62,11 +61,11 @@ export default function Home() {
   const recordedCount = home.data
     ? (home.data.today.recordedCount ?? (home.data.today.notificationMatchedCount + home.data.today.confirmedManuallyCount + home.data.today.unverifiedCount + home.data.today.reviewRequiredCount))
     : 0;
-  const offline = records.error instanceof OfflineError;
-  const refreshing = records.isRefetching || home.isRefetching;
+  const offline = home.error instanceof OfflineError;
+  const refreshing = home.isRefetching;
   const refresh = () => {
     refreshLocal();
-    void Promise.all([records.refetch(), home.refetch()]);
+    void home.refetch();
   };
 
   return (
@@ -161,8 +160,8 @@ export default function Home() {
             <Button compact onPress={() => router.push('/(tabs)/records')}>See all</Button>
           </View>
 
-          {records.isLoading && feed.length === 0 ? <Loading variant="list" label="Loading records" /> : null}
-          {!records.isLoading && feed.length === 0 ? (
+          {home.isLoading && feed.length === 0 ? <Loading variant="list" label="Loading records" /> : null}
+          {!home.isLoading && feed.length === 0 ? (
             <View style={[styles.empty, { borderColor: theme.colors.outlineVariant }]}>
               <Icon source="receipt-text-outline" size={28} color={theme.colors.onSurfaceVariant} />
               <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>No records yet</Text>
