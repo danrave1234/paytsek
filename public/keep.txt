@@ -1,0 +1,1 @@
+PayTsek API static placeholder. All requests are rewritten to the API function.
