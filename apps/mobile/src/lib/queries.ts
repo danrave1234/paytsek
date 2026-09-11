@@ -49,7 +49,7 @@ export const keys = {
 };
 
 export const useWorkspaces = () => useQuery({ queryKey: keys.workspaces, queryFn: ({ signal }) => api<WorkspaceSummary[]>('/v1/workspaces', { noWorkspace: true, signal }) });
-export const useHome = () => useQuery({ queryKey: keys.home, queryFn: ({ signal }) => api<HomeSummary>('/v1/home', { signal }), refetchInterval: useVisiblePolling(60_000) });
+export const useHome = () => useQuery({ queryKey: keys.home, queryFn: ({ signal }) => api<HomeSummary>('/v1/home', { signal }), refetchInterval: useVisiblePolling(30_000) });
 export const useSources = () => useQuery({ queryKey: keys.sources, queryFn: ({ signal }) => api<SourceSummary[]>('/v1/sources', { signal }), staleTime: 5 * 60_000 });
 export const useDevices = () => useQuery({ queryKey: keys.devices, queryFn: ({ signal }) => api<DeviceSummary[]>('/v1/devices', { signal }), refetchInterval: useVisiblePolling(60_000) });
 export const useMembers = () => useQuery({ queryKey: keys.members, queryFn: ({ signal }) => api<MemberSummary[]>('/v1/workspaces/current/members', { signal }) });
@@ -66,10 +66,11 @@ export function useRecords(filters: { q?: string; state?: string[]; sourceId?: s
   if (filters.to) qs.set('to', filters.to);
   if (filters.cursor) qs.set('cursor', filters.cursor);
   qs.set('limit', '30');
-  return useQuery({ queryKey: keys.records(filters), queryFn: ({ signal }) => api<ListRecordsResponse>(`/v1/records?${qs.toString()}`, { signal }) });
+  return useQuery({ queryKey: keys.records(filters), queryFn: ({ signal }) => api<ListRecordsResponse>(`/v1/records?${qs.toString()}`, { signal }), refetchInterval: useVisiblePolling(30_000) });
 }
 
-export const useRecord = (id: string) => useQuery({ queryKey: keys.record(id), queryFn: ({ signal }) => api<RecordDetail>(`/v1/records/${id}`, { signal }), enabled: !!id });
+/** Keep an open record current while a notification from the payment phone is arriving. */
+export const useRecord = (id: string) => useQuery({ queryKey: keys.record(id), queryFn: ({ signal }) => api<RecordDetail>(`/v1/records/${id}`, { signal }), enabled: !!id, refetchInterval: useVisiblePolling(15_000) });
 export const useCandidates = (id: string) => useQuery({ queryKey: keys.candidates(id), queryFn: ({ signal }) => api<CandidatesResponse>(`/v1/records/${id}/candidates`, { signal }), enabled: !!id, refetchInterval: useVisiblePolling(30_000) });
 
 /** Invalidate everything that a record-state change can affect. */

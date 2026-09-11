@@ -93,6 +93,9 @@ export type SourceSummary = z.infer<typeof SourceSummary>;
 export const HomeSummary = z.object({
   /** Recorded-payment totals — not wallet balance or guaranteed revenue. */
   today: z.object({
+    /** Every captured record except voided records. This is the dashboard headline. */
+    recordedCount: z.number().int(),
+    recordedCentavos: z.number().int(),
     notificationMatchedCount: z.number().int(),
     notificationMatchedCentavos: z.number().int(),
     confirmedManuallyCount: z.number().int(),

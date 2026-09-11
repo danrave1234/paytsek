@@ -286,6 +286,18 @@ describe('GCash notification adapter (SYNTHETIC fixtures)', () => {
     }
   });
 
+  it('recognizes the observed GCash received-money notification', () => {
+    const r = parseNotification({
+      packageName: 'com.globe.gcash.android',
+      title: 'You have received money…',
+      text: 'You have received PHP 1.00 of GCash from KI** A M** A. 09277364278.',
+      bigText: null,
+      textLines: [],
+      isGroupSummary: false,
+    });
+    expect(r).toMatchObject({ ok: true, event: { provider: 'GCASH', amountCentavos: 100, payerMaskedPhone: '09277364278' } });
+  });
+
   it('rejects an outgoing lookalike before it can match an incoming template', () => {
     const r = parseNotification({ packageName: 'com.gotyme.gotymebank', title: 'Transfer received', text: 'You have sent P1,250.00 to A. Santos.', bigText: null, textLines: [], isGroupSummary: false });
     expect(r).toEqual({ ok: false, reason: 'OUTGOING_PAYMENT' });
