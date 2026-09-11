@@ -51,6 +51,15 @@ export default function Home() {
 
   const savedAmount = Number(params.savedAmount);
   const justSaved = Number.isFinite(savedAmount) && savedAmount > 0;
+  // Older API deployments did not expose the all-records dashboard total.
+  // Keep the upgrade usable while the API rolls forward; the fallback still
+  // covers the normal captured/matched/manual states.
+  const recordedCentavos = home.data
+    ? (home.data.today.recordedCentavos ?? (home.data.today.notificationMatchedCentavos + home.data.today.confirmedManuallyCentavos + home.data.today.unverifiedCentavos))
+    : 0;
+  const recordedCount = home.data
+    ? (home.data.today.recordedCount ?? (home.data.today.notificationMatchedCount + home.data.today.confirmedManuallyCount + home.data.today.unverifiedCount + home.data.today.reviewRequiredCount))
+    : 0;
   const offline = records.error instanceof OfflineError;
   const refreshing = records.isRefetching || home.isRefetching;
   const refresh = () => {
@@ -86,21 +95,21 @@ export default function Home() {
             <View style={styles.totalHeader}>
               <View style={{ gap: 2 }}>
                 <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>RECORDED TODAY</Text>
-                <Text variant="headlineMedium" style={styles.totalAmount}>{peso(home.data.today.recordedCentavos)}</Text>
+                <Text variant="headlineMedium" style={styles.totalAmount}>{peso(recordedCentavos)}</Text>
               </View>
               <View style={[styles.totalIcon, { backgroundColor: theme.colors.primaryContainer }]}>
                 <Icon source="receipt-text-check-outline" size={24} color={theme.colors.primary} />
               </View>
             </View>
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-              {home.data.today.recordedCount} payment{home.data.today.recordedCount === 1 ? '' : 's'} captured · verification shown below
+              {recordedCount} payment{recordedCount === 1 ? '' : 's'} captured · verification shown below
             </Text>
             <View style={[styles.statusStrip, { borderTopColor: theme.colors.outlineVariant }]}>
               {home.data.today.notificationMatchedCount > 0 ? <StateChip state="MATCHED_AUTO" compact /> : null}
               {home.data.today.confirmedManuallyCount > 0 ? <StateChip state="CONFIRMED_MANUALLY" compact /> : null}
               {home.data.today.unverifiedCount > 0 ? <StateChip state="UNVERIFIED" compact /> : null}
               {home.data.today.reviewRequiredCount > 0 ? <StateChip state="REVIEW_REQUIRED" compact /> : null}
-              {home.data.today.recordedCount === 0 ? <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>No payments captured yet</Text> : null}
+              {recordedCount === 0 ? <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>No payments captured yet</Text> : null}
             </View>
           </View>
         ) : home.isLoading ? <Loading variant="dashboard" label="Loading today’s records" /> : null}
