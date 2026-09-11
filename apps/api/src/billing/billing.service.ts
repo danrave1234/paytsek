@@ -32,6 +32,18 @@ export class BillingService {
   }
 
   async usage(orgId: string): Promise<UsageSummary> {
+    // Compatibility response for older builds. It performs no metering query
+    // and must not be treated as a beta limit.
+    if (this.env.BETA_MODE) {
+      const now = new Date(); const end = new Date(now); end.setUTCMonth(end.getUTCMonth() + 1);
+      return {
+        planCode: 'FREE', subscriptionStatus: 'NONE', managementPlatform: null,
+        periodStart: now.toISOString(), periodEnd: end.toISOString(), monthlyAllowance: 0, monthlyUsed: 0,
+        prepaidCreditsRemaining: 0, warnLevelsCrossed: [],
+        limits: { scannerDevices: 0, collectorDevices: 0, receivingSources: 0, members: 0 },
+        usage: { scannerDevices: 0, collectorDevices: 0, receivingSources: 0, members: 0 },
+      };
+    }
     await this.expireEndedAccess(orgId);
     const r = await this.db.one<{
       plan_code: PlanCode; status: SubscriptionStatus | null; store: string | null; period_start: Date; allowance: number; used: number; credits: number;
@@ -61,6 +73,7 @@ export class BillingService {
 
   /** A paid pass never silently remains active after its verified end date. */
   async expireEndedAccess(orgId?: string): Promise<void> {
+    if (this.env.BETA_MODE) return;
     await this.db.tx(async (c) => {
       const scope = orgId ? 'and organization_id = $1' : '';
       const args = orgId ? [orgId] : [];
@@ -70,6 +83,7 @@ export class BillingService {
   }
 
   async ledger(orgId: string, limit = 100): Promise<LedgerEntry[]> {
+    if (this.env.BETA_MODE) return [];
     const r = await this.db.query<{ id: string; created_at: Date; kind: string; delta: number; record_id: string | null; store_transaction_id: string | null; reason: string | null }>(
       `select id, created_at, case when kind = 'USAGE' then 'USAGE' when kind = 'ADJUSTMENT' then 'ADJUSTMENT' end as kind, -delta as delta, record_id, null::text as store_transaction_id, reason from usage_ledger where organization_id = $1
        union all select id, created_at, case kind when 'GRANT' then 'PREPAID_CREDIT' when 'REVOCATION' then 'REFUND_REVOCATION' when 'CONSUME' then 'USAGE' else 'ADJUSTMENT' end, delta, record_id, store_transaction_id, reason from credit_ledger where organization_id = $1

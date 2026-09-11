@@ -7,9 +7,11 @@ import { DbService, isUniqueViolation } from '../db/db.service';
 import { ReconcileService } from '../matching/reconcile.service';
 import { ProofsService } from './proofs.service';
 import { RECORD_SELECT, toDetail, toSummary, type RecordRow } from './records.rows';
+import { loadEnv } from '../config/env';
 
 @Injectable()
 export class RecordsService {
+  private readonly env = loadEnv();
   constructor(
     private readonly db: DbService,
     private readonly audit: AuditService,
@@ -19,9 +21,8 @@ export class RecordsService {
 
   /**
    * Create one canonical record. Stable clientRecordId makes retries free.
-   * Quota is consumed atomically with creation via consume_record_quota();
-   * when exhausted nothing is written and QUOTA_EXHAUSTED is returned so the
-   * client keeps a clearly labeled local draft.
+   * Public beta never meters or blocks records; the future paid path keeps
+   * the atomic quota operation below for when billing is deliberately enabled.
    */
   async create(orgId: string, userId: string, input: CreateRecordRequest): Promise<CreateRecordResponse> {
     const existing = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.organization_id = $1 and r.client_record_id = $2`, [orgId, input.clientRecordId]);
@@ -60,8 +61,11 @@ export class RecordsService {
         if (isUniqueViolation(e)) throw new ApiException('IDEMPOTENCY_CONFLICT', 'Record already being created; retry');
         throw e;
       }
-      const pool = await tx.query<{ consume_record_quota: string }>(`select consume_record_quota($1,$2,$3)`, [orgId, id, userId]);
-      const outcome = pool.rows[0]!.consume_record_quota;
+      // Public beta has no metering: do not write a usage row or block a
+      // payment record. The full quota path remains intact for a later launch.
+      const outcome = this.env.BETA_MODE
+        ? 'BETA'
+        : (await tx.query<{ consume_record_quota: string }>(`select consume_record_quota($1,$2,$3)`, [orgId, id, userId])).rows[0]!.consume_record_quota;
       if (outcome === 'NONE') throw new ApiException('QUOTA_EXHAUSTED', 'Monthly record allowance and prepaid credits are used up. Your scan is kept as a local draft.');
 
       await tx.query(`insert into proof_versions (organization_id, record_id, version, kind, ocr, fields, edited_fields, created_by) values ($1,$2,1,'OCR_ORIGINAL',$3,$4,'{}',$5)`, [orgId, id, input.ocr ? JSON.stringify(input.ocr) : null, JSON.stringify(input.extracted), userId]);
@@ -69,12 +73,12 @@ export class RecordsService {
         await tx.query(`insert into proof_versions (organization_id, record_id, version, kind, fields, edited_fields, created_by) values ($1,$2,2,'USER_CORRECTION',$3,$4,$5)`, [orgId, id, JSON.stringify(c), edited, userId]);
       }
       await this.flagDuplicates(tx, orgId, id, c.referenceNamespace, c.referenceValue, input.proofId);
-      await this.audit.record({ organizationId: orgId, actorUserId: userId, action: 'RECORD_CREATED', subjectType: 'payment_record', subjectId: id, after: { amountCentavos: c.amountCentavos, sourceId: input.sourceId, quotaPool: outcome } }, tx);
-      await this.audit.record({ organizationId: orgId, actorUserId: userId, action: 'QUOTA_CONSUMED', subjectType: 'payment_record', subjectId: id, after: { pool: outcome } }, tx);
+      await this.audit.record({ organizationId: orgId, actorUserId: userId, action: 'RECORD_CREATED', subjectType: 'payment_record', subjectId: id, after: { amountCentavos: c.amountCentavos, sourceId: input.sourceId } }, tx);
+      if (!this.env.BETA_MODE) await this.audit.record({ organizationId: orgId, actorUserId: userId, action: 'QUOTA_CONSUMED', subjectType: 'payment_record', subjectId: id, after: { pool: outcome } }, tx);
       if (input.fromEventId) await tx.query(`update notification_events set saved_as_record_id = $2, purge_after = null where id = $1 and organization_id = $3`, [input.fromEventId, id, orgId]);
       await this.reconcile.scheduleRecord(id, tx);
       const row = await tx.query<RecordRow>(`${RECORD_SELECT} where r.id = $1`, [id]);
-      return { record: toSummary(row.rows[0]!), deduplicated: false, quotaConsumed: true };
+      return { record: toSummary(row.rows[0]!), deduplicated: false, quotaConsumed: !this.env.BETA_MODE };
     });
   }
 

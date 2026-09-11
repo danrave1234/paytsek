@@ -1,15 +1,12 @@
 import React from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import { Button, Card, Text } from 'react-native-paper';
-import { ErrorState, Loading, Screen } from '@/components/ui';
-import { useUsage } from '@/lib/queries';
+import { Screen } from '@/components/ui';
 import { RADIUS, SPACING } from '@/theme';
 
 /** Billing is intentionally absent while PayTsek is validating the beta. */
 export default function Billing() {
-  const usage = useUsage();
   return <Screen>
-    {usage.isLoading ? <Loading /> : usage.error ? <ErrorState error={usage.error} retry={() => void usage.refetch()} /> : null}
     <Card mode="contained" style={styles.planCard}><Card.Content style={{ gap: SPACING.md }}>
       <Text variant="labelMedium">PAYTSEK BETA</Text>
       <Text variant="headlineSmall" style={{ fontWeight: '700' }}>Everything is free for now.</Text>
