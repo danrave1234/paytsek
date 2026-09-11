@@ -57,6 +57,8 @@ export const EnvSchema = z.object({
   PAYMONGO_API_URL: z.string().url().default('https://api.paymongo.com'),
   /** Public dashboard destination after a hosted PayMongo checkout completes. */
   PAYTSEK_WEB_URL: z.string().url().default('https://www.paytsek.online'),
+  /** Public beta has no checkout or paid quota enforcement. Opt out only when billing is formally launched. */
+  BETA_MODE: z.string().optional().default('true').transform((v) => v === 'true' || v === '1'),
 
   RETENTION_UNLINKED_EVENTS_DAYS: int(7),
   RETENTION_PROOF_IMAGE_FREE_DAYS: int(30),

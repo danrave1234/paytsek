@@ -45,13 +45,13 @@ const sections: LegalSection[] = [
   },
   {
     id: 'plans',
-    title: 'Plans and purchases',
+    title: 'Public beta access',
     body: (
       <p>
-        Thirty-day access passes are sold through PayMongo hosted checkout. One record unit
-        is consumed when a new payment record is saved; duplicates, retries, matching, review and exports are not charged.
-        Allowances reset for each access period and do not roll over. QRPh payments are manually approved by you for each new period; paying before the end date extends access from that date. Refunds follow the applicable PayMongo payment method and PayTsek policy;
-        revoked purchases remove the corresponding capacity but never delete your records.
+        PayTsek is currently offered as a public beta. There is no checkout, subscription, automatic charge or payment
+        requirement for beta access. If paid plans are introduced, we will publish the terms and give notice before any
+        charge is made. Beta access can change or end as we improve the product, but we will not delete your records merely
+        because pricing changes.
       </p>
     ),
   },
@@ -98,8 +98,8 @@ export default function Terms() {
       summary={[
         { label: 'Moves money', value: 'No', tone: 'ok' },
         { label: 'Confirms with providers', value: 'No', tone: 'warn' },
-        { label: 'Charged per', value: 'New record saved' },
-        { label: 'QRPh auto-renewal', value: 'Not available', tone: 'ok' },
+        { label: 'Beta price', value: 'Free', tone: 'ok' },
+        { label: 'Automatic charges', value: 'No', tone: 'ok' },
       ]}
       sections={sections}
     />

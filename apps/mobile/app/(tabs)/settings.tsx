@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { clearInactiveCache } from '@/lib/queries';
 import { pruneSynced } from '@/lib/drafts';
-import { Platform, View } from 'react-native';
+import { Linking, Platform, View } from 'react-native';
 import { IconButton, Text, useTheme } from 'react-native-paper';
 import { Group, ListRow, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
@@ -76,7 +76,8 @@ export default function Settings() {
           />
           <ListRow
             icon="credit-card-outline"
-            title="Plan & usage"
+            title="Beta access"
+            subtitle="All features are free during beta"
             onPress={() => router.push('/settings/billing')}
           />
           <ListRow icon="file-export-outline" title="Export records" onPress={() => router.push('/settings/exports')} />
@@ -90,6 +91,15 @@ export default function Settings() {
         {workspaces.length > 1 ? (
           <ListRow icon="swap-horizontal" title="Switch workspace" onPress={() => void selectWorkspace(null)} />
         ) : null}
+      </Group>
+
+      <Group title="Help">
+        <ListRow
+          icon="help-circle-outline"
+          title="Help & support"
+          subtitle="Ask a question or send feedback"
+          onPress={() => void Linking.openURL('mailto:support@paytsek.online?subject=PayTsek%20support')}
+        />
       </Group>
 
       <Group title="Advanced">

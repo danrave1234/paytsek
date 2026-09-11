@@ -16,6 +16,9 @@ export class BillingService {
   constructor(private readonly db: DbService, private readonly audit: AuditService) {}
 
   products(): BillingProduct[] {
+    // Keep checkout unavailable even if an old mobile build still exposes a
+    // purchase control. This is a server-side policy, not merely hidden UI.
+    if (this.env.BETA_MODE) return [];
     return [
       { key: 'STARTER_30_DAYS', storeProductId: 'paytsek_starter_30_days', kind: 'SUBSCRIPTION', planCode: 'STARTER', records: 500, priceCentavos: 5900 },
       { key: 'BUSINESS_30_DAYS', storeProductId: 'paytsek_business_30_days', kind: 'SUBSCRIPTION', planCode: 'BUSINESS', records: 2000, priceCentavos: 14900 },
@@ -76,6 +79,7 @@ export class BillingService {
 
   /** Creates a hosted PayMongo checkout. Only the signed webhook can grant capacity. */
   async createCheckout(orgId: string, ownerId: string, key: ProductKey): Promise<{ checkoutUrl: string; expiresAt: string }> {
+    if (this.env.BETA_MODE) throw new ApiException('PURCHASE_NOT_VERIFIED', 'PayTsek is currently in free beta. No payment is required.');
     if (!this.env.PAYMONGO_SECRET_KEY) throw new ApiException('PURCHASE_NOT_VERIFIED', 'Online billing is not configured yet. Please contact PayTsek support.');
     const product = this.product(key);
     // All owners in one workspace share a pending checkout per product. This

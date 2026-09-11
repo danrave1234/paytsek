@@ -22,7 +22,7 @@ const groups = [
       },
       {
         q: 'What happens when I reach my monthly record limit?',
-        a: 'Existing records, matching, exports and notifications keep working. New scans are kept on your phone as clearly labelled drafts until you top up a record pack or the month resets.',
+        a: 'There is no paid record limit during public beta. Save the payment first; verification can happen afterwards when a notification is available.',
       },
     ],
   },
@@ -84,6 +84,8 @@ export default function Support() {
           </>
         }
       />
+
+      <a href="mailto:support@paytsek.online?subject=PayTsek%20support" className="btn-primary mt-7 inline-flex">Email PayTsek support</a>
 
       {/* ── Triage: send people to the right place before they start reading ── */}
       <nav aria-label="Jump to" className="mt-12 grid gap-4 sm:grid-cols-3">
