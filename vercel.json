@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "pnpm install",
+  "buildCommand": "pnpm --filter @paytsek/contracts run build && pnpm --filter @paytsek/receipt-parsers run build && pnpm --filter @paytsek/api run build",
+  "functions": {
+    "api/index.ts": { "memory": 1024, "maxDuration": 10 }
+  },
+  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
+  "crons": [{ "path": "/v1/internal/cron/maintenance", "schedule": "0 3 * * *" }]
+}
