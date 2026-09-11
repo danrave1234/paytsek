@@ -119,5 +119,6 @@ export function toDetail(
     proofRetentionUntil: extra.image?.retentionUntil ?? null,
     voidReason: r.void_reason,
     history: extra.history,
+    candidates: null,
   };
 }
