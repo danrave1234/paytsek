@@ -23,14 +23,17 @@ export interface PlanLimits {
 export const PLAN_LIMITS: Record<PlanCode, PlanLimits> = {
   FREE: {
     code: 'FREE',
-    displayName: 'Free',
+    displayName: 'Beta',
     proposedMonthlyPriceCentavos: 0,
-    monthlyRecordAllowance: 100,
-    scannerDevices: 1,
-    collectorDevices: 1,
-    receivingSources: 1,
-    members: 2,
-    proofImageRetentionDays: 30,
+    // Beta is deliberately generous while the product is being validated.
+    // The database remains authoritative, but these defaults keep clients and
+    // new environments aligned with the no-charge beta policy.
+    monthlyRecordAllowance: 1_000_000,
+    scannerDevices: 10,
+    collectorDevices: 5,
+    receivingSources: 5,
+    members: 10,
+    proofImageRetentionDays: 90,
   },
   STARTER: {
     code: 'STARTER',

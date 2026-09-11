@@ -79,6 +79,8 @@ class PaymentCollectorModule : Module() {
         android.service.notification.NotificationListenerService.requestRebind(ComponentName(context, PayTsekNotificationListener::class.java))
       } catch (_: Throwable) {}
       UploadWorker.enqueue(context, expedited = false)
+      HealthWorker.enqueue(context)
+      HealthWorker.schedule(context)
     }
 
     AsyncFunction("clearConfiguration") {

@@ -80,8 +80,8 @@ const sections: LegalSection[] = [
     title: 'Processors',
     body: (
       <p>
-        Hosting and authentication: Supabase. Billing is processed by PayMongo through its hosted checkout (purchase
-        identifiers only). Error monitoring is configured to scrub amounts, names, phone numbers, references, tokens and image
+        Hosting and authentication: Supabase. PayTsek does not process payments or collect payment details during public beta.
+        Error monitoring is configured to scrub amounts, names, phone numbers, references, tokens and image
         URLs.
       </p>
     ),

@@ -5,7 +5,7 @@ import { StyleSheet, View } from 'react-native';
 import { Button, Dialog, Icon, IconButton, List, Portal, Text, TextInput, useTheme } from 'react-native-paper';
 import { ErrorState, Loading, Notice, Screen, StateChip } from '@/components/ui';
 import { isApiError } from '@/lib/api';
-import { lastSeen, manilaTime, peso } from '@/lib/format';
+import { lastSeenWithTime, manilaTime, peso } from '@/lib/format';
 import { useCandidates, useConfirmCandidate, useConfirmManually, useEscalate, useRecord, useUnlink, useVoid } from '@/lib/queries';
 import { useIsOwner, useSession } from '@/lib/session';
 import { RADIUS, SPACING, stateColorsFor } from '@/theme';
@@ -80,7 +80,7 @@ export default function RecordDetail() {
 
     {open ? <View style={[styles.surface, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
       <View style={styles.sectionHeader}><View style={[styles.sectionIcon, { backgroundColor: theme.colors.surfaceVariant }]}><Icon source="bell-sync-outline" size={20} color={theme.colors.primary} /></View><View style={{ flex: 1 }}><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment-phone check</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{cands.isFetching ? 'Checking for a matching notification…' : cands.data ? `${cands.data.candidates.length} possible match${cands.data.candidates.length === 1 ? '' : 'es'}` : 'Checking notifications…'}</Text></View></View>
-      {cands.data?.collectorStale ? <Notice kind="warning">Payment phone {lastSeen(cands.data.collectorLastSeenAt).toLowerCase()}. Keep it online with notification access enabled; this payment remains safely recorded.</Notice> : null}
+      {cands.data?.collectorStale ? <Notice kind="warning">Payment phone {lastSeenWithTime(cands.data.collectorLastSeenAt).toLowerCase()}. Keep it online with notification access enabled; this payment remains safely recorded.</Notice> : null}
       {cands.data && cands.data.candidates.length === 0 && !cands.data.collectorStale ? <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Waiting for a matching notification. This page checks again automatically while it is open.</Text> : null}
       {cands.data?.candidates.map((c) => <View key={c.eventId} style={[styles.candidate, { borderColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surfaceVariant }]}><View style={{ flex: 1, gap: 2 }}><Text variant="titleSmall">{peso(c.amountCentavos)} · {c.payerMaskedName ?? c.payerMaskedPhone ?? 'Unknown sender'}</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(c.eventAt, 'SECOND')}{c.deltaSeconds !== null ? ` · ${Math.abs(c.deltaSeconds) < 60 ? `${Math.abs(c.deltaSeconds)}s` : `${Math.round(Math.abs(c.deltaSeconds) / 60)} min`} from receipt` : ''}</Text></View>{c.alreadyLinkedToOtherRecord ? <Text variant="labelSmall" style={{ color: theme.colors.error }}>Already linked</Text> : null}<Button mode="contained" compact disabled={c.alreadyLinkedToOtherRecord || confirm.isPending || !canConfirm} onPress={() => void onConfirm(c.eventId)}>Use this match</Button></View>)}
       <View style={styles.verificationAction}>{isOwner ? <Button onPress={() => setDialog('manual')}>I checked the wallet</Button> : <Button onPress={() => void escalate.mutateAsync(undefined)}>Ask owner to check</Button>}</View>

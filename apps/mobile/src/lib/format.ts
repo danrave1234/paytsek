@@ -17,6 +17,12 @@ export function lastSeen(iso: string | null): string {
   return `Last seen ${Math.floor(h / 24)} days ago`;
 }
 
+/** A readable absolute time avoids ambiguity when a relative device health label looks surprising. */
+export function lastSeenWithTime(iso: string | null): string {
+  if (!iso) return 'Never contacted the server';
+  return `${lastSeen(iso)} · ${manilaTime(iso, 'TIME')}`;
+}
+
 export function manilaTime(iso: string | null, precision?: string): string {
   if (!iso) return '—';
   const d = new Date(iso);

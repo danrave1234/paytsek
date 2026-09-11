@@ -35,6 +35,10 @@ class PayTsekNotificationListener : NotificationListenerService() {
     // Recovery attempt only: enumerate active notifications (deduplicated). Not history.
     try { activeNotifications?.forEach { handle(it, recovery = true) } } catch (_: Throwable) {}
     UploadWorker.enqueue(this, expedited = false)
+    // Report listener health even when no payment arrives. This separates an
+    // inactive wallet from a broken Android listener in the record UI.
+    HealthWorker.enqueue(this)
+    HealthWorker.schedule(this)
   }
 
   override fun onListenerDisconnected() {
