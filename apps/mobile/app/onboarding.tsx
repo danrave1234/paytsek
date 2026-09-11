@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
-import { Button, Icon, Text, useTheme } from 'react-native-paper';
+import { Image, Platform, StyleSheet, View } from 'react-native';
+import { Button, Text, useTheme } from 'react-native-paper';
 import { Screen } from '@/components/ui';
 import { useIsOwner, useSession } from '@/lib/session';
 import { markOnboardingSeen } from '@/lib/onboarding';
@@ -39,20 +39,18 @@ export default function Onboarding() {
 
   return (
     <Screen scroll={false} style={styles.page}>
-      <View style={[styles.mark, { backgroundColor: theme.colors.primaryContainer }]}>
-        <Icon source="check" size={38} color={theme.colors.primary} />
-      </View>
+      <Image source={require('../assets/icon.png')} style={styles.mark} resizeMode="contain" accessibilityLabel="PayTsek" />
       <View style={styles.copy}>
-        <Text variant="headlineLarge" style={styles.title}>You’re ready</Text>
-        <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant }}>{workspace?.name}</Text>
+        <Text variant="headlineSmall" style={styles.title}>Start with a scan</Text>
+        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>{workspace?.name}</Text>
       </View>
       <View style={styles.actions}>
         <Button mode="contained" icon="line-scan" disabled={leaving} onPress={() => void continueTo('/(tabs)/scan')} contentStyle={{ minHeight: 58 }}>
-          Scan proof
+          Scan payment
         </Button>
         {owner && Platform.OS === 'android' ? (
           <Button mode="text" icon="cellphone-message" disabled={leaving} onPress={() => void continueTo('/pair')} contentStyle={{ minHeight: TOUCH_TARGET }}>
-            Automatic GCash records
+            Set up payment phone
           </Button>
         ) : null}
       </View>
@@ -62,7 +60,7 @@ export default function Onboarding() {
 
 const styles = StyleSheet.create({
   page: { flex: 1, justifyContent: 'center', gap: SPACING.xxl, paddingBottom: SPACING.xxxl },
-  mark: { width: 72, height: 72, borderRadius: RADIUS.xl, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
+  mark: { width: 64, height: 64, borderRadius: RADIUS.lg, alignSelf: 'center' },
   copy: { alignItems: 'center', gap: SPACING.xs },
   title: { fontWeight: '700', letterSpacing: -0.8 },
   actions: { gap: SPACING.sm },

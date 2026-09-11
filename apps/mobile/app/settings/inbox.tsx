@@ -32,7 +32,7 @@ export default function Inbox() {
 
   return (
     <Screen>
-      <Notice kind="info">Unmatched notifications captured from your payment phone. They are purged after 7 days unless linked to a record or saved. Collecting them here is free; saving one as a record uses one record.</Notice>
+      <Notice kind="info">Unmatched incoming payments stay here for 7 days. Saving one uses one record.</Notice>
       {msg ? <Notice kind="info">{msg}</Notice> : null}
       {q.isLoading ? <Loading /> : q.error ? <ErrorState error={q.error} retry={() => void q.refetch()} /> : null}
       {q.data?.length === 0 ? <EmptyState icon="inbox-outline" title="No unmatched notifications" body="New incoming-payment notifications from your payment phone appear here until they are matched." /> : null}

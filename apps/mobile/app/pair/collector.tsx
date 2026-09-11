@@ -120,7 +120,7 @@ export default function PairCollector() {
         <View style={[styles.statusIcon, { backgroundColor: ready ? theme.colors.primaryContainer : theme.colors.errorContainer }]}>
           <Icon source={ready ? 'check' : 'bell-off-outline'} size={34} color={ready ? theme.colors.onPrimaryContainer : theme.colors.onErrorContainer} />
         </View>
-        <Text variant="headlineSmall" style={styles.centerText}>{ready ? 'GCash monitoring is on' : 'Notifications are off'}</Text>
+        <Text variant="titleLarge" style={styles.centerText}>{ready ? 'Payment monitoring is on' : 'Notifications are off'}</Text>
         <Text variant="bodyMedium" style={[styles.centerText, { color: theme.colors.onSurfaceVariant }]}>{existing.sourceLabel}</Text>
         {!status?.notificationAccessGranted ? (
           <Button mode="contained" onPress={() => PaymentCollector.openNotificationAccessSettings()} contentStyle={styles.actionContent}>Allow notification access</Button>
@@ -136,7 +136,8 @@ export default function PairCollector() {
     <Screen scroll={false} style={styles.centered}>
       {step === 'code' ? (
         <>
-          <Text variant="headlineSmall" style={styles.centerText}>Connect payment phone</Text>
+          <Text variant="titleLarge" style={styles.centerText}>Connect payment phone</Text>
+          <Text variant="bodySmall" style={[styles.centerText, { color: theme.colors.onSurfaceVariant }]}>Enter the code shown on the owner’s phone.</Text>
           <TextInput label="Pairing code" mode="outlined" autoCapitalize="characters" value={code} onChangeText={setCode} style={styles.fullWidth} />
           {error ? <Notice kind="error">{error}</Notice> : null}
           <Button mode="contained" onPress={() => void submitCode()} loading={busy} disabled={busy || code.replace(/[^A-Za-z0-9]/g, '').length < 10} contentStyle={styles.actionContent} style={styles.fullWidth}>Continue</Button>
@@ -146,7 +147,7 @@ export default function PairCollector() {
       {step === 'waiting' && accepted ? (
         <>
           <ActivityIndicator size="large" />
-          <Text variant="headlineSmall" style={styles.centerText}>Waiting for approval</Text>
+          <Text variant="titleLarge" style={styles.centerText}>Waiting for approval</Text>
           <Text variant="bodyMedium" style={[styles.centerText, { color: theme.colors.onSurfaceVariant }]}>{accepted.workspaceName} · {accepted.sourceLabel}</Text>
         </>
       ) : null}
@@ -156,9 +157,9 @@ export default function PairCollector() {
           <View style={[styles.statusIcon, { backgroundColor: theme.colors.primaryContainer }]}>
             <Icon source="bell-check-outline" size={34} color={theme.colors.onPrimaryContainer} />
           </View>
-          <Text variant="headlineSmall" style={styles.centerText}>Approved</Text>
+          <Text variant="titleLarge" style={styles.centerText}>Approved</Text>
           <Checkbox.Item
-            label={`Share supported incoming ${accepted.provider} payment notifications with ${accepted.workspaceName}. OTPs are never collected.`}
+            label={`Share incoming ${accepted.provider} payment details with ${accepted.workspaceName}`}
             status={consent ? 'checked' : 'unchecked'}
             onPress={() => setConsent((checked) => !checked)}
             style={styles.fullWidth}
@@ -170,7 +171,8 @@ export default function PairCollector() {
 
       {step === 'access' ? (
         <>
-          <Text variant="headlineSmall" style={styles.centerText}>One last permission</Text>
+          <Text variant="titleLarge" style={styles.centerText}>Allow notification access</Text>
+          <Text variant="bodySmall" style={[styles.centerText, { color: theme.colors.onSurfaceVariant }]}>Android will open its notification-access settings.</Text>
           <Button mode="contained" onPress={() => PaymentCollector.openNotificationAccessSettings()} contentStyle={styles.actionContent} style={styles.fullWidth}>Allow notification access</Button>
           <Button onPress={() => void refresh().then(() => setStep('code'))}>Done</Button>
         </>

@@ -41,16 +41,15 @@ export default function Notifications() {
 
   return (
     <Screen>
-      <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant }}>Choose which operational alerts appear in PayTsek.</Text>
-      <Notice kind="info">Alerts stay inside PayTsek in this release. They are based on live workspace data and do not expose wallet notification text.</Notice>
+      <Notice kind="info">These alerts appear inside PayTsek and never include wallet notification text.</Notice>
       <Group title="Current alerts">
         {alerts.filter((alert) => alert.visible).map((alert) => <ListRow key={alert.id} icon={alert.icon} title={alert.title} subtitle={alert.subtitle} />)}
         {!alerts.some((alert) => alert.visible) ? <ListRow icon="check-circle-outline" title="All caught up" subtitle="There are no enabled alerts right now." /> : null}
       </Group>
       <Group title="Alert preferences">
-        <ListRow icon="clipboard-alert-outline" title="Reviews needed" subtitle="Show when a saved record needs a decision." right={<Switch value={preferences?.reviewRequired ?? true} onValueChange={(value) => void update('reviewRequired', value)} />} />
-        <ListRow icon="cellphone-alert" title="Payment phone health" subtitle="Show when listener access, connection, or device state needs attention." right={<Switch value={preferences?.paymentPhoneHealth ?? true} onValueChange={(value) => void update('paymentPhoneHealth', value)} />} />
-        <ListRow icon="cloud-alert-outline" title="Scan sync issues" subtitle="Show when saved scans are waiting on this phone." right={<Switch value={preferences?.syncIssues ?? true} onValueChange={(value) => void update('syncIssues', value)} />} />
+        <ListRow icon="clipboard-alert-outline" title="Reviews needed" right={<Switch value={preferences?.reviewRequired ?? true} onValueChange={(value) => void update('reviewRequired', value)} />} />
+        <ListRow icon="cellphone-alert" title="Payment phone health" right={<Switch value={preferences?.paymentPhoneHealth ?? true} onValueChange={(value) => void update('paymentPhoneHealth', value)} />} />
+        <ListRow icon="cloud-alert-outline" title="Scan sync issues" right={<Switch value={preferences?.syncIssues ?? true} onValueChange={(value) => void update('syncIssues', value)} />} />
       </Group>
     </Screen>
   );

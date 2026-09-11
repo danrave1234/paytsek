@@ -82,9 +82,9 @@ export function Screen({
 export function ScreenTitle({ title, subtitle }: { title: string; subtitle?: string }) {
   const theme = useTheme();
   return (
-    <View style={{ gap: 4, marginBottom: SPACING.sm }}>
-      <Text variant="headlineSmall" style={{ fontWeight: '700', letterSpacing: -0.45 }}>{title}</Text>
-      {subtitle ? <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, lineHeight: 21 }}>{subtitle}</Text> : null}
+    <View style={{ gap: 2, marginBottom: SPACING.xs }}>
+      <Text variant="titleLarge" style={{ fontWeight: '700', letterSpacing: -0.3 }}>{title}</Text>
+      {subtitle ? <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, lineHeight: 18 }}>{subtitle}</Text> : null}
     </View>
   );
 }
@@ -94,8 +94,8 @@ export function SectionHeader({ children }: { children: React.ReactNode }) {
   const theme = useTheme();
   return (
     <Text
-      variant="labelMedium"
-      style={{ color: theme.colors.primary, fontWeight: '700', marginTop: SPACING.md, marginBottom: SPACING.xs }}
+      variant="labelSmall"
+      style={{ color: theme.colors.onSurfaceVariant, fontWeight: '700', marginTop: SPACING.sm, marginBottom: SPACING.xs, textTransform: 'uppercase', letterSpacing: 0.7 }}
     >
       {children}
     </Text>
@@ -256,7 +256,7 @@ export function EmptyState({ icon, title, body, action }: { icon: string; title:
   const theme = useTheme();
   return (
     <View style={styles.center}>
-      <View style={[styles.emptyIcon, { backgroundColor: theme.colors.surfaceVariant }]}>
+      <View style={styles.emptyIcon}>
         <Icon source={icon} size={32} color={theme.colors.onSurfaceVariant} />
       </View>
       <Text variant="titleMedium" style={{ marginTop: SPACING.lg, textAlign: 'center', fontWeight: '600' }}>{title}</Text>
@@ -306,12 +306,12 @@ export function Row({ label, value }: { label: string; value: React.ReactNode })
 const styles = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, alignSelf: 'flex-start' },
   chipCompact: { paddingHorizontal: 8, paddingVertical: 3 },
-  screen: { paddingHorizontal: SPACING.xl, paddingTop: SPACING.lg, gap: SPACING.md },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xl, minHeight: 240 },
-  emptyIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
+  screen: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.md, gap: SPACING.md },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xl, minHeight: 220 },
+  emptyIcon: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   notice: { flexDirection: 'row', gap: 10, alignItems: 'center', padding: SPACING.md, borderRadius: RADIUS.md },
   group: { borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', shadowColor: '#101828', shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
-  listRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.lg, paddingHorizontal: SPACING.lg, minHeight: TOUCH_TARGET },
+  listRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.md, paddingHorizontal: SPACING.lg, minHeight: TOUCH_TARGET },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: SPACING.md, paddingVertical: 6 },
   skeletonScene: { width: '100%', gap: SPACING.md },
   skeletonActions: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', gap: SPACING.sm },

@@ -141,8 +141,8 @@ export default function Scan() {
     }
   }, [invalidate, ocrText, router, sourceId, sources.data, workspace]);
 
-  const processImage = useCallback(async (uri: string, from: CaptureOrigin, automatic = false) => {
-    if (!automatic) setStage('processing');
+  const processImage = useCallback(async (uri: string, from: CaptureOrigin) => {
+    setStage('processing');
     setImageUri(uri);
     setError(null);
     setOrigin(from);
@@ -165,20 +165,12 @@ export default function Scan() {
       );
       const sourceAvailable = Boolean(sourceId ?? sources.data?.[0]?.id);
       if (confident && sourceAvailable && await persist(receipt, clean.uri, from, receipt.fields, ocr.fullText)) return;
-      if (automatic && (!confident || sourceAvailable)) {
-        reset();
-        return;
-      }
       setStage('review');
     } catch {
-      if (automatic) {
-        reset();
-        return;
-      }
       setError('Could not read the proof. Try again or import a screenshot.');
       setStage('capture');
     }
-  }, [persist, reset, sourceId, sources.data]);
+  }, [persist, sourceId, sources.data]);
 
   useEffect(() => {
     if (params.source !== 'share') return;
@@ -189,15 +181,15 @@ export default function Scan() {
     })();
   }, [params.source, params.uri, processImage]);
 
-  const capture = useCallback(async (automatic = false) => {
+  const capture = useCallback(async () => {
     if (!camera || !cameraReady || operation.current) return;
     operation.current = true;
     setBusy(true);
     try {
       const photo = await camera.takePictureAsync({ quality: 0.9, skipProcessing: false });
-      if (photo?.uri) await processImage(photo.uri, 'CAMERA', automatic);
+      if (photo?.uri) await processImage(photo.uri, 'CAMERA');
     } catch {
-      if (!automatic) setError('Could not capture the proof.');
+      setError('Could not capture the proof.');
     } finally {
       operation.current = false;
       setBusy(false);
@@ -274,7 +266,7 @@ export default function Scan() {
   return (
     <Screen scroll={false} tabbed style={styles.page}>
       <View style={styles.header}>
-        <ScreenTitle title="Scan proof" />
+        <ScreenTitle title="Scan payment" />
         <IconButton icon="account-circle-outline" accessibilityLabel="Open settings" onPress={() => router.push('/(tabs)/settings')} />
       </View>
       {error ? <Notice kind="error">{error}</Notice> : null}

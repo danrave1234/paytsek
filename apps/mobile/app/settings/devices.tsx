@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import React, { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
-import { Button, Card, Text, useTheme } from 'react-native-paper';
+import { Button, Card, Icon, List, Text, useTheme } from 'react-native-paper';
 import type { CollectorStatus } from 'payment-collector';
 import { ErrorState, Loading, Notice, Row, Screen } from '@/components/ui';
 import { api } from '@/lib/api';
@@ -33,10 +33,11 @@ export default function Devices() {
 
   return (
     <Screen>
-      <Notice kind="info">"Last seen" shows the last time a phone contacted the server. Server silence does not prove the phone is off, and a recent heartbeat does not guarantee every notification is captured.</Notice>
+      <Notice kind="info">Device status shows the latest contact with PayTsek—not a guarantee that every wallet notification was received.</Notice>
       {local?.supported ? (
         <Card mode="outlined">
-          <Card.Title title="This phone (local)" />
+          <Card.Title title="This phone" subtitle={local.notificationAccessGranted && local.listenerConnected ? 'Ready' : 'Needs attention'} left={(props) => <Icon {...props} source={local.notificationAccessGranted && local.listenerConnected ? 'check-circle-outline' : 'alert-circle-outline'} />} />
+          <List.Accordion title="Local diagnostics">
           <Card.Content>
             <Row label="Notification access" value={local.notificationAccessGranted ? 'Granted' : 'Not granted'} />
             <Row label="Listener connected" value={local.listenerConnected ? 'Yes' : 'No'} />
@@ -44,15 +45,17 @@ export default function Devices() {
             <Row label="Paused" value={local.paused ? 'Yes' : 'No'} />
             <Row label="Last upload error" value={local.lastUploadError ?? '—'} />
           </Card.Content>
+          </List.Accordion>
         </Card>
       ) : null}
       {error ? <Notice kind="error">{error}</Notice> : null}
       {q.isLoading ? <Loading /> : q.error ? <ErrorState error={q.error} retry={() => void q.refetch()} /> : null}
       {q.data?.map((d) => (
         <Card key={d.id} mode="outlined">
-          <Card.Title title={d.label} subtitle={`${d.platform} · ${d.capability.toLowerCase()} · ${d.status.toLowerCase()}`} />
+          <Card.Title title={d.label} subtitle={`${d.status.toLowerCase()} · ${lastSeen(d.lastServerContactAt).replace('Last seen ', '')}`} left={(props) => <Icon {...props} source={d.status === 'ACTIVE' ? 'cellphone-check' : 'cellphone-alert'} />} />
+          <List.Accordion title="Device details">
           <Card.Content>
-            <Row label="Server contact" value={lastSeen(d.lastServerContactAt)} />
+            <Row label="Role" value={d.capability.toLowerCase().replace(/_/g, ' ')} />
             {d.capability !== 'SCANNER' ? (
               <>
                 <Row label="Last event observed" value={d.lastObservedEventAt ? lastSeen(d.lastObservedEventAt) : 'None yet'} />
@@ -64,6 +67,7 @@ export default function Devices() {
             ) : null}
             <Row label="App version" value={d.appVersion ?? '—'} />
           </Card.Content>
+          </List.Accordion>
           {isOwner && d.status !== 'REVOKED' ? (
             <Card.Actions>
               <Button onPress={() => void setStatus(d.id, d.status === 'PAUSED' ? 'ACTIVE' : 'PAUSED')}>{d.status === 'PAUSED' ? 'Resume' : 'Pause'}</Button>
@@ -72,7 +76,7 @@ export default function Devices() {
           ) : null}
         </Card>
       ))}
-      {q.data?.length === 0 ? <Text variant="bodyMedium">No devices registered yet.</Text> : null}
+      {q.data?.length === 0 ? <Text variant="bodyMedium">No connected devices.</Text> : null}
     </Screen>
   );
 }

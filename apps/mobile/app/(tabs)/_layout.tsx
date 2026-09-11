@@ -12,7 +12,7 @@ import { useReducedMotion } from '@/components/motion';
  */
 const TABS = [
   { name: 'index', title: 'Home', icon: 'home-variant', iconOutline: 'home-variant-outline' },
-  { name: 'scan', title: 'Scan proof', icon: 'line-scan', iconOutline: 'line-scan', primary: true },
+  { name: 'scan', title: 'Scan', icon: 'line-scan', iconOutline: 'line-scan', primary: true },
   { name: 'settings', title: 'Settings', icon: 'cog', iconOutline: 'cog-outline' },
 ] as const;
 
