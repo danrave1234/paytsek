@@ -6,7 +6,7 @@ import { Button, Dialog, Icon, IconButton, List, Portal, Text, TextInput, useThe
 import { ErrorState, Loading, Notice, Screen, StateChip } from '@/components/ui';
 import { isApiError } from '@/lib/api';
 import { lastSeenWithTime, manilaTime, peso } from '@/lib/format';
-import { useCandidates, useConfirmCandidate, useConfirmManually, useEscalate, useRecord, useUnlink, useVoid } from '@/lib/queries';
+import { useConfirmCandidate, useConfirmManually, useEscalate, useRecord, useUnlink, useVoid } from '@/lib/queries';
 import { useIsOwner, useSession } from '@/lib/session';
 import { RADIUS, SPACING, stateColorsFor } from '@/theme';
 
@@ -31,8 +31,6 @@ export default function RecordDetail() {
   const isOwner = useIsOwner();
   const { workspace } = useSession();
   const rec = useRecord(id);
-  const open = rec.data && (rec.data.evidenceState === 'UNVERIFIED' || rec.data.evidenceState === 'REVIEW_REQUIRED');
-  const cands = useCandidates(open ? id : '');
   const confirm = useConfirmCandidate(id);
   const manual = useConfirmManually(id);
   const unlink = useUnlink(id);
@@ -45,6 +43,8 @@ export default function RecordDetail() {
   if (rec.isLoading) return <Screen scroll={false}><Loading variant="detail" label="Loading payment record" /></Screen>;
   if (rec.error || !rec.data) return <Screen scroll={false}><ErrorState error={rec.error} retry={() => void rec.refetch()} /></Screen>;
   const r = rec.data;
+  const open = r.evidenceState === 'UNVERIFIED' || r.evidenceState === 'REVIEW_REQUIRED';
+  const cands = r.candidates;
   const canConfirm = isOwner || (workspace && r.createdByUserId);
   const status = STATUS_COPY[r.evidenceState];
   const stateColor = stateColorsFor(theme.dark)[r.evidenceState];
@@ -79,10 +79,10 @@ export default function RecordDetail() {
     {msg ? <Notice kind={msg.kind}>{msg.text}</Notice> : null}
 
     {open ? <View style={[styles.surface, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
-      <View style={styles.sectionHeader}><View style={[styles.sectionIcon, { backgroundColor: theme.colors.surfaceVariant }]}><Icon source="bell-sync-outline" size={20} color={theme.colors.primary} /></View><View style={{ flex: 1 }}><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment-phone check</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{cands.isFetching ? 'Checking for a matching notification…' : cands.data ? `${cands.data.candidates.length} possible match${cands.data.candidates.length === 1 ? '' : 'es'}` : 'Checking notifications…'}</Text></View></View>
-      {cands.data?.collectorStale ? <Notice kind="warning">Payment phone {lastSeenWithTime(cands.data.collectorLastSeenAt).toLowerCase()}. Keep it online with notification access enabled; this payment remains safely recorded.</Notice> : null}
-      {cands.data && cands.data.candidates.length === 0 && !cands.data.collectorStale ? <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Waiting for a matching notification. This page checks again automatically while it is open.</Text> : null}
-      {cands.data?.candidates.map((c) => <View key={c.eventId} style={[styles.candidate, { borderColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surfaceVariant }]}><View style={{ flex: 1, gap: 2 }}><Text variant="titleSmall">{peso(c.amountCentavos)} · {c.payerMaskedName ?? c.payerMaskedPhone ?? 'Unknown sender'}</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(c.eventAt, 'SECOND')}{c.deltaSeconds !== null ? ` · ${Math.abs(c.deltaSeconds) < 60 ? `${Math.abs(c.deltaSeconds)}s` : `${Math.round(Math.abs(c.deltaSeconds) / 60)} min`} from receipt` : ''}</Text></View>{c.alreadyLinkedToOtherRecord ? <Text variant="labelSmall" style={{ color: theme.colors.error }}>Already linked</Text> : null}<Button mode="contained" compact disabled={c.alreadyLinkedToOtherRecord || confirm.isPending || !canConfirm} onPress={() => void onConfirm(c.eventId)}>Use this match</Button></View>)}
+      <View style={styles.sectionHeader}><View style={[styles.sectionIcon, { backgroundColor: theme.colors.surfaceVariant }]}><Icon source="bell-sync-outline" size={20} color={theme.colors.primary} /></View><View style={{ flex: 1 }}><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment-phone check</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{cands ? `${cands.candidates.length} possible match${cands.candidates.length === 1 ? '' : 'es'}` : 'Checking notifications…'}</Text></View></View>
+      {cands?.collectorStale ? <Notice kind="warning">Payment phone {lastSeenWithTime(cands.collectorLastSeenAt).toLowerCase()}. Keep it online with notification access enabled; this payment remains safely recorded.</Notice> : null}
+      {cands && cands.candidates.length === 0 && !cands.collectorStale ? <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Waiting for a matching notification. This page checks again automatically while it is open.</Text> : null}
+      {cands?.candidates.map((c) => <View key={c.eventId} style={[styles.candidate, { borderColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surfaceVariant }]}><View style={{ flex: 1, gap: 2 }}><Text variant="titleSmall">{peso(c.amountCentavos)} · {c.payerMaskedName ?? c.payerMaskedPhone ?? 'Unknown sender'}</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(c.eventAt, 'SECOND')}{c.deltaSeconds !== null ? ` · ${Math.abs(c.deltaSeconds) < 60 ? `${Math.abs(c.deltaSeconds)}s` : `${Math.round(Math.abs(c.deltaSeconds) / 60)} min`} from receipt` : ''}</Text></View>{c.alreadyLinkedToOtherRecord ? <Text variant="labelSmall" style={{ color: theme.colors.error }}>Already linked</Text> : null}<Button mode="contained" compact disabled={c.alreadyLinkedToOtherRecord || confirm.isPending || !canConfirm} onPress={() => void onConfirm(c.eventId)}>Use this match</Button></View>)}
       <View style={styles.verificationAction}>{isOwner ? <Button onPress={() => setDialog('manual')}>I checked the wallet</Button> : <Button onPress={() => void escalate.mutateAsync(undefined)}>Ask owner to check</Button>}</View>
     </View> : null}
 

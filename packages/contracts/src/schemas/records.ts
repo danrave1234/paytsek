@@ -14,6 +14,7 @@ import {
   TimePrecision,
 } from '../enums';
 import { uuid } from './pairing';
+import { CandidatesResponse } from './review';
 
 /**
  * Fields extracted from a receipt. Every value is nullable: missing values stay
@@ -202,6 +203,8 @@ export const RecordDetail = RecordSummary.extend({
       reason: z.string().nullable(),
     }),
   ),
+  /** Present only while the record is waiting for a payment-phone match. */
+  candidates: CandidatesResponse.nullable(),
 });
 export type RecordDetail = z.infer<typeof RecordDetail>;
 

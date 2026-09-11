@@ -130,14 +130,20 @@ export class RecordsService {
       `select kind, reason_codes, supporting_fields, missing_fields, time_basis, window_seconds, matcher_version from payment_matches where record_id = $1 and active`,
       [id],
     );
-    return toDetail(row, {
+    const candidates = row.evidence_state === 'UNVERIFIED' || row.evidence_state === 'REVIEW_REQUIRED'
+      ? await this.reconcile.candidates(orgId, id)
+      : null;
+    return {
+      ...toDetail(row, {
       extracted: versions.rows.find((v) => v.kind === 'OCR_ORIGINAL')?.fields ?? null,
       history: history.rows.map((h) => ({ at: h.created_at.toISOString(), action: h.action, actorDisplayName: h.display_name, reason: h.reason })),
       image,
       match: match
         ? { kind: match.kind, reasonCodes: match.reason_codes, supportingFields: match.supporting_fields, missingFields: match.missing_fields, timeBasis: match.time_basis, windowSeconds: match.window_seconds, matcherVersion: match.matcher_version, disclosure: match.kind === 'AUTO' ? AUTO_MATCH_DISCLOSURE : null }
         : { kind: null, reasonCodes: [], supportingFields: [], missingFields: [], timeBasis: 'NONE', windowSeconds: null, matcherVersion: row.matcher_version, disclosure: null },
-    });
+      }),
+      candidates,
+    };
   }
 
   /** Corrections keep history; material (matching-critical) edits reopen reconciliation. */
