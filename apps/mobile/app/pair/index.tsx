@@ -2,7 +2,7 @@ import type { CreatePairingSessionResponse, DeviceSummary } from '@paytsek/contr
 import React, { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Button, Card, Menu, Text, TextInput } from 'react-native-paper';
+import { Button, Card, List, Menu, Switch, Text, TextInput } from 'react-native-paper';
 import { Notice, Screen } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useDevices, useSources } from '@/lib/queries';
@@ -66,30 +66,29 @@ export default function PairOwner() {
 
   return (
     <Screen>
-      <Notice kind="info">
-        The payment phone must be the Android phone that actually receives your {selected?.provider ?? 'wallet'} notifications. Pairing another phone does not forward notifications. The code never contains your login.
-      </Notice>
+      <Notice kind="info">Use the Android phone that receives your wallet payment notifications.</Notice>
       {sources.data?.length === 0 ? <Notice kind="warning">Add a wallet source first (Settings → Payment sources).</Notice> : null}
       <Menu visible={menu} onDismiss={() => setMenu(false)} anchor={<Button mode="outlined" onPress={() => setMenu(true)} style={{ minHeight: TOUCH_TARGET }}>{selected ? `${selected.provider} notifications on main phone` : 'Choose payment source'}</Button>}>
         {sources.data?.map((s) => <Menu.Item key={s.id} title={`${s.provider} notifications on main phone`} onPress={() => { setSourceId(s.id); setMenu(false); }} />)}
       </Menu>
       {selected?.activeCollectorDeviceId ? <Notice kind="warning">This wallet source already has an active payment phone. Revoke it in Devices before pairing a different one.</Notice> : null}
       <TextInput label="Phone label" mode="outlined" value={label} onChangeText={setLabel} />
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Button mode={capability === 'COLLECTOR' ? 'contained' : 'outlined'} onPress={() => setCapability('COLLECTOR')} style={{ flex: 1 }}>Collect only</Button>
-        <Button mode={capability === 'BOTH' ? 'contained' : 'outlined'} onPress={() => setCapability('BOTH')} style={{ flex: 1 }}>Collect + scan</Button>
-      </View>
-      <Text variant="bodySmall" style={{ opacity: 0.7 }}>"Collect + scan" uses one scanner slot and one collector slot of your plan.</Text>
+      <List.Accordion title="More options" description="Scanner access">
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8 }}>
+          <Text variant="bodyMedium" style={{ flex: 1 }}>Also use this phone for scanning</Text>
+          <Switch value={capability === 'BOTH'} onValueChange={(value) => setCapability(value ? 'BOTH' : 'COLLECTOR')} />
+        </View>
+      </List.Accordion>
       {error ? <Notice kind="error">{error}</Notice> : null}
-      {Platform.OS === 'android' ? <Button mode="contained" icon="cellphone-check" loading={busy} onPress={() => void create(true)} disabled={busy || !sourceId || !!selected?.activeCollectorDeviceId} style={{ minHeight: TOUCH_TARGET }}>This is my main payment phone</Button> : null}
-      <Button mode="outlined" onPress={() => void create()} disabled={busy || !sourceId || !!selected?.activeCollectorDeviceId} style={{ minHeight: TOUCH_TARGET }}>Create code for another main phone</Button>
+      {Platform.OS === 'android' ? <Button mode="contained" icon="cellphone-check" loading={busy} onPress={() => void create(true)} disabled={busy || !sourceId || !!selected?.activeCollectorDeviceId} style={{ minHeight: TOUCH_TARGET }}>Use this phone</Button> : null}
+      <Button mode="outlined" onPress={() => void create()} disabled={busy || !sourceId || !!selected?.activeCollectorDeviceId} style={{ minHeight: TOUCH_TARGET }}>Connect another phone</Button>
 
       {session ? (
         <Card mode="outlined">
-          <Card.Title title="Enter this code on the payment phone" subtitle={secondsLeft > 0 ? `Expires in ${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}` : 'Expired — create a new code'} />
+          <Card.Title title="Enter on the payment phone" subtitle={secondsLeft > 0 ? `Expires in ${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}` : 'Code expired'} />
           <Card.Content style={{ alignItems: 'center', gap: 8 }}>
             <Text variant="displaySmall" selectable accessibilityLabel={`Pairing code ${session.code.split('').join(' ')}`} style={{ letterSpacing: 4 }}>{session.code}</Text>
-            <Text variant="bodySmall" style={{ opacity: 0.7, textAlign: 'center' }}>On the main Android phone, open PayTsek → Set up main phone with a pairing code (on sign-in), or More → Set up this main payment phone. Enter the code, then approve it here.</Text>
+            <Text variant="bodySmall" style={{ opacity: 0.7, textAlign: 'center' }}>On the payment phone, open PayTsek, choose Set up payment phone, then enter this code.</Text>
           </Card.Content>
         </Card>
       ) : null}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Share } from 'react-native';
-import { Button, Card, Dialog, Portal, Text, TextInput, useTheme } from 'react-native-paper';
-import { Notice, Row, Screen } from '@/components/ui';
+import { Button, Card, Dialog, List, Portal, Text, TextInput, useTheme } from 'react-native-paper';
+import { Group, ListRow, Notice, Row, Screen } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useIsOwner, useSession } from '@/lib/session';
 
@@ -35,34 +35,37 @@ export default function Privacy() {
 
   return (
     <Screen>
+      <Notice kind="info">PayTsek reads payment evidence you choose and incoming-payment notifications from a connected Android phone. It never reads OTPs, passwords, contacts, or your wallet balance.</Notice>
       <Card mode="outlined">
-        <Card.Title title="What PayTsek collects" />
-        <Card.Content style={{ gap: 6 }}>
-          <Text variant="bodySmall">• Receipt images you capture or import (location EXIF removed) and the fields read from them.</Text>
-          <Text variant="bodySmall">• On a paired Android payment phone only: amount, masked sender, reference (if shown) and time of positive incoming-payment notifications from the wallet apps you enabled. OTPs, security prompts, outgoing payments, promos and unknown messages are dropped on the phone and never uploaded.</Text>
-          <Text variant="bodySmall">• Never: GPS, contacts, installed-app inventory, wallet balance, MPIN/OTP/login, IMEI or other hardware identifiers.</Text>
-        </Card.Content>
+        <List.Accordion title="Data PayTsek uses" description="Receipts and payment notifications">
+          <Card.Content style={{ gap: 8 }}>
+            <Text variant="bodySmall">Receipt images you capture or import, with location metadata removed.</Text>
+            <Text variant="bodySmall">Incoming amount, masked sender, reference and time from supported wallet notifications.</Text>
+            <Text variant="bodySmall">Security prompts, outgoing payments, promotions and unknown messages are discarded on the phone.</Text>
+          </Card.Content>
+        </List.Accordion>
+        <List.Accordion title="How long data is kept" description="Tap to view retention periods">
+          <Card.Content>
+            <Row label="Unmatched notifications" value="7 days" />
+            <Row label="Receipt images" value="30–90 days" />
+            <Row label="Records and history" value="12 months" />
+            <Row label="Export files" value="24 hours" />
+          </Card.Content>
+        </List.Accordion>
       </Card>
-      <Card mode="outlined">
-        <Card.Title title="Retention (operational recordkeeping, not a tax archive)" />
-        <Card.Content>
-          <Row label="Unmatched notifications" value="7 days" />
-          <Row label="Receipt images (Free)" value="30 days" />
-          <Row label="Receipt images (paid)" value="90 days" />
-          <Row label="Structured records & audit" value="12 months" />
-          <Row label="Export files" value="24 hours" />
-        </Card.Content>
-      </Card>
-      <Notice kind="info">A notification match means PayTsek saw a notification on your phone. It is not a confirmation from GCash, GoTyme, Maya or any bank.</Notice>
-      <Button mode="outlined" onPress={() => void exportData()}>Export my personal data</Button>
-      {isOwner ? <Button mode="outlined" textColor={theme.colors.error} onPress={() => setDialog('workspace')}>Delete workspace "{workspace?.name}"</Button> : null}
-      <Button mode="outlined" textColor={theme.colors.error} onPress={() => setDialog('account')}>Delete my account</Button>
+      <Group title="Your data">
+        <ListRow icon="file-export-outline" title="Export my personal data" onPress={() => void exportData()} />
+      </Group>
+      <Group title="Danger zone">
+        {isOwner ? <ListRow icon="delete-outline" title={`Delete ${workspace?.name ?? 'workspace'}`} destructive onPress={() => setDialog('workspace')} /> : null}
+        <ListRow icon="account-remove-outline" title="Delete my account" destructive onPress={() => setDialog('account')} />
+      </Group>
       {msg ? <Notice kind={msg.kind}>{msg.text}</Notice> : null}
       <Portal>
         <Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}>
           <Dialog.Title>{dialog === 'workspace' ? 'Delete workspace' : 'Delete account'}</Dialog.Title>
           <Dialog.Content style={{ gap: 8 }}>
-            <Text variant="bodySmall">{dialog === 'workspace' ? 'All records, images, notifications, devices and billing links for this workspace will be removed. Devices are revoked immediately; files are purged by the retention job.' : 'Your profile and memberships are removed. Business records you created stay with the workspace without your name. Sole owners must transfer ownership or delete the workspace first.'}</Text>
+            <Text variant="bodySmall">{dialog === 'workspace' ? 'This removes its records, images, notifications, devices and billing links.' : 'This removes your profile and memberships. Business records stay with their workspace without your name.'}</Text>
             <TextInput label="Type DELETE to confirm" mode="outlined" value={confirm} onChangeText={setConfirm} autoCapitalize="characters" />
           </Dialog.Content>
           <Dialog.Actions>

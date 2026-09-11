@@ -36,7 +36,7 @@ export default function Exports() {
 
   return (
     <Screen>
-      <Notice kind="info">Exports include your recorded payments with their evidence state. "Notification matched" is not a provider confirmation. Download links expire after 24 hours and the file is deleted.</Notice>
+      <Notice kind="info">CSV exports include payment records and status. Download links expire after 24 hours.</Notice>
       {RANGES.map((r) => <Button key={r.key} mode="outlined" onPress={() => void create(r.days)} style={{ minHeight: TOUCH_TARGET }}>{r.label} (CSV)</Button>)}
       {error ? <Notice kind="error">{error}</Notice> : null}
       {job ? (

@@ -1,28 +1,16 @@
 import { CameraView } from 'expo-camera';
-import React, { useEffect, useRef } from 'react';
-import { Animated, Linking, Pressable, StyleSheet, View } from 'react-native';
+import React from 'react';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text, useTheme } from 'react-native-paper';
 
 export function CaptureSurface({ granted, canAskAgain, active, ready, busy, onPermission, onCapture, onImport, cameraRef, onReady, torch, onTorch }: {
   granted: boolean; canAskAgain: boolean; active: boolean; ready: boolean; busy: boolean;
-  onPermission: () => void; onCapture: (automatic?: boolean) => void; onImport: () => void;
+  onPermission: () => void; onCapture: () => void; onImport: () => void;
   cameraRef: (camera: CameraView | null) => void; onReady: () => void;
   torch: boolean; onTorch: () => void;
 }) {
   const theme = useTheme();
-  const autoPulse = useRef(new Animated.Value(0)).current;
   const captureDisabled = busy || !granted || !ready || !active;
-
-  useEffect(() => {
-    if (!granted || !active || !ready || busy) return;
-    autoPulse.setValue(0);
-    const animation = Animated.timing(autoPulse, { toValue: 1, duration: 1400, useNativeDriver: true });
-    const timer = setTimeout(() => {
-      onCapture(true);
-    }, 1450);
-    animation.start();
-    return () => { clearTimeout(timer); animation.stop(); };
-  }, [active, autoPulse, busy, granted, onCapture, ready]);
 
   return <View style={[styles.surface, { backgroundColor: granted ? '#101B2C' : theme.colors.surface }]}>
     {granted && active ? <CameraView ref={cameraRef} onCameraReady={onReady} enableTorch={torch} facing="back" style={StyleSheet.absoluteFill} /> : null}
@@ -53,18 +41,7 @@ export function CaptureSurface({ granted, canAskAgain, active, ready, busy, onPe
       <Pressable accessibilityRole="button" accessibilityLabel="Import payment screenshot" disabled={busy} onPress={onImport} style={({ pressed }) => [styles.sideAction, { opacity: pressed || busy ? 0.5 : 1 }]}>
         <Icon source="image-multiple-outline" size={27} color="#FFFFFF" />
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Capture receipt" accessibilityState={{ disabled: captureDisabled, busy }} disabled={captureDisabled} onPress={() => onCapture(false)} style={({ pressed }) => [styles.shutter, { opacity: captureDisabled ? 0.4 : 1, transform: [{ scale: pressed ? 0.93 : 1 }] }]}>
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.autoRing,
-            {
-              borderColor: theme.colors.primary,
-              opacity: autoPulse.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.95] }),
-              transform: [{ scale: autoPulse.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1.08] }) }],
-            },
-          ]}
-        />
+      <Pressable accessibilityRole="button" accessibilityLabel="Capture payment proof" accessibilityHint="Takes one photo when you tap" accessibilityState={{ disabled: captureDisabled, busy }} disabled={captureDisabled} onPress={onCapture} style={({ pressed }) => [styles.shutter, { opacity: captureDisabled ? 0.4 : 1, transform: [{ scale: pressed ? 0.93 : 1 }] }]}>
         <View style={styles.shutterInner}><Icon source="line-scan" size={32} color="#101828" /></View>
       </Pressable>
       <View style={styles.sideAction} />
@@ -84,7 +61,6 @@ const styles = StyleSheet.create({
   sideAction: { width: 72, minHeight: 64, alignItems: 'center', justifyContent: 'center' },
   shutter: { width: 84, height: 84, borderRadius: 42, borderWidth: 2, borderColor: '#FFFFFF99', padding: 5 },
   shutterInner: { flex: 1, borderRadius: 40, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
-  autoRing: { position: 'absolute', top: -7, right: -7, bottom: -7, left: -7, borderRadius: 49, borderWidth: 3 },
   corner: { position: 'absolute', width: 34, height: 34, zIndex: 2 },
   topLeft: { top: 22, left: 22, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 12 },
   topRight: { top: 22, right: 22, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 12 },

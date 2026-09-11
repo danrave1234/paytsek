@@ -13,6 +13,7 @@ export default function Workspaces() {
   const [businessName, setBusinessName] = useState('');
   const [invite, setInvite] = useState('');
   const [joining, setJoining] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const autoCreateStarted = useRef(false);
@@ -70,14 +71,15 @@ export default function Workspaces() {
 
   return (
     <Screen>
-      <ScreenTitle title={workspaces.length ? 'Your records' : 'Join a team'} />
+      <ScreenTitle
+        title={workspaces.length ? 'Choose workspace' : 'Finish setup'}
+        subtitle={workspaces.length ? undefined : 'Create your workspace or join with a code.'}
+      />
 
       {workspaces.map((workspace) => (
         <TouchableRipple key={workspace.id} onPress={() => void selectWorkspace(workspace.id)} borderless style={{ borderRadius: RADIUS.lg }}>
           <View style={[styles.workspace, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
-            <View style={[styles.icon, { backgroundColor: theme.colors.primaryContainer }]}>
-              <Icon source="wallet-outline" size={22} color={theme.colors.primary} />
-            </View>
+            <Icon source="wallet-outline" size={22} color={theme.colors.onSurfaceVariant} />
             <Text variant="titleMedium" style={{ flex: 1, fontWeight: '700' }}>{workspace.name}</Text>
             <Icon source="chevron-right" size={22} color={theme.colors.onSurfaceVariant} />
           </View>
@@ -86,13 +88,18 @@ export default function Workspaces() {
 
       {error ? <Notice kind="error">Couldn’t finish setup.</Notice> : null}
 
-      {!joining && workspaces.length ? (
-        <View style={styles.form}>
-          <TextInput label="Business name (optional)" mode="outlined" value={businessName} onChangeText={setBusinessName} maxLength={80} />
-          <Button mode="contained" loading={busy} disabled={busy} onPress={() => void create()} contentStyle={{ minHeight: TOUCH_TARGET }}>
-            Continue
-          </Button>
+      {!joining && !creating && workspaces.length ? (
+        <View style={styles.secondaryActions}>
+          <Button mode="outlined" icon="plus" onPress={() => setCreating(true)}>New workspace</Button>
           <Button mode="text" onPress={() => setJoining(true)}>Join with a code</Button>
+        </View>
+      ) : creating ? (
+        <View style={styles.form}>
+          <TextInput label="Workspace name" mode="outlined" value={businessName} onChangeText={setBusinessName} maxLength={80} />
+          <Button mode="contained" loading={busy} disabled={busy} onPress={() => void create()} contentStyle={{ minHeight: TOUCH_TARGET }}>
+            Create workspace
+          </Button>
+          <Button mode="text" onPress={() => setCreating(false)}>Cancel</Button>
         </View>
       ) : joining ? (
         <View style={styles.form}>
@@ -127,7 +134,7 @@ export default function Workspaces() {
 
 const styles = StyleSheet.create({
   workspace: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: SPACING.md, padding: SPACING.md, borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth },
-  icon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   form: { gap: SPACING.md, marginTop: SPACING.sm },
+  secondaryActions: { gap: SPACING.xs, marginTop: SPACING.xs },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Platform, Share, View } from 'react-native';
 import { Button, Card, Switch, Text, useTheme } from 'react-native-paper';
 import { PaymentCollector, type TemplateSample } from 'payment-collector';
-import { EmptyState, Group, ListRow, Notice, Screen, ScreenTitle } from '@/components/ui';
+import { EmptyState, Group, ListRow, Notice, Screen } from '@/components/ui';
 import { SPACING, TOUCH_TARGET } from '@/theme';
 
 /**
@@ -67,16 +67,7 @@ export default function Samples() {
 
   return (
     <Screen>
-      <ScreenTitle
-        title="Unknown formats"
-        subtitle="Help add support for a wallet PayTsek cannot match yet"
-      />
-
-      <Notice kind="info">
-        Values are removed on this phone before anything is saved: digits become #, letters become a. Only notifications
-        PayTsek failed to recognise are kept — never OTPs or security messages. Nothing is uploaded; you choose when to
-        share it.
-      </Notice>
+      <Notice kind="info">When enabled, unrecognised payment-notification shapes are redacted and stored only on this phone. OTPs and security messages are excluded.</Notice>
 
       <Group title="Capture">
         <ListRow
@@ -89,8 +80,7 @@ export default function Samples() {
 
       {enabled && samples.length === 0 ? (
         <Notice kind="warning">
-          Nothing captured yet. Ask a customer to pay through the wallet you want supported, then come back — the
-          notification has to arrive on this phone while capture is on.
+          No unknown format captured yet. Leave this enabled until the next payment notification arrives.
         </Notice>
       ) : null}
 

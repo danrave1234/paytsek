@@ -3,7 +3,7 @@ import React from 'react';
 import { FlatList, View } from 'react-native';
 import { Card, Icon, Text, useTheme } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { EmptyState, ErrorState, Loading, ScreenTitle, StateChip } from '@/components/ui';
+import { EmptyState, ErrorState, Loading, StateChip } from '@/components/ui';
 import { manilaTime, peso } from '@/lib/format';
 import { useRecords } from '@/lib/queries';
 import { RADIUS, SPACING, TAB_BAR_CLEARANCE } from '@/theme';
@@ -17,22 +17,24 @@ export default function Review() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
-      <View style={{ paddingHorizontal: SPACING.xl, paddingTop: SPACING.lg, paddingBottom: SPACING.md, gap: SPACING.md }}>
-        <ScreenTitle title="Needs attention" />
-      </View>
       <FlatList
         data={items}
         keyExtractor={(r) => r.id}
-        contentContainerStyle={{ paddingHorizontal: SPACING.xl, paddingBottom: TAB_BAR_CLEARANCE, gap: SPACING.md }}
+        contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingBottom: TAB_BAR_CLEARANCE, gap: SPACING.sm }}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={(
+          <View style={{ paddingTop: SPACING.md, paddingBottom: SPACING.sm }}>
+            <Text variant="titleLarge" style={{ fontWeight: '700' }}>Needs attention</Text>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Only payments that need a decision appear here.</Text>
+          </View>
+        )}
         refreshing={q.isRefetching}
         onRefresh={() => void q.refetch()}
         ListEmptyComponent={q.isLoading ? <Loading variant="list" label="Loading" /> : q.error ? <ErrorState error={q.error} retry={() => void q.refetch()} /> : <EmptyState icon="clipboard-check-outline" title="All clear" />}
         renderItem={({ item }) => (
           <Card mode="contained" onPress={() => router.push(`/record/${item.id}`)} style={{ backgroundColor: theme.colors.surface, borderRadius: RADIUS.lg }}>
             <Card.Content style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md }}>
-              <View style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.tertiaryContainer }}>
-                <Icon source="clipboard-search-outline" size={21} color={theme.colors.onTertiaryContainer} />
-              </View>
+              <Icon source="clipboard-search-outline" size={22} color={theme.colors.tertiary} />
               <View style={{ flex: 1, gap: SPACING.xs }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: SPACING.sm }}>
                   <Text variant="titleMedium">{peso(item.amountCentavos)}</Text>
