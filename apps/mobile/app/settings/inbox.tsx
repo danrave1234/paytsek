@@ -25,7 +25,7 @@ export default function Inbox() {
     try {
       const id = newId();
       const r = await api<CreateRecordResponse>('/v1/records', { method: 'POST', body: { clientRecordId: id, sourceId: e.sourceId, proofId: null, captureOrigin: 'FROM_EVENT', capturedAt: new Date().toISOString(), appVersion: APP_VERSION, receiptParserId: null, receiptParserVersion: null, ocr: null, extracted: fields, corrected: fields, editedFields: [], fromEventId: e.eventId } });
-      setMsg(r.quotaConsumed ? 'Saved as a record (1 record used).' : 'Already recorded.');
+      setMsg(r.deduplicated ? 'Already saved as a record.' : 'Saved as a record.');
       invalidate();
     } catch (err) { setMsg((err as Error).message); }
   };

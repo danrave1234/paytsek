@@ -7,7 +7,6 @@ import type {
   OwnerInboxEvent,
   RecordDetail,
   SourceSummary,
-  UsageSummary,
   WorkspaceSummary,
 } from '@paytsek/contracts';
 import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -41,7 +40,6 @@ export const keys = {
   sources: ['sources'] as const,
   devices: ['devices'] as const,
   members: ['members'] as const,
-  usage: ['usage'] as const,
   inbox: ['inbox'] as const,
   records: (filters: Record<string, unknown>) => ['records', filters] as const,
   record: (id: string) => ['record', id] as const,
@@ -53,7 +51,6 @@ export const useHome = () => useQuery({ queryKey: keys.home, queryFn: ({ signal 
 export const useSources = () => useQuery({ queryKey: keys.sources, queryFn: ({ signal }) => api<SourceSummary[]>('/v1/sources', { signal }), staleTime: 5 * 60_000 });
 export const useDevices = () => useQuery({ queryKey: keys.devices, queryFn: ({ signal }) => api<DeviceSummary[]>('/v1/devices', { signal }), refetchInterval: useVisiblePolling(60_000) });
 export const useMembers = () => useQuery({ queryKey: keys.members, queryFn: ({ signal }) => api<MemberSummary[]>('/v1/workspaces/current/members', { signal }) });
-export const useUsage = () => useQuery({ queryKey: keys.usage, queryFn: ({ signal }) => api<UsageSummary>('/v1/billing/usage', { signal }) });
 export const useInbox = () => useQuery({ queryKey: keys.inbox, queryFn: ({ signal }) => api<OwnerInboxEvent[]>('/v1/inbox?unlinkedOnly=true&limit=100', { signal }) });
 
 export function useRecords(filters: { q?: string; state?: string[]; sourceId?: string; staffUserId?: string; from?: string; to?: string; cursor?: string }) {

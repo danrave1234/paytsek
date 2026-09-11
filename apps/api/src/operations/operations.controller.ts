@@ -47,11 +47,15 @@ export class OperationsService {
         where b.organization_id = $1 and b.status = 'ACTIVE' and d.status <> 'REVOKED'`,
       [orgId],
     );
-    const q = await this.db.one<{ allowance: number; used: number; credits: number }>(
-      `select p.monthly_record_allowance as allowance, monthly_used(o.id, current_period_start(o.id)) as used, prepaid_credits_remaining(o.id) as credits
-         from organizations o join plans p on p.code = o.plan_code where o.id = $1`,
-      [orgId],
-    );
+    // The app contract still includes this legacy field, but beta never reads
+    // a usage ledger or exposes a customer quota.
+    const q = this.env.BETA_MODE
+      ? { allowance: 0, used: 0, credits: 0 }
+      : await this.db.one<{ allowance: number; used: number; credits: number }>(
+        `select p.monthly_record_allowance as allowance, monthly_used(o.id, current_period_start(o.id)) as used, prepaid_credits_remaining(o.id) as credits
+           from organizations o join plans p on p.code = o.plan_code where o.id = $1`,
+        [orgId],
+      );
     return {
       today: {
         recordedCount: t?.recorded_n ?? 0,
