@@ -140,7 +140,9 @@ export class ReconcileService {
     const byId = new Map(events.map((e) => [e.id, e]));
 
     const collector = await this.db.one<{ last: Date | null }>(
-      `select d.last_server_contact_at as last from device_bindings b join devices d on d.id = b.device_id where b.source_id = $1 and b.status = 'ACTIVE' limit 1`,
+      // A source can have historical bindings. Use the most recently contacted
+      // active collector, not an arbitrary row, for its health indicator.
+      `select d.last_server_contact_at as last from device_bindings b join devices d on d.id = b.device_id where b.source_id = $1 and b.status = 'ACTIVE' and d.status <> 'REVOKED' order by d.last_server_contact_at desc nulls last limit 1`,
       [rec.source_id],
     );
     const lastSeen = collector?.last ?? null;

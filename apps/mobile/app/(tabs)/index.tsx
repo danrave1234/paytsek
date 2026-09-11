@@ -114,7 +114,7 @@ export default function Home() {
               </View>
             </View>
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-              {recordedCount} payment{recordedCount === 1 ? '' : 's'} captured · verification shown below
+              {recordedCount} payment{recordedCount === 1 ? '' : 's'} recorded · includes payments still awaiting verification
             </Text>
             <View style={[styles.statusStrip, { borderTopColor: theme.colors.outlineVariant }]}>
               {home.data.today.notificationMatchedCount > 0 ? <StateChip state="MATCHED_AUTO" compact /> : null}

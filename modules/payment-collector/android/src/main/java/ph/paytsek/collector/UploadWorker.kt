@@ -7,9 +7,11 @@ import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.OutOfQuotaPolicy
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
@@ -107,7 +109,66 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
         .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
         .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
       if (expedited) builder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-      WorkManager.getInstance(context).enqueueUniqueWork(UNIQUE, ExistingWorkPolicy.APPEND_OR_REPLACE, builder.build())
+      // A fresh payment should not wait behind a delayed retry. The durable
+      // outbox is the source of truth, so replacing scheduled work cannot lose
+      // an event that has not received a server acknowledgement.
+      WorkManager.getInstance(context).enqueueUniqueWork(UNIQUE, ExistingWorkPolicy.REPLACE, builder.build())
+    }
+  }
+}
+
+/**
+ * Content-free collector heartbeat. Android may keep the listener alive while
+ * the React app is closed, so health has to be native too. Periodic work is
+ * intentionally 15 minutes: Android's minimum reliable cadence, not a fake
+ * real-time promise.
+ */
+class HealthWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
+  override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+    val prefs = CollectorPrefs(applicationContext)
+    if (!prefs.isConfigured) return@withContext Result.success()
+    val appVersion = try { applicationContext.packageManager.getPackageInfo(applicationContext.packageName, 0).versionName ?: "" } catch (_: Throwable) { "" }
+    val apps = JSONArray().apply {
+      ProviderApps.detectAll(applicationContext).filter { it.installed }.forEach {
+        put(JSONObject().apply {
+          put("provider", it.provider); put("packageName", it.packageName)
+          put("versionName", it.versionName ?: JSONObject.NULL); put("versionCode", it.versionCode?.toInt() ?: JSONObject.NULL)
+        })
+      }
+    }
+    val body = JSONObject().apply {
+      put("appVersion", appVersion)
+      put("listenerConnected", prefs.listenerConnected)
+      put("notificationAccessGranted", androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(applicationContext).contains(applicationContext.packageName))
+      put("pendingUploadCount", OutboxDb(applicationContext).pendingCount())
+      put("lastObservedEventAt", prefs.lastObservedEventAt ?: JSONObject.NULL)
+      put("unknownTemplateCount", prefs.unknownTemplateCount.toInt())
+      put("diagnosticReason", prefs.lastUploadError ?: JSONObject.NULL)
+      put("providerApps", apps)
+    }
+    val req = Request.Builder()
+      .url(prefs.apiBaseUrl!!.trimEnd('/') + "/v1/collector/health")
+      .header("Authorization", "Collector " + prefs.credential!!)
+      .header("x-paytsek-api-version", "v1")
+      .post(body.toString().toRequestBody("application/json".toMediaType()))
+      .build()
+    try {
+      client.newCall(req).execute().use { response -> if (response.isSuccessful) Result.success() else if (response.code >= 500 || response.code == 429) Result.retry() else Result.failure() }
+    } catch (_: Exception) { Result.retry() }
+  }
+
+  companion object {
+    private const val ONCE = "paytsek-health-now"
+    private const val PERIODIC = "paytsek-health-periodic"
+    private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
+    private fun constraints() = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+
+    fun enqueue(context: Context) {
+      WorkManager.getInstance(context).enqueueUniqueWork(ONCE, ExistingWorkPolicy.REPLACE, OneTimeWorkRequestBuilder<HealthWorker>().setConstraints(constraints()).build())
+    }
+
+    fun schedule(context: Context) {
+      WorkManager.getInstance(context).enqueueUniquePeriodicWork(PERIODIC, ExistingPeriodicWorkPolicy.UPDATE, PeriodicWorkRequestBuilder<HealthWorker>(15, TimeUnit.MINUTES).setConstraints(constraints()).build())
     }
   }
 }

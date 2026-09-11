@@ -31,10 +31,7 @@ export function DashboardClient() {
   // has settled. Without this, an existing owner briefly sees onboarding.
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
-  const [purchasing, setPurchasing] = useState<string | null>(null);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
-  const checkoutState = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('checkout');
-  const checkoutCancelled = typeof window === 'undefined' ? false : new URLSearchParams(window.location.search).get('cancelled') === '1';
 
   const workspace = useMemo(() => workspaces.find((item) => item.id === workspaceId) ?? null, [workspaces, workspaceId]);
   const owner = workspace?.role === 'OWNER';
@@ -115,15 +112,6 @@ export function DashboardClient() {
     finally { setCreatingWorkspace(false); }
   }
 
-  async function checkout(productKey: Product['key']) {
-    if (!session || !workspaceId) return;
-    setPurchasing(productKey); setMessage(null);
-    try {
-      const result = await request<{ checkoutUrl: string }>('/v1/billing/checkout', session.access_token, workspaceId, { method: 'POST', body: JSON.stringify({ productKey }) });
-      window.location.assign(result.checkoutUrl);
-    } catch (error) { setMessage(detailError(error)); setPurchasing(null); }
-  }
-
   if (loading || (session && workspacesLoading)) return <DashboardShell><Loading /></DashboardShell>;
   if (!session) return <DashboardShell><SignIn message={message} onSignIn={signIn} /></DashboardShell>;
   if (!workspaces.length && !message) return <DashboardShell><EmptyWorkspace creating={creatingWorkspace} onCreate={createWorkspace} /></DashboardShell>;
@@ -134,7 +122,6 @@ export function DashboardClient() {
       <div className="flex items-center gap-3"><select aria-label="Choose workspace" value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} className="max-w-[190px] rounded-xl border border-line bg-bg px-3 py-2.5 text-sm font-medium">{workspaces.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><button onClick={signOut} className="rounded-xl border border-line bg-bg px-3 py-2.5 text-sm font-medium text-ink-2 hover:text-ink">Sign out</button></div>
     </section>
     {message ? <p role="alert" className="mb-5 rounded-xl border border-danger/20 bg-danger-soft px-4 py-3 text-sm text-danger">{message}</p> : null}
-    {checkoutState ? <p className={`mb-5 rounded-xl border px-4 py-3 text-sm ${checkoutCancelled ? 'border-warn/20 bg-warn-soft text-warn' : 'border-ok/20 bg-ok-soft text-ok'}`}>{checkoutCancelled ? 'Checkout cancelled. No payment was recorded.' : 'Payment received. Your plan will refresh as soon as PayMongo confirms the webhook.'}</p> : null}
     {loading || !data ? <Loading /> : <>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Notification matched" value={amount(data.home.today.notificationMatchedCentavos)} detail={`${data.home.today.notificationMatchedCount} records`} tone="ok" />
@@ -144,13 +131,13 @@ export function DashboardClient() {
       </section>
       <section className="mt-5 grid gap-5 xl:grid-cols-[1.45fr_.85fr]">
         <Panel title="Today’s records" action="Open in mobile app"><div className="divide-y divide-line">{data.records.length ? data.records.map((record) => <div key={record.id} className="flex items-center justify-between gap-4 py-3.5"><div className="min-w-0"><p className="truncate text-sm font-semibold">{record.customerLabel || record.payerName || 'Unknown sender'}</p><p className="mt-1 truncate text-xs text-ink-3">{record.sourceLabel} · {record.referenceValue ?? 'No reference'} · {time.format(new Date(record.capturedAt))}</p></div><div className="shrink-0 text-right"><p className="data text-sm font-semibold">{amount(record.amountCentavos)}</p><p className="mt-1 text-[11px] font-medium text-ink-3">{stateLabel(record.evidenceState)}</p></div></div>) : <Empty label="No records yet today." />}</div></Panel>
-        <Panel title="Record allowance"><div className="p-1"><div className="flex justify-between gap-4"><span className="text-sm text-ink-2">This billing period</span><strong className="data text-sm">{data.usage.monthlyUsed} / {data.usage.monthlyAllowance}</strong></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-bg-3"><div className="h-full rounded-full bg-brand" style={{ width: `${Math.min(100, (data.usage.monthlyUsed / Math.max(1, data.usage.monthlyAllowance)) * 100)}%` }} /></div><dl className="mt-6 space-y-3 text-sm"><Row label="Plan" value={data.usage.planCode.replace(/_/g, ' ')} /><Row label="Access" value={data.usage.subscriptionStatus === 'ACTIVE' ? `Until ${shortDate(data.usage.periodEnd)}` : 'Free plan'} /><Row label="Billing" value={data.usage.managementPlatform === 'PAYMONGO' ? 'PayMongo · QRPh' : 'Not required'} /></dl></div></Panel>
+        <Panel title="Beta access"><div className="p-1"><p className="text-sm font-semibold">Everything is free during public beta.</p><p className="mt-2 text-sm leading-6 text-ink-2">There is no checkout, subscription or automatic charge. Keep recording payments; an unverified record still counts in your day.</p><a href="/support" className="mt-4 inline-block text-sm font-medium text-brand underline underline-offset-4">Questions or feedback?</a></div></Panel>
       </section>
       <section className="mt-5 grid gap-5 lg:grid-cols-2">
         <Panel title={`Team · ${data.members.length}`} action={owner ? 'Manage in mobile app' : undefined}><div className="divide-y divide-line">{data.members.map((member) => <div key={member.userId} className="flex items-center justify-between gap-3 py-3"><div><p className="text-sm font-semibold">{member.displayName}</p><p className="text-xs text-ink-3">{member.email ?? 'No email shared'}</p></div><span className="pill bg-bg-3 text-ink-2">{member.role.toLowerCase()}</span></div>)}</div></Panel>
         <Panel title={`Devices · ${data.devices.length}`} action="Pair scanners in mobile app"><div className="divide-y divide-line">{data.devices.length ? data.devices.map((device) => <div key={device.id} className="flex items-center justify-between gap-3 py-3"><div><p className="text-sm font-semibold">{device.label}</p><p className="text-xs text-ink-3">{device.platform} · {device.lastServerContactAt ? `seen ${time.format(new Date(device.lastServerContactAt))}` : 'not seen yet'}</p></div><span className={`pill ${device.status === 'ACTIVE' ? 'bg-ok-soft text-ok' : 'bg-warn-soft text-warn'}`}>{device.status.toLowerCase()}</span></div>) : <Empty label="Pair a scanner or notification phone from the mobile app." />}</div></Panel>
       </section>
-      <section className="mt-5"><Panel title="Plans & billing" action={owner ? 'Owner controls' : 'Only workspace owners can manage billing'}>{owner ? <><div className="mb-4 rounded-2xl border border-line bg-bg-2 px-4 py-3 text-sm"><p className="font-semibold">{data.usage.subscriptionStatus === 'ACTIVE' ? `Paid access ends ${shortDate(data.usage.periodEnd)}.` : 'You are on the Free plan.'}</p><p className="mt-1 text-ink-2">QRPh renewals need your approval each period. Paying early extends access from the current end date, so no paid time is lost.</p></div><div className="grid gap-3 md:grid-cols-2">{data.products.map((product) => <article key={product.key} className={`rounded-2xl border p-4 ${data.usage.planCode === product.planCode ? 'border-brand/35 bg-brand-soft/40' : 'border-line bg-bg-2'}`}><p className="eyebrow">30-day billing period</p><h3 className="mt-2 text-lg font-semibold">{product.planCode}</h3><p className="mt-2 text-sm text-ink-2">{product.records.toLocaleString('en-PH')} records each billing period</p><div className="mt-5 flex items-center justify-between gap-3"><strong className="data">{amount(product.priceCentavos)} / 30 days</strong><button onClick={() => checkout(product.key)} disabled={purchasing !== null} className="rounded-xl bg-brand px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">{purchasing === product.key ? 'Opening…' : data.usage.subscriptionStatus === 'ACTIVE' ? 'Extend access' : `Choose ${product.planCode}`}</button></div></article>)}</div><div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-ink-3"><span>Automatic renewal is unavailable for QRPh. Pay only when you approve a new period.</span><a href="/pricing" className="font-medium text-brand underline underline-offset-4">Compare plans and billing</a></div></> : <p className="text-sm text-ink-2">Ask a workspace owner to manage billing. Payment checkout is intentionally restricted to owners.</p>}</Panel></section>
+      <section className="mt-5"><Panel title="Public beta" action="No payment required"><p className="text-sm leading-6 text-ink-2">Billing is disabled while we validate PayTsek with real payment-recording workflows. We will announce any future pricing before it applies.</p></Panel></section>
     </>}
   </DashboardShell>;
 }
