@@ -1,13 +1,14 @@
 import type { RecordSummary } from '@paytsek/contracts';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Icon, IconButton, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Loading, StateChip } from '@/components/ui';
 import { listDrafts, type Draft } from '@/lib/drafts';
 import { manilaTime, peso } from '@/lib/format';
 import { useHome, useRecords } from '@/lib/queries';
+import { useAppUpdate } from '@/lib/release-update';
 import { useSession } from '@/lib/session';
 import { OfflineError } from '@/lib/api';
 import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET } from '@/theme';
@@ -29,6 +30,7 @@ export default function Home() {
   const { workspace } = useSession();
   const records = useRecords({});
   const home = useHome();
+  const update = useAppUpdate();
   const [drafts, setDrafts] = useState<Draft[]>([]);
 
   const refreshLocal = useCallback(() => {
@@ -88,6 +90,16 @@ export default function Home() {
               <Text variant="bodySmall" style={{ color: theme.colors.onSecondaryContainer }}>Waiting for the payment-phone notification</Text>
             </View>
           </View>
+        ) : null}
+
+        {update.data ? (
+          <TouchableRipple onPress={() => void Linking.openURL(update.data!.downloadUrl)} borderless style={{ borderRadius: RADIUS.lg }} accessibilityRole="button" accessibilityLabel={`Update to PayTsek ${update.data.version}`}>
+            <View style={[styles.update, { backgroundColor: theme.colors.primaryContainer }]}>
+              <View style={[styles.updateIcon, { backgroundColor: theme.colors.primary }]}><Icon source="download" size={20} color={theme.colors.onPrimary} /></View>
+              <View style={{ flex: 1, gap: 2 }}><Text variant="titleSmall" style={{ color: theme.colors.onPrimaryContainer }}>PayTsek {update.data.version} is ready</Text><Text variant="bodySmall" style={{ color: theme.colors.onPrimaryContainer }}>Tap to download the latest signed update.</Text></View>
+              <Icon source="chevron-right" size={22} color={theme.colors.primary} />
+            </View>
+          </TouchableRipple>
         ) : null}
 
         {home.data ? (
@@ -200,6 +212,8 @@ const styles = StyleSheet.create({
   heading: { fontWeight: '700', letterSpacing: -0.8 },
   saved: { minHeight: 88, borderRadius: RADIUS.xl, padding: SPACING.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
   savedIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  update: { minHeight: 72, paddingHorizontal: SPACING.md, borderRadius: RADIUS.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  updateIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   totalCard: { borderRadius: RADIUS.xl, borderWidth: StyleSheet.hairlineWidth, padding: SPACING.lg, gap: SPACING.md },
   totalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   totalAmount: { fontWeight: '700', letterSpacing: -0.9 },

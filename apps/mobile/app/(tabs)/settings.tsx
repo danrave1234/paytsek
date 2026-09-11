@@ -6,6 +6,7 @@ import { Platform, View } from 'react-native';
 import { IconButton, Text, useTheme } from 'react-native-paper';
 import { Group, ListRow, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
+import { useAppUpdate } from '@/lib/release-update';
 import { useIsOwner, useSession } from '@/lib/session';
 import { useThemeMode } from '@/lib/theme-mode';
 
@@ -15,6 +16,7 @@ export default function Settings() {
   const { setMode } = useThemeMode();
   const isOwner = useIsOwner();
   const { workspace, signOut, selectWorkspace, workspaces } = useSession();
+  const update = useAppUpdate();
   const [cacheMessage, setCacheMessage] = useState('');
   const [clearing, setClearing] = useState(false);
   const clearCache = async () => {
@@ -94,6 +96,8 @@ export default function Settings() {
         {Platform.OS === 'android' && isOwner ? <ListRow icon="text-search" title="Unknown notification formats" onPress={() => router.push('/settings/samples')} /> : null}
         <ListRow icon="broom" title={clearing ? 'Clearing cache…' : 'Clear unused cache'} subtitle={cacheMessage || undefined} onPress={() => void clearCache()} />
       </Group>
+
+      {update.data ? <Group title="App update"><ListRow icon="download" title={`PayTsek ${update.data.version} is ready`} subtitle="Download the latest signed installer from the Home screen." /></Group> : null}
 
       <ListRow icon="logout" title="Sign out" destructive onPress={() => void signOut()} />
 
