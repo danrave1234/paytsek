@@ -122,7 +122,7 @@ function AppNavigator() {
       >
                   <Stack.Screen name="(tabs)" />
                   <Stack.Screen name="auth/callback" />
-                  <Stack.Screen name="record/[id]" options={{ headerShown: true, title: 'Record' }} />
+                  <Stack.Screen name="record/[id]" />
                   <Stack.Screen name="pair/index" options={{ headerShown: true, title: 'Connect payment phone' }} />
                   <Stack.Screen name="pair/collector" options={{ headerShown: true, title: 'Join as payment phone' }} />
                   <Stack.Screen name="settings/sources" options={{ headerShown: true, title: 'Payment sources' }} />

@@ -30,7 +30,7 @@ export default function Team() {
 
   return (
     <Screen>
-      <Notice kind="info">Cashiers can scan and see their own records and minimal candidate details. They never see your full incoming-payment inbox, billing, or device pairing.</Notice>
+      <Notice kind="info">Cashiers can scan and view their own records. Owner data and billing stay private.</Notice>
       {q.isLoading ? <Loading /> : q.error ? <ErrorState error={q.error} retry={() => void q.refetch()} /> : null}
       {q.data?.map((m) => (
         <Card key={m.userId} mode="outlined">
@@ -48,17 +48,21 @@ export default function Team() {
           ) : null}
         </Card>
       ))}
-      <Text variant="titleMedium" style={{ marginTop: SPACING.sm }}>Invite a cashier</Text>
-      <TextInput label="Email" mode="outlined" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text variant="bodyMedium">Allow confirming proposed matches</Text>
-        <Switch value={canConfirm} onValueChange={setCanConfirm} />
-      </View>
-      {error ? <Notice kind="error">{error}</Notice> : null}
-      <Button mode="contained" onPress={() => void send()} disabled={!/\S+@\S+\.\S+/.test(email)} style={{ minHeight: TOUCH_TARGET }}>Create invite</Button>
+      <Card mode="outlined">
+        <Card.Title title="Invite a cashier" />
+        <Card.Content style={{ gap: SPACING.md }}>
+          <TextInput label="Email" mode="outlined" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text variant="bodyMedium" style={{ flex: 1 }}>Can confirm suggested matches</Text>
+            <Switch value={canConfirm} onValueChange={setCanConfirm} />
+          </View>
+          {error ? <Notice kind="error">{error}</Notice> : null}
+          <Button mode="contained" onPress={() => void send()} disabled={!/\S+@\S+\.\S+/.test(email)} style={{ minHeight: TOUCH_TARGET }}>Create invite</Button>
+        </Card.Content>
+      </Card>
       {invite ? (
         <Card mode="outlined">
-          <Card.Title title="Invite created" subtitle="Share this code with the cashier (valid 7 days, single use)" />
+          <Card.Title title="Invite ready" subtitle="Single use · valid for 7 days" />
           <Card.Content><Text selectable variant="bodyLarge">{invite.inviteToken}</Text></Card.Content>
           <Card.Actions><Button onPress={() => void Share.share({ message: `Join my PayTsek workspace. Open PayTsek → Join with an invite and enter: ${invite.inviteToken}` })}>Share</Button></Card.Actions>
         </Card>

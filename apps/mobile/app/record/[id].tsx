@@ -1,16 +1,27 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Image, View } from 'react-native';
-import { Button, Card, Dialog, Divider, Portal, Text, TextInput, useTheme } from 'react-native-paper';
-import { ErrorState, Loading, Notice, Row, Screen, StateChip } from '@/components/ui';
+import { StyleSheet, View } from 'react-native';
+import { Button, Card, Dialog, Icon, IconButton, List, Portal, Text, TextInput, useTheme } from 'react-native-paper';
+import { ErrorState, Loading, Notice, Screen, StateChip } from '@/components/ui';
 import { isApiError } from '@/lib/api';
 import { lastSeen, manilaTime, peso } from '@/lib/format';
 import { useCandidates, useConfirmCandidate, useConfirmManually, useEscalate, useRecord, useUnlink, useVoid } from '@/lib/queries';
 import { useIsOwner, useSession } from '@/lib/session';
-import { TOUCH_TARGET } from '@/theme';
+import { RADIUS, SPACING, TOUCH_TARGET } from '@/theme';
+
+function DetailCell({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.detailCell, wide && styles.detailCellWide]}>
+      <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</Text>
+      <Text variant="bodyMedium" numberOfLines={wide ? undefined : 2} style={{ fontWeight: '600' }}>{value}</Text>
+    </View>
+  );
+}
 
 export default function RecordDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const theme = useTheme();
   const isOwner = useIsOwner();
   const { workspace } = useSession();
@@ -55,39 +66,58 @@ export default function RecordDetail() {
 
   return (
     <Screen>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text variant="headlineMedium">{peso(r.amountCentavos)}</Text>
-        <StateChip state={r.evidenceState} />
+      <View style={styles.topBar}>
+        <IconButton icon="arrow-left" accessibilityLabel="Back to records" onPress={() => router.back()} />
+        <Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment record</Text>
+        <View style={{ width: 48 }} />
       </View>
-      <Text variant="bodySmall" style={{ opacity: 0.7 }}>{r.sourceLabel} · recorded {manilaTime(r.createdAt)} by {r.createdByDisplayName}</Text>
+
+      <Card mode="contained" style={[styles.summaryCard, { backgroundColor: theme.colors.surface }]}>
+        <Card.Content style={styles.summaryContent}>
+          <View style={[styles.walletIcon, { backgroundColor: theme.colors.primaryContainer }]}>
+            <Icon source="wallet-outline" size={24} color={theme.colors.primary} />
+          </View>
+          <Text variant="headlineLarge" style={styles.amount}>{peso(r.amountCentavos)}</Text>
+          <Text variant="titleMedium" style={{ fontWeight: '600' }}>{r.sourceLabel}</Text>
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(r.createdAt)}</Text>
+          <StateChip state={r.evidenceState} />
+        </Card.Content>
+      </Card>
+
       {r.flags.length ? <Notice kind="warning">Flags: {r.flags.map((f) => f.replace(/_/g, ' ').toLowerCase()).join(', ')}. A similar image or repeated reference is a warning, not proof of a duplicate.</Notice> : null}
       {msg ? <Notice kind={msg.kind}>{msg.text}</Notice> : null}
 
       {r.matchExplanation.kind ? (
-        <Card mode="outlined">
-          <Card.Title title={r.evidenceState === 'CONFIRMED_MANUALLY' ? 'Confirmed manually by owner' : 'Matched to an incoming notification'} />
-          <Card.Content style={{ gap: 4 }}>
+        <Card mode="outlined" style={styles.card}>
+          <Card.Title
+            title={r.evidenceState === 'CONFIRMED_MANUALLY' ? 'Confirmed by owner' : 'Notification matched'}
+            subtitle={r.matchExplanation.supportingFields.length ? `Matched using ${r.matchExplanation.supportingFields.join(' and ')}` : 'Confirmation evidence'}
+            left={(props) => <Icon {...props} source={r.evidenceState === 'CONFIRMED_MANUALLY' ? 'account-check-outline' : 'bell-check-outline'} color={theme.colors.primary} />}
+          />
+          <Card.Content>
             {r.matchExplanation.disclosure ? <Notice kind="info">{r.matchExplanation.disclosure}</Notice> : null}
-            {r.matchExplanation.supportingFields.length ? <Text variant="bodySmall">Agreed on: {r.matchExplanation.supportingFields.join(', ')}</Text> : null}
-            {r.matchExplanation.missingFields.length ? <Text variant="bodySmall">Missing: {r.matchExplanation.missingFields.join(', ')}</Text> : null}
-            <Text variant="bodySmall" style={{ opacity: 0.6 }}>Rule {r.matchExplanation.matcherVersion ?? '—'} · {r.matchExplanation.reasonCodes.join(', ')} · time basis {r.matchExplanation.timeBasis.toLowerCase().replace(/_/g, ' ')}</Text>
+            <List.Accordion title="How this was checked" titleStyle={styles.accordionTitle} style={styles.accordion}>
+              <View style={styles.accordionBody}>
+                {r.matchExplanation.missingFields.length ? <Text variant="bodySmall">Missing from evidence: {r.matchExplanation.missingFields.join(', ')}</Text> : null}
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Rule {r.matchExplanation.matcherVersion ?? '—'} · {r.matchExplanation.reasonCodes.join(', ') || 'manual review'} · {r.matchExplanation.timeBasis.toLowerCase().replace(/_/g, ' ')}</Text>
+              </View>
+            </List.Accordion>
           </Card.Content>
           {isOwner && r.evidenceState !== 'VOIDED' ? <Card.Actions><Button onPress={() => setDialog('unlink')}>Unlink</Button></Card.Actions> : null}
         </Card>
       ) : null}
 
       {open ? (
-        <Card mode="outlined">
-          <Card.Title title="Candidate notifications" subtitle={cands.data ? `${cands.data.candidates.length} within the ${Math.round(cands.data.windowSeconds / 60)}-minute window (${cands.data.timeBasis.toLowerCase().replace(/_/g, ' ')})` : 'Loading…'} />
+        <Card mode="outlined" style={styles.card}>
+          <Card.Title title="Possible matches" subtitle={cands.data ? `${cands.data.candidates.length} nearby notification${cands.data.candidates.length === 1 ? '' : 's'}` : 'Checking notifications…'} left={(props) => <Icon {...props} source="bell-search-outline" color={theme.colors.tertiary} />} />
           <Card.Content style={{ gap: 10 }}>
             {cands.data?.collectorStale ? <Notice kind="warning">Payment phone {lastSeen(cands.data.collectorLastSeenAt).toLowerCase()}. No matching notification yet does not mean unpaid.</Notice> : null}
             {cands.data && cands.data.candidates.length === 0 ? <Text variant="bodyMedium">No matching notification yet.</Text> : null}
             {cands.data?.candidates.map((c) => (
-              <View key={c.eventId} style={{ borderWidth: 1, borderColor: theme.colors.outlineVariant, borderRadius: 12, padding: 12, gap: 4 }}>
+              <View key={c.eventId} style={[styles.candidate, { borderColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surfaceVariant }]}>
                 <Text variant="titleSmall">{peso(c.amountCentavos)} from {c.payerMaskedName ?? c.payerMaskedPhone ?? 'unknown sender'}</Text>
                 <Text variant="bodySmall">{manilaTime(c.eventAt, 'SECOND')} ({c.eventTimeSource.toLowerCase().replace(/_/g, ' ')}){c.deltaSeconds !== null ? ` · ${Math.abs(c.deltaSeconds) < 60 ? `${Math.abs(c.deltaSeconds)}s` : `${Math.round(Math.abs(c.deltaSeconds) / 60)} min`} ${c.deltaSeconds >= 0 ? 'after' : 'before'} receipt` : ''}</Text>
-                <Text variant="bodySmall">Reference: {c.referenceValue ?? 'not in notification'} · agrees on {c.supportingFields.join(', ') || 'nothing yet'}</Text>
-                {c.missingFields.length ? <Text variant="bodySmall" style={{ opacity: 0.7 }}>Missing: {c.missingFields.join(', ')}</Text> : null}
+                <Text variant="bodySmall" numberOfLines={2}>Reference: {c.referenceValue ?? 'not provided'}{c.supportingFields.length ? ` · agrees on ${c.supportingFields.join(', ')}` : ''}</Text>
                 {c.alreadyLinkedToOtherRecord ? <Text variant="bodySmall" style={{ color: theme.colors.error }}>Already linked to another record.</Text> : null}
                 <Button mode="contained-tonal" disabled={c.alreadyLinkedToOtherRecord || confirm.isPending || !canConfirm} onPress={() => void onConfirm(c.eventId)} style={{ minHeight: TOUCH_TARGET, marginTop: 4 }}>Confirm this notification</Button>
               </View>
@@ -99,31 +129,44 @@ export default function RecordDetail() {
         </Card>
       ) : null}
 
-      <Card mode="outlined">
-        <Card.Title title="Receipt details" subtitle={r.editedFields.length ? `Edited by cashier: ${r.editedFields.join(', ')}` : 'As read from the receipt'} />
-        <Card.Content>
-          <Row label="Provider / rail" value={`${r.corrected.receiptProvider ?? '—'} / ${r.corrected.paymentRail ?? '—'}`} />
-          <Row label="Reference" value={r.corrected.referenceValue ? `${r.corrected.referenceValue} (${r.corrected.referenceNamespace})` : '—'} />
-          {r.corrected.payerName || r.corrected.payerPhone ? <Row label="Sender" value={r.corrected.payerName ?? r.corrected.payerPhone!} /> : null}
-          {r.corrected.payeeName || r.corrected.payeePhone ? <Row label="Recipient" value={r.corrected.payeeName ?? r.corrected.payeePhone!} /> : null}
-          <Row label="Fee / total charged" value={`${r.corrected.feeCentavos !== null ? peso(r.corrected.feeCentavos) : '—'} / ${r.corrected.totalChargedCentavos !== null ? peso(r.corrected.totalChargedCentavos) : '—'}`} />
-          <Row label="Receipt time" value={r.corrected.receiptTransactionAt ? `${manilaTime(r.corrected.receiptTransactionAt, r.corrected.receiptTransactionPrecision)} (${r.corrected.receiptTransactionPrecision.toLowerCase()})` : 'not on receipt'} />
-          <Row label="Receipt status" value={r.corrected.receiptStatus} />
-          <Row label="Customer / note" value={[r.customerLabel, r.note].filter(Boolean).join(' · ') || '—'} />
-          <Row label="Captured" value={`${manilaTime(r.capturedAt)} · ${r.captureOrigin.toLowerCase().replace(/_/g, ' ')}`} />
+      <Card mode="outlined" style={styles.card}>
+        <Card.Title title="Payment details" subtitle={r.editedFields.length ? 'Some details were corrected after scanning' : 'Read from the payment proof'} />
+        <Card.Content style={styles.detailGrid}>
+          <DetailCell label="Reference" value={r.corrected.referenceValue ?? 'Not provided'} wide />
+          <DetailCell label="Wallet" value={r.corrected.receiptProvider ?? r.sourceLabel} />
+          <DetailCell label="Payment rail" value={(r.corrected.paymentRail ?? 'Unknown').replace(/_/g, ' ')} />
+          {r.corrected.payerName || r.corrected.payerPhone ? <DetailCell label="Sender" value={r.corrected.payerName ?? r.corrected.payerPhone!} wide /> : null}
+          {r.corrected.payeeName || r.corrected.payeePhone ? <DetailCell label="Recipient" value={r.corrected.payeeName ?? r.corrected.payeePhone!} wide /> : null}
+          {r.customerLabel || r.note ? <DetailCell label="Customer / note" value={[r.customerLabel, r.note].filter(Boolean).join(' · ')} wide /> : null}
+          <DetailCell label="Receipt time" value={r.corrected.receiptTransactionAt ? manilaTime(r.corrected.receiptTransactionAt, r.corrected.receiptTransactionPrecision) : 'Not shown'} wide />
         </Card.Content>
       </Card>
 
-      {r.proofImageUrl ? <Image source={{ uri: r.proofImageUrl }} style={{ width: '100%', height: 360, borderRadius: 12 }} resizeMode="contain" accessibilityLabel="Receipt image" /> : r.hasProofImage ? <Notice kind="info">Image no longer available (retention period ended{r.proofRetentionUntil ? ` ${manilaTime(r.proofRetentionUntil, 'DAY')}` : ''}).</Notice> : null}
-      {r.proofRetentionUntil && r.proofImageUrl ? <Text variant="bodySmall" style={{ opacity: 0.6 }}>Image kept until {manilaTime(r.proofRetentionUntil, 'DAY')}.</Text> : null}
+      {r.proofImageUrl ? (
+        <Card mode="outlined" style={styles.card}>
+          <Card.Title title="Payment proof" subtitle={r.proofRetentionUntil ? `Available until ${manilaTime(r.proofRetentionUntil, 'DAY')}` : undefined} left={(props) => <Icon {...props} source="image-outline" color={theme.colors.primary} />} />
+          <Card.Cover source={{ uri: r.proofImageUrl }} resizeMode="contain" style={[styles.proof, { backgroundColor: theme.colors.surfaceVariant }]} accessibilityLabel="Receipt image" />
+        </Card>
+      ) : r.hasProofImage ? <Notice kind="info">The proof image is no longer available{r.proofRetentionUntil ? `; retention ended ${manilaTime(r.proofRetentionUntil, 'DAY')}` : ''}.</Notice> : null}
 
-      <Divider />
-      <Text variant="titleSmall">History</Text>
-      {r.history.map((h, i) => (
-        <Text key={i} variant="bodySmall">{manilaTime(h.at, 'SECOND')} · {h.action.replace(/_/g, ' ').toLowerCase()}{h.actorDisplayName ? ` · ${h.actorDisplayName}` : ''}{h.reason ? ` — ${h.reason}` : ''}</Text>
-      ))}
+      <Card mode="outlined" style={styles.card}>
+        <List.Accordion title={`Activity · ${r.history.length}`} description={`Recorded by ${r.createdByDisplayName}`} left={(props) => <List.Icon {...props} icon="history" />}>
+          <View style={styles.history}>
+            {r.history.map((h, i) => (
+              <View key={i} style={styles.historyRow}>
+                <View style={[styles.historyDot, { backgroundColor: theme.colors.outline }]} />
+                <View style={{ flex: 1 }}>
+                  <Text variant="bodySmall" style={{ fontWeight: '600' }}>{h.action.replace(/_/g, ' ').toLowerCase()}</Text>
+                  <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(h.at, 'SECOND')}{h.actorDisplayName ? ` · ${h.actorDisplayName}` : ''}{h.reason ? ` · ${h.reason}` : ''}</Text>
+                </View>
+              </View>
+            ))}
+            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Captured {manilaTime(r.capturedAt)} · {r.captureOrigin.toLowerCase().replace(/_/g, ' ')}</Text>
+          </View>
+        </List.Accordion>
+      </Card>
       {r.voidReason ? <Notice kind="error">Voided: {r.voidReason}</Notice> : null}
-      {isOwner && r.evidenceState !== 'VOIDED' ? <Button textColor={theme.colors.error} onPress={() => setDialog('void')}>Void record</Button> : null}
+      {isOwner && r.evidenceState !== 'VOIDED' ? <Button icon="cancel" textColor={theme.colors.error} onPress={() => setDialog('void')}>Void record</Button> : null}
 
       <Portal>
         <Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}>
@@ -141,3 +184,23 @@ export default function RecordDetail() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  topBar: { height: 44, marginHorizontal: -SPACING.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  summaryCard: { borderRadius: RADIUS.xl, overflow: 'hidden' },
+  summaryContent: { alignItems: 'center', paddingVertical: SPACING.xl, gap: SPACING.xs },
+  walletIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: SPACING.sm },
+  amount: { fontWeight: '700', letterSpacing: -0.8 },
+  card: { borderRadius: RADIUS.lg, overflow: 'hidden' },
+  accordion: { paddingHorizontal: 0, backgroundColor: 'transparent' },
+  accordionTitle: { fontSize: 14 },
+  accordionBody: { gap: SPACING.xs, paddingHorizontal: SPACING.lg, paddingBottom: SPACING.md },
+  candidate: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.md, padding: SPACING.md, gap: SPACING.xs },
+  detailGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: SPACING.md, rowGap: SPACING.lg },
+  detailCell: { width: '47%', gap: SPACING.xs },
+  detailCellWide: { width: '100%' },
+  proof: { height: 320, borderRadius: 0 },
+  history: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg, gap: SPACING.md },
+  historyRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm },
+  historyDot: { width: 7, height: 7, borderRadius: 4, marginTop: 5 },
+});

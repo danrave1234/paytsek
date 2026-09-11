@@ -61,11 +61,11 @@ export default function Home() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: SPACING.xl, paddingTop: SPACING.xlg, paddingBottom: insets.bottom + TAB_BAR_CLEARANCE, gap: SPACING.xlg }}
+        contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingTop: SPACING.md, paddingBottom: insets.bottom + TAB_BAR_CLEARANCE, gap: SPACING.lg }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.colors.primary} />}
       >
         <View style={styles.header}>
-          <Text variant="headlineLarge" style={styles.heading}>{greeting()}</Text>
+          <Text variant="titleLarge" style={styles.heading}>{greeting()}</Text>
           <IconButton icon="account-circle-outline" size={28} onPress={() => router.push('/(tabs)/settings')} accessibilityLabel="Open settings" />
         </View>
 
@@ -82,12 +82,12 @@ export default function Home() {
         <Button
           mode="contained"
           icon="line-scan"
-          contentStyle={{ minHeight: 64 }}
-          labelStyle={{ fontSize: 18, fontWeight: '700' }}
+          contentStyle={{ minHeight: 58 }}
+          labelStyle={{ fontSize: 16, fontWeight: '700' }}
           style={{ borderRadius: RADIUS.xl }}
           onPress={() => router.push('/(tabs)/scan')}
         >
-          Scan proof
+          Scan payment
         </Button>
 
         {offline ? (
@@ -135,8 +135,8 @@ export default function Home() {
                     disabled={item.kind === 'local'}
                   >
                     <View style={[styles.row, index > 0 && { borderTopColor: theme.colors.outlineVariant, borderTopWidth: StyleSheet.hairlineWidth }]}>
-                      <View style={[styles.providerIcon, { backgroundColor: theme.colors.primaryContainer }]}>
-                        <Icon source="wallet-outline" size={22} color={theme.colors.primary} />
+                      <View style={styles.providerIcon}>
+                        <Icon source="wallet-outline" size={22} color={theme.colors.onSurfaceVariant} />
                       </View>
                       <View style={{ flex: 1, gap: 2 }}>
                         <Text variant="titleMedium" style={{ fontWeight: '700' }}>{peso(amount)}</Text>
@@ -170,6 +170,6 @@ const styles = StyleSheet.create({
   sectionHeading: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   list: { borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   row: { minHeight: 76, marginHorizontal: SPACING.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
-  providerIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  empty: { minHeight: 128, borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center', gap: SPACING.sm },
+  providerIcon: { width: 32, height: 44, alignItems: 'flex-start', justifyContent: 'center' },
+  empty: { minHeight: 112, borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center', gap: SPACING.xs },
 });

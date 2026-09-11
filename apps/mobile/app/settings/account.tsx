@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Button, HelperText, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, Card, HelperText, Text, TextInput, useTheme } from 'react-native-paper';
 import { Notice, Screen } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 import { useSession } from '@/lib/session';
@@ -24,14 +24,19 @@ export default function Account() {
   };
   return (
     <Screen>
-      <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>{session?.user.email ?? 'Signed-in account'}</Text>
-      <Text variant="titleMedium" style={{ marginTop: SPACING.sm }}>Change password</Text>
-      <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>Choose a new password with at least 8 characters. You remain signed in on this device.</Text>
-      <TextInput label="New password" mode="outlined" secureTextEntry={!showPassword} autoComplete="new-password" textContentType="newPassword" value={password} onChangeText={setPassword} right={<TextInput.Icon icon={showPassword ? 'eye-off-outline' : 'eye-outline'} onPress={() => setShowPassword((value) => !value)} accessibilityLabel={showPassword ? 'Hide password' : 'Show password'} />} />
-      <TextInput label="Confirm new password" mode="outlined" secureTextEntry={!showPassword} autoComplete="new-password" textContentType="newPassword" value={confirm} onChangeText={setConfirm} error={!!confirm && password !== confirm} />
-      {confirm && password !== confirm ? <HelperText type="error" visible>Passwords do not match.</HelperText> : null}
-      {message ? <Notice kind={message.kind}>{message.text}</Notice> : null}
-      <Button mode="contained" loading={busy} disabled={!valid || busy} onPress={() => void save()} style={{ minHeight: TOUCH_TARGET }}>Update password</Button>
+      <Card mode="outlined">
+        <Card.Title title="Signed in as" subtitle={session?.user.email ?? 'PayTsek account'} />
+      </Card>
+      <Card mode="outlined">
+        <Card.Title title="Change password" subtitle="At least 8 characters" />
+        <Card.Content style={{ gap: SPACING.md }}>
+          <TextInput label="New password" mode="outlined" secureTextEntry={!showPassword} autoComplete="new-password" textContentType="newPassword" value={password} onChangeText={setPassword} right={<TextInput.Icon icon={showPassword ? 'eye-off-outline' : 'eye-outline'} onPress={() => setShowPassword((value) => !value)} accessibilityLabel={showPassword ? 'Hide password' : 'Show password'} />} />
+          <TextInput label="Confirm password" mode="outlined" secureTextEntry={!showPassword} autoComplete="new-password" textContentType="newPassword" value={confirm} onChangeText={setConfirm} error={!!confirm && password !== confirm} />
+          {confirm && password !== confirm ? <HelperText type="error" visible>Passwords do not match.</HelperText> : null}
+          {message ? <Notice kind={message.kind}>{message.text}</Notice> : null}
+          <Button mode="contained" loading={busy} disabled={!valid || busy} onPress={() => void save()} style={{ minHeight: TOUCH_TARGET }}>Update password</Button>
+        </Card.Content>
+      </Card>
     </Screen>
   );
 }

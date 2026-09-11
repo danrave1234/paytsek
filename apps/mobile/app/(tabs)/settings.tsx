@@ -41,47 +41,32 @@ export default function Settings() {
         />
       </View>
 
-      <Group title="Phone setup">
-        <ListRow icon="cellphone-link" title="Phone setup" onPress={() => router.push('/onboarding')} />
-      </Group>
-      <Group title="This phone">
-        {Platform.OS === 'android' ? (
-          <ListRow
-            icon="cellphone-message"
-            title="Payment phone"
-            onPress={() => router.push('/pair/collector')}
-          />
-        ) : (
-          <ListRow
-            icon="information-outline"
-            title="Payment notifications"
-            subtitle="Connect an Android phone"
-          />
-        )}
+      <Group title="Payments">
         <ListRow
-          icon="heart-pulse"
-          title="Devices & health"
-          onPress={() => router.push('/settings/devices')}
+          icon="cellphone-link"
+          title="Payment phone setup"
+          subtitle={Platform.OS === 'android' ? 'Connect this phone or another Android phone' : 'Connect an Android phone'}
+          onPress={() => router.push(isOwner ? '/pair' : '/pair/collector')}
         />
-      </Group>
-
-      {isOwner ? (
-        <Group title="Owner">
-          <ListRow
-            icon="qrcode"
-            title="Connect an Android payment phone"
-            onPress={() => router.push('/pair')}
-          />
+        {isOwner ? (
+          <>
           <ListRow
             icon="bank-outline"
-            title="Payment sources"
+            title="Wallet apps"
             onPress={() => router.push('/settings/sources')}
           />
           <ListRow
             icon="inbox-arrow-down-outline"
-            title="Incoming payments inbox"
+            title="Incoming payments"
             onPress={() => router.push('/settings/inbox')}
           />
+          </>
+        ) : null}
+        <ListRow icon="heart-pulse" title="Connected devices" onPress={() => router.push('/settings/devices')} />
+      </Group>
+
+      {isOwner ? (
+        <Group title="Business">
           <ListRow
             icon="account-multiple-outline"
             title="Team"
@@ -92,38 +77,25 @@ export default function Settings() {
             title="Plan & usage"
             onPress={() => router.push('/settings/billing')}
           />
-          {Platform.OS === 'android' ? (
-            <ListRow
-              icon="text-search"
-              title="Unknown formats"
-              onPress={() => router.push('/settings/samples')}
-            />
-          ) : null}
+          <ListRow icon="file-export-outline" title="Export records" onPress={() => router.push('/settings/exports')} />
         </Group>
       ) : null}
 
-      <Group title="Data">
-        <ListRow icon="broom" title={clearing ? 'Clearing cache…' : 'Clear unused cache'} subtitle={cacheMessage || undefined} onPress={() => void clearCache()} />
-        <ListRow
-          icon="file-export-outline"
-          title="Export records"
-          onPress={() => router.push('/settings/exports')}
-        />
-        <ListRow
-          icon="shield-lock-outline"
-          title="Privacy & data"
-          onPress={() => router.push('/settings/privacy')}
-        />
-      </Group>
-
-      <Group title="Account">
+      <Group title="Preferences">
         <ListRow icon="bell-outline" title="Notifications" onPress={() => router.push('/settings/notifications')} />
+        <ListRow icon="shield-lock-outline" title="Privacy & data" onPress={() => router.push('/settings/privacy')} />
         <ListRow icon="account-cog-outline" title="Account & password" onPress={() => router.push('/settings/account')} />
         {workspaces.length > 1 ? (
           <ListRow icon="swap-horizontal" title="Switch workspace" onPress={() => void selectWorkspace(null)} />
         ) : null}
-        <ListRow icon="logout" title="Sign out" destructive onPress={() => void signOut()} />
       </Group>
+
+      <Group title="Advanced">
+        {Platform.OS === 'android' && isOwner ? <ListRow icon="text-search" title="Unknown notification formats" onPress={() => router.push('/settings/samples')} /> : null}
+        <ListRow icon="broom" title={clearing ? 'Clearing cache…' : 'Clear unused cache'} subtitle={cacheMessage || undefined} onPress={() => void clearCache()} />
+      </Group>
+
+      <ListRow icon="logout" title="Sign out" destructive onPress={() => void signOut()} />
 
       <Text variant="bodySmall" style={{ opacity: 0.5, textAlign: 'center' }}>
         PayTsek {APP_VERSION}

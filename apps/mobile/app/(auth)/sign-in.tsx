@@ -98,14 +98,21 @@ export default function SignIn() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top', 'bottom', 'left', 'right']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.page}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          overScrollMode="never"
+        >
           <View style={styles.brand}>
             <Image source={require('../../assets/icon.png')} style={styles.logo} resizeMode="contain" />
-            <Text variant="headlineLarge" style={styles.brandName}>PayTsek</Text>
+            <Text variant="headlineSmall" style={styles.brandName}>PayTsek</Text>
           </View>
 
           <View style={styles.form}>
-            <Text variant="headlineSmall" style={styles.title}>{COPY[mode].title}</Text>
+            <Text variant="titleLarge" style={styles.title}>{COPY[mode].title}</Text>
 
             {mode !== 'reset' ? (
               <Button mode="contained" icon="google" loading={busy} disabled={busy} onPress={() => void google()} contentStyle={styles.actionContent} style={styles.action}>
@@ -134,6 +141,7 @@ export default function SignIn() {
                   value={field.value}
                   onChangeText={field.onChange}
                   error={!!errors.email}
+                  outlineStyle={styles.inputOutline}
                 />
               )}
             />
@@ -154,6 +162,7 @@ export default function SignIn() {
                       value={field.value}
                       onChangeText={field.onChange}
                       error={!!errors.password}
+                      outlineStyle={styles.inputOutline}
                       right={<TextInput.Icon icon={showPassword ? 'eye-off-outline' : 'eye-outline'} onPress={() => setShowPassword((shown) => !shown)} />}
                     />
                   )}
@@ -198,13 +207,23 @@ export default function SignIn() {
 }
 
 const styles = StyleSheet.create({
-  page: { flexGrow: 1, justifyContent: 'center', width: '100%', maxWidth: 440, alignSelf: 'center', padding: SPACING.xl, gap: SPACING.xxl },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
-  logo: { width: 52, height: 52, borderRadius: RADIUS.lg },
-  brandName: { fontWeight: '700', letterSpacing: -0.8 },
-  form: { gap: SPACING.md },
-  title: { fontWeight: '700', letterSpacing: -0.4, marginBottom: SPACING.xs },
-  action: { borderRadius: RADIUS.lg },
+  page: {
+    flexGrow: 1,
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.xxl,
+    paddingBottom: SPACING.lg,
+    gap: SPACING.xl,
+  },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  logo: { width: 40, height: 40, borderRadius: RADIUS.md },
+  brandName: { fontWeight: '700', letterSpacing: -0.5 },
+  form: { gap: SPACING.sm },
+  title: { fontWeight: '700', letterSpacing: -0.3, marginBottom: SPACING.sm },
+  inputOutline: { borderRadius: RADIUS.lg },
+  action: { borderRadius: RADIUS.xl },
   actionContent: { minHeight: TOUCH_TARGET },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   divider: { flex: 1, height: StyleSheet.hairlineWidth },
