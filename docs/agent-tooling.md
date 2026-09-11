@@ -21,7 +21,7 @@ Never enable Supabase MCP write access against production. Never paste service-r
 
 | Concern | Library | Why |
 | --- | --- | --- |
-| Routing | Expo Router (SDK 55 / RN 0.83, New Architecture) | File-based, typed routes, deep links (`payrecord://pair?c=…`, share sheet) |
+| Routing | Expo Router (SDK 55 / RN 0.83, New Architecture) | File-based, typed routes, deep links (`paytsek://pair?c=…`, share sheet) |
 | UI kit | React Native Paper (Material Design 3) | Mature, accessible components, light/dark theming, identical look on Android & iOS; status always shown with icon + text |
 | Server state | TanStack Query v5 | Single source of truth, refetch on reconnect/focus, no duplicated stores |
 | Forms | React Hook Form + Zod (`@hookform/resolvers`) | Same Zod contracts as the API |

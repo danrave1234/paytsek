@@ -1,6 +1,6 @@
-import type { MatchReasonCode, PaymentRail, Provider, ReferenceNamespace, TimeBasis, TimePrecision } from '@payrecord/contracts';
-import { MATCHING_CRITICAL_FIELDS } from '@payrecord/contracts';
-import { autoMatchFlow, normalizeReference, referencesEqual } from '@payrecord/receipt-parsers';
+import type { MatchReasonCode, PaymentRail, Provider, ReferenceNamespace, TimeBasis, TimePrecision } from '@paytsek/contracts';
+import { MATCHING_CRITICAL_FIELDS } from '@paytsek/contracts';
+import { autoMatchFlow, normalizeReference, referencesEqual } from '@paytsek/receipt-parsers';
 
 /**
  * Matching policy v1 — correctness before automatic coverage.

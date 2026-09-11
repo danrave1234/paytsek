@@ -15,6 +15,21 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.1.8',
+    date: '2026-09-11',
+    channel: 'beta',
+    highlights: [
+      'A scan-first mobile refresh gives payment capture the primary action while tightening navigation, loading states, spacing and visual hierarchy.',
+      'PayTsek branding, app identifiers and native notification-collector packages are now consistent across the Android app, web experience and backend.',
+      'The web dashboard, plans and download experience have been refreshed to reflect the current PayTsek product and billing flow.',
+    ],
+    fixes: [
+      'Improves dark-mode transitions with an explicit native app background to prevent a white flash during navigation.',
+      'Includes the current Android package update (version code 7) so it installs over earlier PayTsek releases.',
+    ],
+    notes: 'Install directly over an existing PayTsek app. This beta release includes the latest local product, onboarding and platform updates.',
+  },
+  {
     version: '0.1.7',
     date: '2026-09-11',
     channel: 'beta',

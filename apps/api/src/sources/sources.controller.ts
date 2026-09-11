@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Injectable, Module, Param, Patch, Post } from '@nestjs/common';
-import { CreateSourceRequest, UpdateSourceRequest, type Provider, type SourceSummary } from '@payrecord/contracts';
-import { autoMatchFlowsForReceivingProvider } from '@payrecord/receipt-parsers';
+import { CreateSourceRequest, UpdateSourceRequest, type Provider, type SourceSummary } from '@paytsek/contracts';
+import { autoMatchFlowsForReceivingProvider } from '@paytsek/receipt-parsers';
 import { CurrentUser, Workspace, WorkspaceRoute } from '../auth/decorators';
 import { OwnerOnly, type AuthUser, type WorkspaceContext } from '../auth/guards';
 import { ApiException } from '../common/errors';

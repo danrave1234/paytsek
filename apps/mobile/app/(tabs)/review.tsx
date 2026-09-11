@@ -3,7 +3,7 @@ import React from 'react';
 import { FlatList, View } from 'react-native';
 import { Card, Icon, Text, useTheme } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { EmptyState, ErrorState, Loading, Notice, ScreenTitle, StateChip } from '@/components/ui';
+import { EmptyState, ErrorState, Loading, ScreenTitle, StateChip } from '@/components/ui';
 import { manilaTime, peso } from '@/lib/format';
 import { useRecords } from '@/lib/queries';
 import { RADIUS, SPACING, TAB_BAR_CLEARANCE } from '@/theme';
@@ -18,8 +18,7 @@ export default function Review() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
       <View style={{ paddingHorizontal: SPACING.xl, paddingTop: SPACING.lg, paddingBottom: SPACING.md, gap: SPACING.md }}>
-        <ScreenTitle title="Review" subtitle="Resolve records that need a decision" />
-        <Notice kind="info">Same amount and time alone never confirm a payment automatically. Compare the details, then confirm only if you are sure.</Notice>
+        <ScreenTitle title="Needs attention" />
       </View>
       <FlatList
         data={items}
@@ -27,7 +26,7 @@ export default function Review() {
         contentContainerStyle={{ paddingHorizontal: SPACING.xl, paddingBottom: TAB_BAR_CLEARANCE, gap: SPACING.md }}
         refreshing={q.isRefetching}
         onRefresh={() => void q.refetch()}
-        ListEmptyComponent={q.isLoading ? <Loading variant="list" label="Loading review queue" /> : q.error ? <ErrorState error={q.error} retry={() => void q.refetch()} /> : <EmptyState icon="clipboard-check-outline" title="Nothing to review" body="Records with candidate notifications or conflicts appear here." />}
+        ListEmptyComponent={q.isLoading ? <Loading variant="list" label="Loading" /> : q.error ? <ErrorState error={q.error} retry={() => void q.refetch()} /> : <EmptyState icon="clipboard-check-outline" title="All clear" />}
         renderItem={({ item }) => (
           <Card mode="contained" onPress={() => router.push(`/record/${item.id}`)} style={{ backgroundColor: theme.colors.surface, borderRadius: RADIUS.lg }}>
             <Card.Content style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.md }}>

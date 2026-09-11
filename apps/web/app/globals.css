@@ -1,14 +1,14 @@
 @import "tailwindcss";
 
 /*
- * PayRecord web — screen-first identity.
+ * PayTsek web — screen-first identity.
  *
  * The product is about phone screens: the confirmation a customer shows you,
  * and the notification your own phone receives. So the site is built from
  * device frames, real UI and data type — not paper, ledgers or stamps.
  *
  * Neutral cool greys carry the page; the app's brand blue is the only accent
- * that means "PayRecord"; status colours mean exactly one thing each and are
+ * that means "PayTsek"; status colours mean exactly one thing each and are
  * always paired with a label.
  *
  * Component classes live in @layer components so plain utilities
@@ -16,17 +16,17 @@
  */
 @theme {
   --color-bg: #ffffff;
-  --color-bg-2: #f5f7fa;
-  --color-bg-3: #e9edf3;
-  --color-ink: #0b0f17;
-  --color-ink-2: #48515f;
-  --color-ink-3: #7c8697;
-  --color-line: #e2e7ee;
-  --color-line-2: #f0f3f7;
+  --color-bg-2: #f7f8fb;
+  --color-bg-3: #edf0f5;
+  --color-ink: #111827;
+  --color-ink-2: #4b5565;
+  --color-ink-3: #7b8494;
+  --color-line: #e4e7ec;
+  --color-line-2: #f0f2f5;
 
-  --color-brand: #0b5fff;
-  --color-brand-2: #0847c4;
-  --color-brand-soft: #e7efff;
+  --color-brand: #155eef;
+  --color-brand-2: #1849a9;
+  --color-brand-soft: #eaf0ff;
 
   --color-ok: #0f6b46;
   --color-ok-soft: #dcf2e7;
@@ -35,12 +35,12 @@
   --color-danger: #b3261e;
   --color-danger-soft: #fbe4e2;
 
-  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
 
-  --shadow-card: 0 1px 2px rgba(11, 15, 23, 0.05), 0 1px 3px rgba(11, 15, 23, 0.04);
-  --shadow-raised: 0 2px 4px rgba(11, 15, 23, 0.04), 0 12px 28px -12px rgba(11, 15, 23, 0.22);
-  --shadow-device: 0 4px 8px rgba(11, 15, 23, 0.06), 0 32px 64px -24px rgba(11, 15, 23, 0.38);
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --shadow-raised: 0 2px 4px rgba(16, 24, 40, 0.04), 0 20px 48px -24px rgba(16, 24, 40, 0.28);
+  --shadow-device: 0 6px 16px rgba(16, 24, 40, 0.10), 0 36px 72px -28px rgba(16, 24, 40, 0.42);
 }
 
 html {
@@ -55,7 +55,7 @@ html {
 }
 
 body {
-  @apply bg-bg text-ink antialiased;
+  @apply bg-bg-2 text-ink antialiased;
 }
 
 ::selection { background: var(--color-brand); color: #fff; }
@@ -71,7 +71,7 @@ body {
 
   /* Small technical label; also used for data keys and table headers. */
   .eyebrow {
-    @apply font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-3;
+    @apply font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-3;
   }
 
   /* Display headline. Tight tracking is what keeps a grotesque from reading
@@ -117,13 +117,13 @@ body {
 
   .btn-primary,
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 text-[15px] font-medium transition-colors;
-    min-height: 48px;
+    @apply inline-flex items-center justify-center gap-2 rounded-[14px] px-5 text-[15px] font-semibold transition-all;
+    min-height: 50px;
   }
-  .btn-primary { @apply bg-brand text-white; }
-  .btn-primary:hover { @apply bg-brand-2; }
+  .btn-primary { @apply bg-brand text-white; box-shadow: 0 8px 20px -10px rgba(21, 94, 239, .85); }
+  .btn-primary:hover { @apply -translate-y-0.5 bg-brand-2; }
   .btn-secondary { @apply border border-line bg-bg text-ink; }
-  .btn-secondary:hover { @apply border-ink-3 bg-bg-2; }
+  .btn-secondary:hover { @apply -translate-y-0.5 border-ink-3 bg-bg; }
 
   .btn-ghost-dark {
     @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/25 px-5 text-[15px] font-medium text-white transition-colors;
@@ -134,12 +134,12 @@ body {
   /* ---- Surfaces -------------------------------------------------------- */
 
   .card {
-    @apply relative rounded-2xl border border-line bg-bg;
+    @apply relative rounded-3xl border border-line bg-bg;
     box-shadow: var(--shadow-card);
   }
 
   .card-raised {
-    @apply relative rounded-2xl border border-line bg-bg;
+    @apply relative rounded-3xl border border-line bg-bg;
     box-shadow: var(--shadow-raised);
   }
 
@@ -203,10 +203,7 @@ body {
 
   /* ---- Dark band ------------------------------------------------------- */
 
-  .band-dark {
-    @apply bg-ink text-white;
-    background-image: radial-gradient(900px 420px at 12% 0%, rgba(11, 95, 255, 0.16), transparent 62%);
-  }
+  .band-dark { @apply bg-ink text-white; }
   .band-dark .eyebrow { @apply text-white/45; }
 
   /* ---- Long-form legal / prose ----------------------------------------- */

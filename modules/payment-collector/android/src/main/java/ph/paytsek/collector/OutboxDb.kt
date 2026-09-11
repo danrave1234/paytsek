@@ -1,4 +1,4 @@
-package ph.payrecord.collector
+package ph.paytsek.collector
 
 import android.content.ContentValues
 import android.content.Context
@@ -20,7 +20,7 @@ import javax.crypto.spec.GCMParameterSpec
  * stored. Bounded: oldest acknowledged rows are pruned; unacknowledged rows are
  * capped with a visible warning rather than silently dropped.
  */
-class OutboxDb(context: Context) : SQLiteOpenHelper(context, "payrecord_outbox.db", null, 1) {
+class OutboxDb(context: Context) : SQLiteOpenHelper(context, "paytsek_outbox.db", null, 1) {
 
   data class Item(
     val clientEventId: String,
@@ -129,7 +129,7 @@ class OutboxDb(context: Context) : SQLiteOpenHelper(context, "payrecord_outbox.d
 
 /** AES-256-GCM column encryption with a non-exportable Android Keystore key. */
 object ColumnCrypto {
-  private const val ALIAS = "payrecord_outbox_aes"
+  private const val ALIAS = "paytsek_outbox_aes"
   private const val TRANSFORM = "AES/GCM/NoPadding"
 
   private fun key(): SecretKey {

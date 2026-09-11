@@ -4,9 +4,9 @@
 const { withInfoPlist } = require('@expo/config-plugins');
 
 module.exports = function withReceiptOcr(config, props = {}) {
-  const appGroup = props.appGroup ?? 'group.ph.payrecord.app';
+  const appGroup = props.appGroup ?? 'group.ph.paytsek.app';
   return withInfoPlist(config, (mod) => {
-    mod.modResults.PayRecordAppGroup = appGroup;
+    mod.modResults.PayTsekAppGroup = appGroup;
     return mod;
   });
 };

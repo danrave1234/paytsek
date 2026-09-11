@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { EVIDENCE_STATE_LABELS, type EvidenceState } from '@payrecord/contracts';
-import { formatCentavos } from '@payrecord/receipt-parsers';
+import { EVIDENCE_STATE_LABELS, type EvidenceState } from '@paytsek/contracts';
+import { formatCentavos } from '@paytsek/receipt-parsers';
 import { hostname } from 'node:os';
 import { BillingService } from '../billing/billing.service';
 import { loadEnv } from '../config/env';
@@ -111,7 +111,8 @@ export class WorkerService {
           await this.purgeRetention(job.payload.orgId ? String(job.payload.orgId) : null, Boolean(job.payload.hardDelete));
           break;
         case 'RECONCILE_ENTITLEMENT':
-          await this.billing.reconcileAsSystem(String(job.payload.orgId), String(job.payload.appUserId));
+          // Retire legacy entitlement retry jobs. PayMongo fulfills only from a
+          // signed webhook and does not have a polling reconciliation endpoint.
           break;
         default:
           throw new Error(`unknown job kind ${String(job.kind)}`);
@@ -161,7 +162,7 @@ export class WorkerService {
           ].map(csvEscape).join(','),
         );
       }
-      const disclaimer = `# PayRecord export. "Notification matched" means matched to an incoming notification on the seller's phone; not confirmed directly with the payment provider. Totals are recorded payments, not wallet balance.`;
+      const disclaimer = `# PayTsek export. "Notification matched" means matched to an incoming notification on the seller's phone; not confirmed directly with the payment provider. Totals are recorded payments, not wallet balance.`;
       const body = `${disclaimer}\n${lines.join('\n')}\n`;
       const path = `${job.organization_id}/${exportJobId}.csv`;
       await this.storage.upload(this.storage.exportsBucket, path, body, 'text/csv');

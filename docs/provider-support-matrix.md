@@ -12,11 +12,12 @@ A flow is **(receipt provider, receiving provider, rail)**, and `autoMatchFlow()
 | `gcash-to-gcash.qr-p2p` | GCash → GCash | QR (personal) | ✔ | ✔ **only when the notification contains the Ref No.** | SYNTHETIC | Same wallet both sides, same `GCASH_REF_NO` namespace, and receiving money produces the same notification whichever rail the payer used — the same assumption already shipped for Express Send. Needs the same redacted real sample pairs. |
 | `gcash-to-gcash.qr-merchant` | GCash → GCash | QR (merchant) | ✔ | ✖ | NONE | Merchant Scan-to-Pay confirmations use different channels per GCash help table; text unverified. |
 | `gotyme-to-gcash.instapay-qr` | GoTyme → GCash | InstaPay/QR Ph | ✔ | ✖ | NONE | Cross-provider references are not the same identifier; no invented mapping. |
-| `gotyme-to-gotyme.transfer` | GoTyme → GoTyme | Transfer | ✔ | ✖ | NONE | GoTyme notification adapter fails closed (`gotyme.incoming.unsupported`). |
-| `maya-to-maya.qr-p2p` | Maya → Maya | QR (personal) | ✔ | ✖ | NONE | No Maya incoming-payment notification sample captured; no Maya notification adapter exists, so the Kotlin parser rejects the package. |
+| `gotyme-to-gotyme.transfer` | GoTyme → GoTyme | Transfer | ✔ | ✖ | REDACTED_REAL_SAMPLE | Incoming template is recognised, but it has no comparable reference. Review required. |
+| `maya-to-maya.qr-p2p` | Maya → Maya | QR (personal) | ✔ | ✖ | REDACTED_REAL_SAMPLE | Incoming InstaPay template is recognised, but it has no comparable reference. Review required. |
 | `maya-to-maya.qr-merchant` | Maya → Maya | QR (merchant) | ✔ | ✖ | NONE | Merchant Scan-to-Pay confirmations use a different channel; text unverified. |
 | `maya-to-gcash.instapay-qr` | Maya → GCash | InstaPay/QR Ph | ✔ | ✖ | NONE | Cross-provider references are not the same identifier; no invented mapping. |
 | `gcash-to-maya.instapay-qr` | GCash → Maya | InstaPay/QR Ph | ✔ | ✖ | NONE | Cross-provider references are not the same identifier; no invented mapping. |
+| `maribank-to-maribank.qr-p2p` | MariBank → MariBank | QR (personal) | ✔ | ✖ | REDACTED_REAL_SAMPLE | Incoming template is recognised, but it has no comparable reference. Review required. |
 
 ## Enabling a flow (checklist)
 
@@ -35,9 +36,9 @@ Every wallet has a registered notification adapter on both sides (`NOTIFICATION_
 | Wallet | Recording | Notification parsing | Auto-match |
 | --- | --- | --- | --- |
 | GCash | ✔ | ✔ `gcash.incoming.v1` | ✔ Express Send + personal QR |
-| GoTyme | ✔ | ✖ fails closed (`gotyme.incoming.unsupported`) | ✖ |
-| Maya | ✔ | ✖ fails closed (`maya.incoming.unsupported`) | ✖ |
-| MariBank | ✔ | ✖ fails closed (`maribank.incoming.unsupported`) | ✖ |
+| GoTyme | ✔ | ✔ `gotyme.incoming.v1` | ✖ (notification has no comparable reference) |
+| Maya | ✔ | ✔ `maya.incoming.v1` | ✖ (notification has no comparable reference) |
+| MariBank | ✔ | ✔ `maribank.incoming.v1` | ✖ (notification has no comparable reference) |
 
 ## Package allowlist & signing
 

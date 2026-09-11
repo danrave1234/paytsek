@@ -19,8 +19,8 @@ create table plans (
 
 insert into plans values
   ('FREE','Free',50,1,1,1,2,30,null,null),
-  ('SOLO','Solo',1000,2,1,1,2,90,'payrecord_solo_monthly','payrecord_solo_monthly'),
-  ('TEAM','Team',5000,5,2,2,5,90,'payrecord_team_monthly','payrecord_team_monthly');
+  ('SOLO','Solo',1000,2,1,1,2,90,'paytsek_solo_monthly','paytsek_solo_monthly'),
+  ('TEAM','Team',5000,5,2,2,5,90,'paytsek_team_monthly','paytsek_team_monthly');
 
 create table subscriptions (
   id uuid primary key default gen_random_uuid(),

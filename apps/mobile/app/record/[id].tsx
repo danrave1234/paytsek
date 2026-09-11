@@ -104,8 +104,8 @@ export default function RecordDetail() {
         <Card.Content>
           <Row label="Provider / rail" value={`${r.corrected.receiptProvider ?? '—'} / ${r.corrected.paymentRail ?? '—'}`} />
           <Row label="Reference" value={r.corrected.referenceValue ? `${r.corrected.referenceValue} (${r.corrected.referenceNamespace})` : '—'} />
-          <Row label="Sender (payer)" value={r.corrected.payerName ?? r.corrected.payerPhone ?? '—'} />
-          <Row label="Recipient (payee)" value={r.corrected.payeeName ?? r.corrected.payeePhone ?? '—'} />
+          {r.corrected.payerName || r.corrected.payerPhone ? <Row label="Sender" value={r.corrected.payerName ?? r.corrected.payerPhone!} /> : null}
+          {r.corrected.payeeName || r.corrected.payeePhone ? <Row label="Recipient" value={r.corrected.payeeName ?? r.corrected.payeePhone!} /> : null}
           <Row label="Fee / total charged" value={`${r.corrected.feeCentavos !== null ? peso(r.corrected.feeCentavos) : '—'} / ${r.corrected.totalChargedCentavos !== null ? peso(r.corrected.totalChargedCentavos) : '—'}`} />
           <Row label="Receipt time" value={r.corrected.receiptTransactionAt ? `${manilaTime(r.corrected.receiptTransactionAt, r.corrected.receiptTransactionPrecision)} (${r.corrected.receiptTransactionPrecision.toLowerCase()})` : 'not on receipt'} />
           <Row label="Receipt status" value={r.corrected.receiptStatus} />

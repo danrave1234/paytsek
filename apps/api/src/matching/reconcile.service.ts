@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { CandidateEvent, CandidatesResponse, EvidenceState, PaymentRail, Provider, ReferenceNamespace, TimePrecision } from '@payrecord/contracts';
+import type { CandidateEvent, CandidatesResponse, EvidenceState, PaymentRail, Provider, ReferenceNamespace, TimePrecision } from '@paytsek/contracts';
 import { loadEnv } from '../config/env';
 import { AuditService } from '../db/audit.service';
 import { DbService, isUniqueViolation, type Queryable } from '../db/db.service';

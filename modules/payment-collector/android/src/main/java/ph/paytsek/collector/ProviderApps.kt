@@ -1,4 +1,4 @@
-package ph.payrecord.collector
+package ph.paytsek.collector
 
 import android.content.Context
 import android.content.pm.PackageManager
@@ -26,8 +26,8 @@ object ProviderApps {
     "com.globe.gcash.android" to "GCASH",
     "com.gotyme.gotymebank" to "GOTYME",
     "ph.gotyme.app" to "GOTYME",
-    // Maya is identifiable but has no notification adapter yet, so its
-    // notifications are dropped by NotificationParser rather than uploaded.
+    // Incoming-payment parsing is strict and template-specific; unrecognised
+    // Maya notifications are still dropped by NotificationParser.
     "com.paymaya" to "MAYA",
     // MariBank PH kept SeaBank's package through the 2025 rebrand.
     "ph.seabank.seabank" to "MARIBANK",

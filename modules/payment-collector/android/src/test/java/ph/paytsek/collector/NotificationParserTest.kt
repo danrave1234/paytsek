@@ -1,4 +1,4 @@
-package ph.payrecord.collector
+package ph.paytsek.collector
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -49,9 +49,22 @@ class NotificationParserTest {
     assertEquals("UNKNOWN_PACKAGE", (r as NotificationParser.Result.Rejected).reason)
   }
 
-  @Test fun gotymeFailsClosed() {
-    val r = NotificationParser.parse(input("You received ₱100.00 from Someone", pkg = "com.gotyme.gotymebank"))
-    assertEquals("UNKNOWN_TEMPLATE", (r as NotificationParser.Result.Rejected).reason)
+  @Test fun acceptsSuppliedGoTymeTemplateAndIgnoresBalance() {
+    val r = NotificationParser.parse(NotificationParser.Input("com.gotyme.gotymebank", "Transfer received", "You received P1,250.00 from A. Santos. Your available balance is P9,000.00.", null, emptyList(), false))
+    val e = (r as NotificationParser.Result.Accepted).event
+    assertEquals("GOTYME", e.provider); assertEquals(125000L, e.amountCentavos); assertEquals("A. Santos", e.payerMaskedName)
+  }
+
+  @Test fun acceptsSuppliedMayaTemplate() {
+    val r = NotificationParser.parse(NotificationParser.Input("com.paymaya", "Money received ↙️", "You received 500.00 in your wallet via InstaPay", null, emptyList(), false))
+    val e = (r as NotificationParser.Result.Accepted).event
+    assertEquals("MAYA", e.provider); assertEquals(50000L, e.amountCentavos); assertEquals("INSTAPAY", e.paymentRail)
+  }
+
+  @Test fun acceptsSuppliedMariBankTemplate() {
+    val r = NotificationParser.parse(NotificationParser.Input("ph.seabank.seabank", "Successful Incoming Transfer", "You've received PHP 780.50 from bank with account ending 1234", null, emptyList(), false))
+    val e = (r as NotificationParser.Result.Accepted).event
+    assertEquals("MARIBANK", e.provider); assertEquals(78050L, e.amountCentavos); assertNull(e.payerMaskedName)
   }
 
   @Test fun centavosAreExact() {

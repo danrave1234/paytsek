@@ -1,6 +1,6 @@
 /**
  * The four evidence states drawn as what they actually are: a rising scale of
- * how much is known about one payment — closed by the level PayRecord refuses
+ * how much is known about one payment — closed by the level PayTsek refuses
  * to claim. `PROVIDER_VERIFIED` deliberately does not exist in the contracts
  * (see packages/contracts/src/enums.ts); showing that absence is the point.
  */
@@ -20,7 +20,7 @@ const levels = [
     tone: 'bg-warn-soft text-warn',
     bar: 'bg-warn/60',
     what: 'Something needs a person.',
-    why: 'Candidate notifications exist but none is an exact match, or two records compete for the same one. PayRecord will not guess.',
+    why: 'Candidate notifications exist but none is an exact match, or two records compete for the same one. PayTsek will not guess.',
   },
   {
     label: 'Notif. matched',
@@ -36,7 +36,7 @@ const levels = [
     tone: 'bg-brand-soft text-brand-2',
     bar: 'bg-brand/70',
     what: 'A person checked the wallet.',
-    why: 'An owner opened the wallet app, saw the money, and signed off. The strongest state PayRecord can offer.',
+    why: 'An owner opened the wallet app, saw the money, and signed off. The strongest state PayTsek can offer.',
   },
 ];
 

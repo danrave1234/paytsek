@@ -1,4 +1,4 @@
-package ph.payrecord.collector
+package ph.paytsek.collector
 
 import android.app.Notification
 import android.os.SystemClock
@@ -19,7 +19,7 @@ import java.util.UUID
  * Reposts/updates of the same notification map to the same lifecycle key and
  * never create a second event. Group summaries are ignored.
  */
-class PayRecordNotificationListener : NotificationListenerService() {
+class PayTsekNotificationListener : NotificationListenerService() {
 
   private lateinit var prefs: CollectorPrefs
   private lateinit var outbox: OutboxDb

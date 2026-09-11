@@ -10,7 +10,7 @@ public class ReceiptOcrModule: Module {
   private lazy var recognizer = TextRecognizer.textRecognizer(options: TextRecognizerOptions())
 
   private var appGroup: String {
-    (Bundle.main.object(forInfoDictionaryKey: "PayRecordAppGroup") as? String) ?? "group.ph.payrecord.app"
+    (Bundle.main.object(forInfoDictionaryKey: "PayTsekAppGroup") as? String) ?? "group.ph.paytsek.app"
   }
 
   public func definition() -> ModuleDefinition {

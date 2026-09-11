@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Injectable, Module, Param, Post, Query } from '@nestjs/common';
-import { ConfirmCandidateRequest, ConfirmManuallyRequest, EscalateRequest, UnlinkRequest, type OwnerInboxEvent } from '@payrecord/contracts';
+import { ConfirmCandidateRequest, ConfirmManuallyRequest, EscalateRequest, UnlinkRequest, type OwnerInboxEvent } from '@paytsek/contracts';
 import { z } from 'zod';
 import { CurrentUser, Workspace, WorkspaceRoute } from '../auth/decorators';
 import { OwnerOnly, type AuthUser, type WorkspaceContext } from '../auth/guards';

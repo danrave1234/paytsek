@@ -50,7 +50,7 @@ const refusals: [string, string][] = [
   ['Upload OTPs or promos', 'Security prompts, outgoing payments and marketing are dropped on the phone, before anything is uploaded.'],
   ['Collect GPS or contacts', 'No location, no contacts, no hardware identifiers. Devices use an app-generated ID.'],
   ['Guarantee against fraud', 'A matched record is evidence you can show and audit, not a fraud shield.'],
-  ['Pretend to be a wallet', 'PayRecord is independent and is not affiliated with GCash, GoTyme, Maya, or any bank.'],
+  ['Pretend to be a wallet', 'PayTsek is independent and is not affiliated with GCash, GoTyme, Maya, or any bank.'],
 ];
 
 export default function Home() {
@@ -59,45 +59,50 @@ export default function Home() {
   return (
     <>
       {/* ═══════════════════════════════════════════════════════════════ Hero */}
-      <section className="relative overflow-hidden">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-40 -top-52 size-[42rem] rounded-full opacity-70 blur-3xl"
-          style={{ background: 'radial-gradient(circle, rgba(11,95,255,0.14), transparent 65%)' }}
-        />
-        <div className="relative mx-auto grid max-w-6xl items-center gap-14 px-4 pb-20 pt-10 sm:px-6 lg:grid-cols-[1fr_1fr] lg:gap-12 lg:pb-24 lg:pt-16">
-          <div>
-            <p className="eyebrow flex flex-wrap items-center gap-x-2.5 gap-y-1">
-              <span className="inline-block size-1.5 rounded-full bg-brand" aria-hidden />
-              Now in beta
-              <span aria-hidden className="text-line">/</span>
-              <span className="data">v{rel.version}</span>
-              <span aria-hidden className="text-line">/</span>
-              <span className="data">{rel.date}</span>
-            </p>
+      <section className="px-4 pb-10 pt-5 sm:px-6 sm:pt-8 lg:pb-16">
+        <div className="mx-auto max-w-7xl overflow-hidden rounded-[2rem] border border-line bg-bg shadow-raised">
+          <div className="grid items-center gap-12 px-5 py-12 sm:px-10 lg:grid-cols-[0.92fr_1.08fr] lg:gap-6 lg:px-14 lg:py-16 xl:px-20">
+            <div className="relative z-10">
+              <div className="inline-flex items-center gap-2 rounded-full border border-line bg-bg-2 px-3 py-1.5">
+                <span className="size-2 rounded-full bg-ok" aria-hidden />
+                <span className="text-[12px] font-semibold text-ink-2">Beta v{rel.version} is available</span>
+              </div>
 
-            <h1 className="h-display mt-6 text-[clamp(2.5rem,6.5vw,4.1rem)] leading-[1.04]">
-              Trust the payment, <span className="marked">not the screenshot</span>.
-            </h1>
+              <h1 className="h-display mt-7 max-w-2xl text-[clamp(2.65rem,7vw,5rem)] leading-[0.98]">
+                Know the payment <span className="text-brand">arrived.</span>
+              </h1>
 
-            <p className="mt-7 max-w-xl text-[16px] leading-7 text-ink-2 sm:text-[17.5px] sm:leading-8">
-              Customers pay your GCash, GoTyme or Maya QR and show you a confirmation screen. PayRecord files that
-              confirmation as a proper record, then checks it against the incoming-payment notification on your own phone —
-              so you know what actually landed. <span className="text-ink">We never touch the money.</span>
-            </p>
+              <p className="mt-7 max-w-xl text-[16px] leading-7 text-ink-2 sm:text-lg sm:leading-8">
+                Turn the confirmation a customer shows you into a clean payment record, then match it against the notification
+                on your own phone. Clear evidence for busy Philippine sellers, without touching the money.
+              </p>
 
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-              <Link href="/download" className="btn-primary">
-                Download for Android <span aria-hidden>→</span>
-              </Link>
-              <Link href="#how" className="btn-secondary">
-                See how it works
-              </Link>
+              <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <Link href="/download" className="btn-primary">
+                  Download for Android
+                </Link>
+                <Link href="#how" className="btn-secondary">
+                  See the 3-step flow
+                </Link>
+              </div>
+
+              <dl className="mt-10 grid grid-cols-3 border-t border-line pt-6">
+                {[
+                  ['On-device', 'Text capture'],
+                  ['Exact', 'Ref + amount match'],
+                  ['Always', 'Human-readable proof'],
+                ].map(([value, label], i) => (
+                  <div key={value} className={i ? 'border-l border-line pl-4 sm:pl-6' : 'pr-4 sm:pr-6'}>
+                    <dt className="text-sm font-semibold text-ink">{value}</dt>
+                    <dd className="mt-1 text-[11px] leading-4 text-ink-3 sm:text-xs">{label}</dd>
+                  </div>
+                ))}
+              </dl>
             </div>
-          </div>
 
-          <div className="mx-auto w-full max-w-[540px] lg:mx-0">
-            <ProofScene />
+            <div className="mx-auto w-full max-w-[600px] lg:mx-0">
+              <ProofScene />
+            </div>
           </div>
         </div>
       </section>
@@ -105,24 +110,24 @@ export default function Home() {
       {/* ══════════════════════════════════════════════════════ The problem
           Narrow measure, big type, tinted ground: the one moment on the page
           that is purely an argument, so it gets its own weight and rhythm. */}
-      <section className="border-y border-line bg-bg-2">
-        <div className="mx-auto max-w-3xl px-4 py-20 text-center sm:px-6 lg:py-28">
-          <p className="eyebrow">Why this exists</p>
-          <p className="h-display mt-6 text-[clamp(1.9rem,5vw,3.2rem)] leading-[1.1]">
+      <section className="border-y border-line bg-bg">
+        <div className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 lg:py-24">
+          <p className="eyebrow text-brand">Built for the moment at the counter</p>
+          <p className="h-display mt-5 text-[clamp(2rem,5vw,3.5rem)] leading-[1.08]">
             A screenshot is not a payment. It is a picture of one.
           </p>
-          <p className="mx-auto mt-7 max-w-xl text-pretty text-[17px] leading-8 text-ink-2">
+          <p className="mx-auto mt-6 max-w-2xl text-pretty text-[17px] leading-8 text-ink-2">
             Anyone can edit an amount, resend an old confirmation, or show you one addressed to somebody else. At a busy
             counter you have seconds to decide, and the only thing that actually proves money arrived is your own phone.
           </p>
 
-          <ul className="mx-auto mt-11 grid max-w-2xl gap-3 text-left sm:grid-cols-3">
+          <ul className="mx-auto mt-10 grid max-w-3xl gap-3 text-left sm:grid-cols-3">
             {[
               ['Edited', 'An amount changed in a photo editor in under a minute.'],
               ['Reused', 'A real confirmation from last week, shown again today.'],
               ['Misread', 'A genuine payment — sent to a different account entirely.'],
             ].map(([k, v]) => (
-              <li key={k} className="rounded-xl border border-line bg-bg px-4 py-4">
+              <li key={k} className="rounded-2xl border border-line bg-bg-2 px-5 py-5">
                 <p className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-danger">{k}</p>
                 <p className="mt-2 text-[13.5px] leading-6 text-ink-2">{v}</p>
               </li>
@@ -134,46 +139,49 @@ export default function Home() {
       {/* ═══════════════════════════════════════════════ How it works (sequence)
           Alternating rows joined by a numbered rail, so the three steps read
           as one process instead of three parallel features. */}
-      <section id="how" className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
-        <div className="max-w-2xl">
-          <p className="eyebrow">The flow</p>
-          <h2 className="h-section mt-3 text-[clamp(1.9rem,4.5vw,2.9rem)] leading-tight">
-            Three steps, and one of them is not yours to fake
+      <section id="how" className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:py-28">
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="eyebrow text-brand">One clear workflow</p>
+          <h2 className="h-section mt-4 text-[clamp(2rem,4.5vw,3.4rem)] leading-tight">
+            From customer screen to usable evidence
           </h2>
+          <p className="mt-5 text-[16px] leading-7 text-ink-2">
+            PayTsek keeps the fast counter workflow simple while preserving the detail you need later.
+          </p>
         </div>
 
-        <ol className="mt-16 space-y-20 lg:space-y-28">
+        <ol className="mt-14 space-y-5">
           {steps.map((s, i) => (
-            <li key={s.n} className="relative grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+            <li key={s.n} className="card relative grid items-center gap-10 overflow-hidden p-6 sm:p-8 lg:grid-cols-2 lg:gap-16 lg:p-12">
               {/* Connector between steps, desktop only. */}
               {i < steps.length - 1 ? (
                 <span
                   aria-hidden
-                  className="absolute left-[calc(1.25rem-1px)] top-14 hidden h-[calc(100%+7rem)] w-px bg-gradient-to-b from-line to-transparent lg:block"
+                  className="hidden"
                 />
               ) : null}
 
               <div className={i % 2 === 1 ? 'lg:order-2' : undefined}>
                 <div className="flex items-center gap-4">
-                  <span className="data relative z-10 grid size-10 shrink-0 place-items-center rounded-full border border-line bg-bg text-[13px] font-semibold text-brand-2">
+                  <span className="data relative z-10 grid size-10 shrink-0 place-items-center rounded-full bg-brand-soft text-[13px] font-semibold text-brand-2">
                     {s.n}
                   </span>
                   <span className="eyebrow">{s.kicker}</span>
                 </div>
-                <h3 className="mt-6 text-[clamp(1.4rem,3vw,1.9rem)] font-semibold leading-tight tracking-[-0.03em] lg:pl-14">
+                <h3 className="mt-6 text-[clamp(1.5rem,3vw,2.1rem)] font-semibold leading-tight tracking-[-0.035em] lg:pl-14">
                   {s.title}
                 </h3>
                 <p className="mt-4 max-w-lg text-[15.5px] leading-8 text-ink-2 lg:pl-14">{s.body}</p>
               </div>
 
-              <div className={i % 2 === 1 ? 'lg:order-1' : undefined}>{s.figure}</div>
+              <div className={`rounded-2xl bg-bg-2 p-2 sm:p-4 ${i % 2 === 1 ? 'lg:order-1' : ''}`}>{s.figure}</div>
             </li>
           ))}
         </ol>
       </section>
 
       {/* ═════════════════════════════════════════════════════ Certainty scale */}
-      <section className="border-y border-line bg-bg-2">
+      <section className="border-y border-line bg-bg">
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
           <div className="grid gap-14 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
             <div className="lg:sticky lg:top-28 lg:self-start">
@@ -196,7 +204,7 @@ export default function Home() {
       </section>
 
       {/* ═════════════════════════════════════════════════════ Wallet support */}
-      <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
+      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:py-28">
         <div className="grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
           <div>
             <p className="eyebrow">Wallet support</p>
@@ -213,12 +221,12 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="card overflow-hidden">
+          <div className="card-raised overflow-hidden">
             <table className="matrix">
               <thead>
                 <tr className="bg-bg-2">
                   <th className="w-[26%] !pl-6">Wallet</th>
-                  <th className="w-[24%]">Recording</th>
+                  <th className="w-[24%]">Support</th>
                   <th className="!pr-6">Automatic matching</th>
                 </tr>
               </thead>
@@ -227,7 +235,9 @@ export default function Home() {
                   <tr key={p.name}>
                     <td className="!pl-6 text-[15px] font-semibold tracking-[-0.02em]">{p.name}</td>
                     <td>
-                      <span className="pill bg-ok-soft text-ok">Supported</span>
+                      <span className={`pill ${p.autoMatch ? 'bg-ok-soft text-ok' : 'bg-warn-soft text-warn'}`}>
+                        {p.autoMatch ? 'Supported' : 'Partial'}
+                      </span>
                     </td>
                     <td className="!pr-6">
                       <span className={`pill ${p.autoMatch ? 'bg-ok-soft text-ok' : 'bg-warn-soft text-warn'}`}>
@@ -246,7 +256,7 @@ export default function Home() {
       {/* ══════════════════════════════════════════ Setups (deliberately quiet)
           Secondary information: compact type, no cards, so it reads as a
           footnote to the flow rather than a fourth headline act. */}
-      <section className="border-t border-line">
+      <section className="border-t border-line bg-bg">
         <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:py-16">
           <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
             <div>
@@ -269,15 +279,15 @@ export default function Home() {
       </section>
 
       {/* ═════════════════════════════════════════════════════ Refusals (dark) */}
-      <section className="band-dark">
-        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:py-28">
+      <section className="px-4 py-8 sm:px-6 lg:py-12">
+        <div className="band-dark mx-auto max-w-7xl rounded-[2rem] px-6 py-16 sm:px-10 lg:px-16 lg:py-20">
           <div className="max-w-2xl">
             <p className="eyebrow">The fine print, up front</p>
             <h2 className="h-section mt-3 text-[clamp(1.9rem,4.5vw,2.9rem)] leading-tight text-white">
               Six things we refuse to do
             </h2>
             <p className="mt-6 leading-8 text-white/60">
-              Most of what goes wrong with payment apps is over-promising. Here is what PayRecord will never claim.
+              Most of what goes wrong with payment apps is over-promising. Here is what PayTsek will never claim.
             </p>
           </div>
 
@@ -294,8 +304,8 @@ export default function Home() {
       </section>
 
       {/* ════════════════════════════════════════════════════════════════ CTA */}
-      <section className="mx-auto max-w-6xl px-4 pt-20 sm:px-6 lg:pt-28">
-        <div className="card-raised flex flex-wrap items-center justify-between gap-8 p-8 sm:p-10">
+      <section className="mx-auto max-w-7xl px-4 pt-16 sm:px-6 lg:pt-20">
+        <div className="card-raised flex flex-wrap items-center justify-between gap-8 border-brand/20 bg-brand-soft/50 p-8 sm:p-10 lg:p-12">
           <div className="max-w-xl">
             <h2 className="h-section text-[clamp(1.5rem,3.5vw,2.1rem)] leading-tight">Start checking your payments.</h2>
             <p className="mt-3 leading-7 text-ink-2">

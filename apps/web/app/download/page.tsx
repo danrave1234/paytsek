@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { DOWNLOADS, latest } from '@/lib/releases';
 
-export const metadata: Metadata = { title: 'Download', description: 'Get PayRecord for Android and iPhone.' };
+export const metadata: Metadata = { title: 'Download', description: 'Get PayTsek for Android and iPhone.' };
 
 const installSteps: ReactNode[] = [
   <>
@@ -13,7 +13,7 @@ const installSteps: ReactNode[] = [
   </>,
   <>Open it from the notification or your Downloads folder. When Android asks, allow your browser to install unknown apps — a one-time prompt.</>,
   <>
-    Open PayRecord and sign in. On the phone that receives your payment notifications, also grant <em>Notification access</em>{' '}
+    Open PayTsek and sign in. On the phone that receives your payment notifications, also grant <em>Notification access</em>{' '}
     when the app asks.
   </>,
   <>To update later, install the newer APK over the old one — your data is kept, because the signing key is the same.</>,
@@ -57,7 +57,7 @@ export default function Download() {
     <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6 lg:py-20">
       <PageHeader
         eyebrow="Downloads"
-        title="Get PayRecord"
+        title="Get PayTsek"
         aside={
           <span className="pill bg-warn-soft text-warn">
             {rel.channel} v{rel.version}
@@ -154,7 +154,7 @@ export default function Download() {
 
           <p className="mt-7 border-t border-line pt-6 text-[13px] leading-6 text-ink-3">
             Want to know when it lands?{' '}
-            <a className="ul" href="mailto:support@payrecord.ph?subject=iOS%20beta">
+            <a className="ul" href="mailto:support@paytsek.online?subject=iOS%20beta">
               Email us
             </a>
             .

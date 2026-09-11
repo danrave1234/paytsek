@@ -1,7 +1,7 @@
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 
-group = 'ph.payrecord.ocr'
+group = 'ph.paytsek.ocr'
 version = '0.1.0'
 
 def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
@@ -11,7 +11,7 @@ useCoreDependencies()
 useDefaultAndroidSdkVersions()
 
 android {
-  namespace 'ph.payrecord.ocr'
+  namespace 'ph.paytsek.ocr'
   defaultConfig {
     versionCode 1
     versionName '0.1.0'

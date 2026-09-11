@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { AuditAction } from '@payrecord/contracts';
+import type { AuditAction } from '@paytsek/contracts';
 import { DbService, type Queryable } from './db.service';
 
 export interface AuditEntry {

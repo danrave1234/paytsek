@@ -20,14 +20,14 @@
 
 - [ ] Guideline 3.1.1: all digital upgrades via IAP; consumable credits do not expire.
 - [ ] Guideline 5.1.1: App Privacy labels — Financial Info (purchase history: no; other financial info: yes, linked), Photos, Diagnostics. Purpose strings in Info.plist for camera and photo library.
-- [ ] Share extension `ph.payrecord.app.share` with App Group `group.ph.payrecord.app`; review notes explain it only stages an image for the main app.
+- [ ] Share extension `ph.paytsek.app.share` with App Group `group.ph.paytsek.app`; review notes explain it only stages an image for the main app.
 - [ ] Clarify in review notes that notification matching requires a separate Android device; the iOS app scans/reviews only.
 - [ ] Sign-in with email/password only; provide reviewer credentials; account deletion available in Settings.
 
 ## Before flipping to production
 
 - [ ] `docs/testing.md` device matrix rows marked with results (device, OS, wallet version).
-- [ ] Zero false automatic matches in the adversarial suite (`pnpm --filter @payrecord/api test`).
+- [ ] Zero false automatic matches in the adversarial suite (`pnpm --filter @paytsek/api test`).
 - [ ] `ProviderApps.KNOWN_SIGNERS` populated from a Play-installed GCash.
 - [ ] Sentry scrubbing verified with a synthetic event containing an amount and phone number.
 - [ ] Download URLs set in `apps/web` env; `/updates` release notes match the shipped version.

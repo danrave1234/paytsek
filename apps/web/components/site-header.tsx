@@ -1,10 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 const nav = [
+  { href: '/pricing', label: 'Pricing' },
+  { href: '/dashboard', label: 'Dashboard' },
   { href: '/updates', label: 'Updates' },
   { href: '/download', label: 'Download' },
   { href: '/support', label: 'Support' },
@@ -32,18 +35,19 @@ export function SiteHeader({ version }: { version: string }) {
   return (
     <header
       className={`sticky top-0 z-50 border-b transition-colors duration-200 ${
-        stuck ? 'border-line bg-bg/85 backdrop-blur-md' : 'border-transparent'
+        stuck ? 'border-line bg-bg/90 backdrop-blur-xl' : 'border-transparent bg-bg-2/80'
       }`}
     >
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <Link href="/" className="group flex items-center gap-2.5">
-          <span
-            aria-hidden
-            className="grid size-9 shrink-0 place-items-center rounded-xl bg-brand text-lg font-semibold leading-none text-white transition-colors group-hover:bg-brand-2"
-          >
-            ₱
-          </span>
-          <span className="h-section text-[19px]">PayRecord</span>
+        <Link href="/" className="group flex items-center" aria-label="PayTsek home">
+          <Image
+            src="/brand/paytsek-wordmark.png"
+            alt="PayTsek"
+            width={152}
+            height={51}
+            priority
+            className="h-auto w-[122px] transition-transform duration-200 group-hover:scale-[1.02] sm:w-[138px]"
+          />
         </Link>
 
         <nav aria-label="Main" className="flex items-center gap-1">
@@ -70,7 +74,7 @@ export function SiteHeader({ version }: { version: string }) {
               second route to the same place in a very tight bar. */}
           <Link
             href="/download"
-            className="ml-2 hidden items-center gap-2 whitespace-nowrap rounded-xl bg-ink px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand sm:inline-flex"
+            className="ml-3 hidden min-h-10 items-center gap-2 whitespace-nowrap rounded-xl bg-ink px-4 py-2 text-[13px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-brand sm:inline-flex"
           >
             Get the app
             <span className="data text-[11px] text-white/55">v{version}</span>

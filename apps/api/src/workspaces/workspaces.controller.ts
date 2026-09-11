@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Module, Param, Patch, Post } from '@nestjs/common';
-import { AcceptInviteRequest, CreateWorkspaceRequest, InviteMemberRequest, UpdateMemberRequest } from '@payrecord/contracts';
+import { AcceptInviteRequest, CreateWorkspaceRequest, InviteMemberRequest, UpdateMemberRequest } from '@paytsek/contracts';
 import { z } from 'zod';
 import { CurrentUser, UserRoute, Workspace, WorkspaceRoute } from '../auth/decorators';
 import { OwnerOnly, type AuthUser, type WorkspaceContext } from '../auth/guards';

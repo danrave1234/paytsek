@@ -39,15 +39,11 @@ export default function AuthCallback() {
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: SPACING.xl, gap: SPACING.lg }}>
         {error ? (
           <>
-            <Text variant="headlineSmall" style={{ textAlign: 'center' }}>Couldn’t finish sign-in</Text>
-            <Text variant="bodyMedium" style={{ textAlign: 'center', color: theme.colors.onSurfaceVariant }}>{error}</Text>
-            <Button mode="contained" onPress={() => router.replace('/(auth)/sign-in')}>Back to sign in</Button>
+            <Text variant="headlineSmall" style={{ textAlign: 'center' }}>Sign-in failed</Text>
+            <Button mode="contained" onPress={() => router.replace('/(auth)/sign-in')}>Try again</Button>
           </>
         ) : (
-          <>
-            <ActivityIndicator size="large" />
-            <Text variant="bodyLarge">Finishing sign-in…</Text>
-          </>
+          <ActivityIndicator size="large" />
         )}
       </View>
     </SafeAreaView>

@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Injectable, Module, Param, Post } from '@nestjs/common';
-import { CreateExportRequest, type ExportJobView, type HomeSummary } from '@payrecord/contracts';
+import { CreateExportRequest, type ExportJobView, type HomeSummary } from '@paytsek/contracts';
 import { z } from 'zod';
 import { CurrentUser, UserRoute, Workspace, WorkspaceRoute } from '../auth/decorators';
 import { OwnerOnly, type AuthUser, type WorkspaceContext } from '../auth/guards';
@@ -145,7 +145,7 @@ export class OperationsController {
 
   @Get('health')
   health() {
-    return { ok: true, service: 'payrecord-api', time: new Date().toISOString() };
+    return { ok: true, service: 'paytsek-api', time: new Date().toISOString() };
   }
 
   @Get('home')

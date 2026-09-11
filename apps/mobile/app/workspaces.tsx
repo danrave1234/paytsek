@@ -1,65 +1,133 @@
 import type { WorkspaceSummary } from '@paytsek/contracts';
-import React, { useState } from 'react';
-import { View } from 'react-native';
-import { Button, Card, Divider, Icon, Text, TextInput, useTheme } from 'react-native-paper';
+import React, { useEffect, useRef, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Button, Icon, Text, TextInput, TouchableRipple, useTheme } from 'react-native-paper';
 import { Notice, Screen, ScreenTitle } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
-import { SPACING, TOUCH_TARGET } from '@/theme';
+import { RADIUS, SPACING, TOUCH_TARGET } from '@/theme';
 
 export default function Workspaces() {
   const theme = useTheme();
   const { workspaces, selectWorkspace, refreshWorkspaces, signOut, session } = useSession();
-  const [name, setName] = useState('');
-  const [display, setDisplay] = useState('');
+  const [businessName, setBusinessName] = useState('');
   const [invite, setInvite] = useState('');
+  const [joining, setJoining] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const autoCreateStarted = useRef(false);
+  const emailName = session?.user.email?.split('@')[0]?.replace(/[._-]+/g, ' ').trim();
+  const metadataName = session?.user.user_metadata?.full_name;
+  const displayName = typeof metadataName === 'string' && metadataName.trim() ? metadataName.trim() : (emailName || 'Owner');
 
   const create = async () => {
-    setBusy(true); setError(null);
+    if (busy) return;
+    setBusy(true);
+    setError(null);
     try {
-      const ws = await api<WorkspaceSummary>('/v1/workspaces', { method: 'POST', noWorkspace: true, body: { name, timezone: 'Asia/Manila', ownerDisplayName: display } });
+      const workspace = await api<WorkspaceSummary>('/v1/workspaces', {
+        method: 'POST',
+        noWorkspace: true,
+        body: { name: businessName.trim() || 'My records', timezone: 'Asia/Manila', ownerDisplayName: displayName },
+      });
       await refreshWorkspaces();
-      await selectWorkspace(ws.id);
-    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+      await selectWorkspace(workspace.id);
+    } catch (createError) {
+      setError((createError as Error).message);
+    } finally {
+      setBusy(false);
+    }
   };
 
+  useEffect(() => {
+    if (!session || workspaces.length || joining || autoCreateStarted.current) return;
+    autoCreateStarted.current = true;
+    void create();
+  }, [error, joining, session, workspaces.length]);
+
   const accept = async () => {
-    setBusy(true); setError(null);
+    if (busy) return;
+    setBusy(true);
+    setError(null);
     try {
-      const ws = await api<WorkspaceSummary>('/v1/workspaces/invites/accept', { method: 'POST', noWorkspace: true, body: { inviteToken: invite.trim(), displayName: display || undefined } });
+      const workspace = await api<WorkspaceSummary>('/v1/workspaces/invites/accept', {
+        method: 'POST',
+        noWorkspace: true,
+        body: { inviteToken: invite.trim(), displayName },
+      });
       await refreshWorkspaces();
-      await selectWorkspace(ws.id);
-    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+      await selectWorkspace(workspace.id);
+    } catch (acceptError) {
+      setError((acceptError as Error).message);
+    } finally {
+      setBusy(false);
+    }
   };
+
+  if (!workspaces.length && !joining && !error) {
+    return <Screen scroll={false} style={styles.center}><ActivityIndicator size="large" /></Screen>;
+  }
 
   return (
     <Screen>
-      <ScreenTitle title="Choose a workspace" subtitle={`Signed in as ${session?.user.email ?? ''}`} />
-      {workspaces.map((w) => (
-        <Card key={w.id} mode="contained" onPress={() => void selectWorkspace(w.id)} accessibilityRole="button" style={{ backgroundColor: theme.colors.surface }}>
-          <Card.Title
-            title={w.name}
-            subtitle={`${w.role === 'OWNER' ? 'Owner' : 'Cashier'} · ${w.planCode} plan`}
-            left={() => <Icon source="store-outline" size={24} color={theme.colors.primary} />}
-            right={() => <Icon source="chevron-right" size={22} color={theme.colors.onSurfaceVariant} />}
-          />
-        </Card>
+      <ScreenTitle title={workspaces.length ? 'Your records' : 'Join a team'} />
+
+      {workspaces.map((workspace) => (
+        <TouchableRipple key={workspace.id} onPress={() => void selectWorkspace(workspace.id)} borderless style={{ borderRadius: RADIUS.lg }}>
+          <View style={[styles.workspace, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
+            <View style={[styles.icon, { backgroundColor: theme.colors.primaryContainer }]}>
+              <Icon source="wallet-outline" size={22} color={theme.colors.primary} />
+            </View>
+            <Text variant="titleMedium" style={{ flex: 1, fontWeight: '700' }}>{workspace.name}</Text>
+            <Icon source="chevron-right" size={22} color={theme.colors.onSurfaceVariant} />
+          </View>
+        </TouchableRipple>
       ))}
-      {error ? <Notice kind="error">{error}</Notice> : null}
-      <Divider style={{ marginVertical: SPACING.sm }} />
-      <Text variant="titleMedium">Create a new workspace</Text>
-      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>One workspace per business. Timezone defaults to Asia/Manila.</Text>
-      <TextInput label="Business name" mode="outlined" value={name} onChangeText={setName} />
-      <TextInput label="Your display name" mode="outlined" value={display} onChangeText={setDisplay} />
-      <Button mode="contained" icon="store-plus-outline" disabled={busy || !name || !display} loading={busy} onPress={create} style={{ minHeight: TOUCH_TARGET }}>Create workspace</Button>
-      <Divider style={{ marginVertical: SPACING.sm }} />
-      <Text variant="titleMedium">Join with an invite</Text>
-      <TextInput label="Invite code" mode="outlined" autoCapitalize="none" value={invite} onChangeText={setInvite} />
-      <Button mode="contained-tonal" icon="account-multiple-plus-outline" disabled={busy || invite.trim().length < 16} onPress={accept} style={{ minHeight: TOUCH_TARGET }}>Join workspace</Button>
-      <View style={{ height: SPACING.sm }} />
-      <Button icon="logout" onPress={() => void signOut()}>Sign out</Button>
+
+      {error ? <Notice kind="error">Couldn’t finish setup.</Notice> : null}
+
+      {!joining && workspaces.length ? (
+        <View style={styles.form}>
+          <TextInput label="Business name (optional)" mode="outlined" value={businessName} onChangeText={setBusinessName} maxLength={80} />
+          <Button mode="contained" loading={busy} disabled={busy} onPress={() => void create()} contentStyle={{ minHeight: TOUCH_TARGET }}>
+            Continue
+          </Button>
+          <Button mode="text" onPress={() => setJoining(true)}>Join with a code</Button>
+        </View>
+      ) : joining ? (
+        <View style={styles.form}>
+          <TextInput label="Invite code" mode="outlined" autoCapitalize="characters" value={invite} onChangeText={setInvite} />
+          <Button mode="contained" loading={busy} disabled={busy || invite.trim().length < 16} onPress={() => void accept()} contentStyle={{ minHeight: TOUCH_TARGET }}>
+            Join
+          </Button>
+          <Button mode="text" onPress={() => setJoining(false)}>Back</Button>
+        </View>
+      ) : (
+        <View style={styles.form}>
+          <Button
+            mode="contained"
+            loading={busy}
+            disabled={busy}
+            onPress={() => {
+              autoCreateStarted.current = false;
+              setError(null);
+            }}
+            contentStyle={{ minHeight: TOUCH_TARGET }}
+          >
+            Try again
+          </Button>
+          <Button mode="text" onPress={() => setJoining(true)}>Join with a code</Button>
+        </View>
+      )}
+
+      <Button icon="logout" onPress={() => void signOut()} style={{ alignSelf: 'center' }}>Sign out</Button>
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  workspace: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: SPACING.md, padding: SPACING.md, borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth },
+  icon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  form: { gap: SPACING.md, marginTop: SPACING.sm },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+});
