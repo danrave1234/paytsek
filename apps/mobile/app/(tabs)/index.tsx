@@ -4,7 +4,7 @@ import React, { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Icon, IconButton, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Loading } from '@/components/ui';
+import { Loading, StateChip } from '@/components/ui';
 import { listDrafts, type Draft } from '@/lib/drafts';
 import { manilaTime, peso } from '@/lib/format';
 import { useHome, useRecords } from '@/lib/queries';
@@ -74,10 +74,36 @@ export default function Home() {
             <View style={[styles.savedIcon, { backgroundColor: theme.colors.secondary }]}>
               <Icon source="check" size={24} color={theme.colors.onSecondary} />
             </View>
-            <Text variant="titleLarge" style={{ flex: 1, color: theme.colors.onSecondaryContainer }}>{peso(savedAmount)}</Text>
-            <Text variant="labelLarge" style={{ color: theme.colors.onSecondaryContainer }}>Recorded</Text>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text variant="titleMedium" style={{ color: theme.colors.onSecondaryContainer }}>{peso(savedAmount)} saved</Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSecondaryContainer }}>Waiting for the payment-phone notification</Text>
+            </View>
           </View>
         ) : null}
+
+        {home.data ? (
+          <View style={[styles.totalCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
+            <View style={styles.totalHeader}>
+              <View style={{ gap: 2 }}>
+                <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>RECORDED TODAY</Text>
+                <Text variant="headlineMedium" style={styles.totalAmount}>{peso(home.data.today.recordedCentavos)}</Text>
+              </View>
+              <View style={[styles.totalIcon, { backgroundColor: theme.colors.primaryContainer }]}>
+                <Icon source="receipt-text-check-outline" size={24} color={theme.colors.primary} />
+              </View>
+            </View>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+              {home.data.today.recordedCount} payment{home.data.today.recordedCount === 1 ? '' : 's'} captured · verification shown below
+            </Text>
+            <View style={[styles.statusStrip, { borderTopColor: theme.colors.outlineVariant }]}>
+              {home.data.today.notificationMatchedCount > 0 ? <StateChip state="MATCHED_AUTO" compact /> : null}
+              {home.data.today.confirmedManuallyCount > 0 ? <StateChip state="CONFIRMED_MANUALLY" compact /> : null}
+              {home.data.today.unverifiedCount > 0 ? <StateChip state="UNVERIFIED" compact /> : null}
+              {home.data.today.reviewRequiredCount > 0 ? <StateChip state="REVIEW_REQUIRED" compact /> : null}
+              {home.data.today.recordedCount === 0 ? <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>No payments captured yet</Text> : null}
+            </View>
+          </View>
+        ) : home.isLoading ? <Loading variant="dashboard" label="Loading today’s records" /> : null}
 
         <Button
           mode="contained"
@@ -146,7 +172,7 @@ export default function Home() {
                       </View>
                       <View style={{ alignItems: 'flex-end', gap: 2 }}>
                         <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(item.at)}</Text>
-                        {item.kind === 'local' ? <Icon source="cellphone-check" size={16} color={theme.colors.secondary} /> : null}
+                        {item.kind === 'local' ? <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Syncing</Text> : <StateChip state={item.record.evidenceState} compact />}
                       </View>
                     </View>
                   </TouchableRipple>
@@ -165,6 +191,11 @@ const styles = StyleSheet.create({
   heading: { fontWeight: '700', letterSpacing: -0.8 },
   saved: { minHeight: 88, borderRadius: RADIUS.xl, padding: SPACING.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
   savedIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  totalCard: { borderRadius: RADIUS.xl, borderWidth: StyleSheet.hairlineWidth, padding: SPACING.lg, gap: SPACING.md },
+  totalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  totalAmount: { fontWeight: '700', letterSpacing: -0.9 },
+  totalIcon: { width: 48, height: 48, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
+  statusStrip: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: SPACING.md, flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
   compactStatus: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   attention: { minHeight: 60, borderRadius: RADIUS.lg, paddingHorizontal: SPACING.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   sectionHeading: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

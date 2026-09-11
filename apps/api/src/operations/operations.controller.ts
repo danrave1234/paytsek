@@ -25,10 +25,12 @@ export class OperationsService {
   /** Recorded-payment totals for "today" in the workspace timezone. Not wallet balance. */
   async home(orgId: string): Promise<HomeSummary> {
     const t = await this.db.one<{
-      matched_n: number; matched_c: string; manual_n: number; manual_c: string; unverified_n: number; unverified_c: string; review_n: number;
+      recorded_n: number; recorded_c: string; matched_n: number; matched_c: string; manual_n: number; manual_c: string; unverified_n: number; unverified_c: string; review_n: number;
     }>(
       `with day as (select (date_trunc('day', now() at time zone o.timezone) at time zone o.timezone) as start from organizations o where o.id = $1)
        select
+         count(*) filter (where evidence_state <> 'VOIDED')::int as recorded_n,
+         coalesce(sum(amount_centavos) filter (where evidence_state <> 'VOIDED'),0)::text as recorded_c,
          count(*) filter (where evidence_state in ('MATCHED_AUTO','MATCHED_BY_USER'))::int as matched_n,
          coalesce(sum(amount_centavos) filter (where evidence_state in ('MATCHED_AUTO','MATCHED_BY_USER')),0)::text as matched_c,
          count(*) filter (where evidence_state = 'CONFIRMED_MANUALLY')::int as manual_n,
@@ -52,6 +54,8 @@ export class OperationsService {
     );
     return {
       today: {
+        recordedCount: t?.recorded_n ?? 0,
+        recordedCentavos: Number(t?.recorded_c ?? 0),
         notificationMatchedCount: t?.matched_n ?? 0,
         notificationMatchedCentavos: Number(t?.matched_c ?? 0),
         confirmedManuallyCount: t?.manual_n ?? 0,
