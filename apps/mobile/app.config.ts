@@ -10,7 +10,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: 'paytsek',
   owner: 'danrave1234',
   scheme: 'paytsek',
-  version: '0.1.13',
+  version: '0.1.14',
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',
   backgroundColor: '#0C111D',
@@ -29,7 +29,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: 'ph.paytsek.app',
     // Must increase for every public APK so Android accepts it as an upgrade.
-    versionCode: 12,
+    versionCode: 13,
     adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#0B5FFF' },
     permissions: ['android.permission.CAMERA', 'android.permission.INTERNET', 'android.permission.POST_NOTIFICATIONS', 'android.permission.RECEIVE_BOOT_COMPLETED'],
     // Receive shared images from other apps (share sheet import).
