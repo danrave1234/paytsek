@@ -9,10 +9,7 @@ type RecordRow = { id: string; amountCentavos: number; currency: 'PHP'; evidence
 type Home = { today: { notificationMatchedCount: number; notificationMatchedCentavos: number; confirmedManuallyCount: number; confirmedManuallyCentavos: number; unverifiedCount: number; unverifiedCentavos: number; reviewRequiredCount: number }; collectors: Array<{ deviceId: string; label: string; sourceLabel: string; lastSeenAt: string | null; stale: boolean; notificationAccessGranted: boolean | null }>; quota: { monthlyAllowance: number; monthlyUsed: number; prepaidCreditsRemaining: number } };
 type Device = { id: string; label: string; platform: string; status: string; lastServerContactAt: string | null; appVersion: string | null };
 type Member = { userId: string; displayName: string; email: string | null; role: string; joinedAt: string };
-type Usage = { planCode: string; subscriptionStatus: string; managementPlatform: string | null; periodStart: string; periodEnd: string; monthlyAllowance: number; monthlyUsed: number; prepaidCreditsRemaining: number; limits: { scannerDevices: number; collectorDevices: number; receivingSources: number; members: number }; usage: { scannerDevices: number; collectorDevices: number; receivingSources: number; members: number } };
-type Product = { key: 'STARTER_30_DAYS' | 'BUSINESS_30_DAYS'; kind: 'SUBSCRIPTION'; planCode: 'STARTER' | 'BUSINESS'; records: number; priceCentavos: number };
-type Ledger = { id: string; at: string; kind: string; delta: number; reason: string | null };
-type DashboardData = { home: Home; records: RecordRow[]; devices: Device[]; members: Member[]; usage: Usage; products: Product[]; ledger: Ledger[] };
+type DashboardData = { home: Home; records: RecordRow[]; devices: Device[]; members: Member[] };
 
 const php = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' });
 const time = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
@@ -52,16 +49,13 @@ export function DashboardClient() {
   const loadWorkspace = useCallback(async (token: string, selectedId: string) => {
     setLoading(true); setMessage(null);
     try {
-      const [home, recordsResponse, devices, members, usage, products, ledger] = await Promise.all([
+      const [home, recordsResponse, devices, members] = await Promise.all([
         request<Home>('/v1/home', token, selectedId),
         request<{ items: RecordRow[] }>('/v1/records?limit=20', token, selectedId),
         request<Device[]>('/v1/devices', token, selectedId),
         request<Member[]>('/v1/workspaces/current/members', token, selectedId),
-        request<Usage>('/v1/billing/usage', token, selectedId),
-        request<Product[]>('/v1/billing/products', token, selectedId),
-        request<Ledger[]>('/v1/billing/ledger', token, selectedId).catch(() => []),
       ]);
-      setData({ home, records: recordsResponse.items, devices, members, usage, products, ledger });
+      setData({ home, records: recordsResponse.items, devices, members });
     } catch (error) { setData(null); setMessage(detailError(error)); }
     finally { setLoading(false); }
   }, [request]);
@@ -118,7 +112,7 @@ export function DashboardClient() {
 
   return <DashboardShell>
     <section className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-      <div><p className="eyebrow text-brand">Your workspace</p><h1 className="h-display mt-2 text-3xl sm:text-4xl">Payments, ready to reconcile.</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-ink-2">Records are evidence, not your wallet balance. Use this dashboard for a clean view of the day, team and billing.</p></div>
+      <div><p className="eyebrow text-brand">Public beta · free to use</p><h1 className="h-display mt-2 text-3xl sm:text-4xl">Payments, ready to reconcile.</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-ink-2">Records are evidence, not your wallet balance. Use this dashboard for a clean view of the day and team.</p></div>
       <div className="flex items-center gap-3"><select aria-label="Choose workspace" value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} className="max-w-[190px] rounded-xl border border-line bg-bg px-3 py-2.5 text-sm font-medium">{workspaces.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><button onClick={signOut} className="rounded-xl border border-line bg-bg px-3 py-2.5 text-sm font-medium text-ink-2 hover:text-ink">Sign out</button></div>
     </section>
     {message ? <p role="alert" className="mb-5 rounded-xl border border-danger/20 bg-danger-soft px-4 py-3 text-sm text-danger">{message}</p> : null}
@@ -152,7 +146,5 @@ function EmptyWorkspace({ creating, onCreate }: { creating: boolean; onCreate: (
 }
 function Panel({ title, action, children }: { title: string; action?: string; children: ReactNode }) { return <section className="card-raised p-5 sm:p-6"><div className="mb-4 flex items-start justify-between gap-3"><h2 className="text-base font-semibold tracking-[-.02em]">{title}</h2>{action ? <span className="text-xs text-ink-3">{action}</span> : null}</div>{children}</section>; }
 function Metric({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: 'ok' | 'brand' | 'warn' | 'plain' }) { const color = tone === 'ok' ? 'text-ok' : tone === 'brand' ? 'text-brand' : tone === 'warn' ? 'text-warn' : 'text-ink'; return <article className="card p-5"><p className="text-sm font-medium text-ink-2">{label}</p><p className={`data mt-5 text-2xl font-semibold ${color}`}>{value}</p><p className="mt-1 text-xs text-ink-3">{detail}</p></article>; }
-function Row({ label, value }: { label: string; value: string }) { return <div className="flex justify-between gap-4"><dt className="text-ink-2">{label}</dt><dd className="data text-right text-ink">{value}</dd></div>; }
 function Empty({ label }: { label: string }) { return <p className="py-5 text-sm text-ink-3">{label}</p>; }
 function stateLabel(state: string) { return state.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase()); }
-function shortDate(iso: string) { return new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso)); }
