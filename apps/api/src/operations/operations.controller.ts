@@ -10,6 +10,7 @@ import { AuditService } from '../db/audit.service';
 import { DbService } from '../db/db.service';
 import { StorageService } from '../db/storage.service';
 import { JobsService } from '../jobs/jobs.service';
+import { RECORD_SELECT, toSummary, type RecordRow } from '../records/records.rows';
 
 @Injectable()
 export class OperationsService {
@@ -47,6 +48,10 @@ export class OperationsService {
         where b.organization_id = $1 and b.status = 'ACTIVE' and d.status <> 'REVOKED'`,
       [orgId],
     );
+    const recent = await this.db.query<RecordRow>(
+      `${RECORD_SELECT} where r.organization_id = $1 order by r.created_at desc limit 6`,
+      [orgId],
+    );
     // The app contract still includes this legacy field, but beta never reads
     // a usage ledger or exposes a customer quota.
     const q = this.env.BETA_MODE
@@ -72,6 +77,7 @@ export class OperationsService {
         deviceId: c.id, label: c.label, sourceLabel: c.source_label, lastSeenAt: c.last?.toISOString() ?? null,
         stale: !c.last || Date.now() - c.last.getTime() > 10 * 60 * 1000, pendingUploadCount: c.pending, notificationAccessGranted: c.access,
       })),
+      recentRecords: recent.rows.map(toSummary),
       quota: { monthlyAllowance: q?.allowance ?? 0, monthlyUsed: q?.used ?? 0, prepaidCreditsRemaining: q?.credits ?? 0 },
     };
   }
