@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Ip, Module, Param, Post, Query } from '@nestjs/common';
-import { AcceptPairingRequest, ApprovePairingRequest, CollectorHealthReport, CreatePairingSessionRequest, DevicePlatform } from '@payrecord/contracts';
+import { AcceptPairingRequest, ApprovePairingRequest, CollectorHealthReport, CreatePairingSessionRequest, DevicePlatform } from '@paytsek/contracts';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { Collector, CollectorRoute, CurrentUser, Workspace, WorkspaceRoute } from '../auth/decorators';

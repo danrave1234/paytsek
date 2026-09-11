@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 /// staging container (share-inbox) and opens the main app, which drains the
 /// inbox on resume. No network, no OCR, no credentials in the extension.
 final class ShareViewController: UIViewController {
-  private let appGroup = (Bundle.main.object(forInfoDictionaryKey: "PayRecordAppGroup") as? String) ?? "group.ph.payrecord.app"
+  private let appGroup = (Bundle.main.object(forInfoDictionaryKey: "PayTsekAppGroup") as? String) ?? "group.ph.paytsek.app"
 
   override func viewDidLoad() {
     super.viewDidLoad()
@@ -43,7 +43,7 @@ final class ShareViewController: UIViewController {
   }
 
   private func openApp() {
-    guard let url = URL(string: "payrecord://scan?source=share") else { return }
+    guard let url = URL(string: "paytsek://scan?source=share") else { return }
     var responder: UIResponder? = self
     while let r = responder {
       if let app = r as? UIApplication { app.open(url); return }

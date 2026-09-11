@@ -1,8 +1,8 @@
 {
-  "name": "payrecord",
+  "name": "paytsek",
   "private": true,
   "version": "0.1.0",
-  "description": "PayRecord — scan a payment proof, keep an organized record, and match it with incoming-payment evidence from your receiving phone.",
+  "description": "PayTsek — scan a payment proof, keep an organized record, and match it with incoming-payment evidence from your receiving phone.",
   "packageManager": "pnpm@11.9.0",
   "engines": {
     "node": ">=20"
@@ -12,9 +12,9 @@
     "test": "pnpm -r --filter ./packages/** --filter ./apps/api run test",
     "typecheck": "pnpm -r run typecheck",
     "lint": "pnpm -r run lint",
-    "api:dev": "pnpm --filter @payrecord/api run start:dev",
-    "api:worker": "pnpm --filter @payrecord/api run worker",
-    "mobile:start": "pnpm --filter @payrecord/mobile run start",
+    "api:dev": "pnpm --filter @paytsek/api run start:dev",
+    "api:worker": "pnpm --filter @paytsek/api run worker",
+    "mobile:start": "pnpm --filter @paytsek/mobile run start",
     "db:migrate": "supabase db push",
     "db:migrate:direct": "node supabase/apply-migrations.mjs",
     "db:check": "node supabase/check-db.mjs",

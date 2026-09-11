@@ -1,4 +1,4 @@
-package ph.payrecord.ocr
+package ph.paytsek.ocr
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory

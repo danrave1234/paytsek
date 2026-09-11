@@ -1,6 +1,7 @@
 import { Controller, ForbiddenException, Get, Headers, Query } from '@nestjs/common';
 import { loadEnv } from '../config/env';
 import { WorkerService } from './worker.service';
+import { BillingService } from '../billing/billing.service';
 
 /**
  * Serverless entrypoint for the background worker.
@@ -20,7 +21,7 @@ import { WorkerService } from './worker.service';
 export class CronController {
   private readonly env = loadEnv();
 
-  constructor(private readonly worker: WorkerService) {}
+  constructor(private readonly worker: WorkerService, private readonly billing: BillingService) {}
 
   private authorize(header: string | undefined): void {
     const secret = this.env.CRON_SECRET;
@@ -43,6 +44,7 @@ export class CronController {
   @Get('maintenance')
   async maintenance(@Headers('authorization') authorization: string | undefined): Promise<{ ok: true }> {
     this.authorize(authorization);
+    await this.billing.expireEndedAccess();
     await this.worker.enqueueMaintenance();
     return { ok: true };
   }

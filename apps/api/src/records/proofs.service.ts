@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { InitProofUploadRequest, InitProofUploadResponse } from '@payrecord/contracts';
+import type { InitProofUploadRequest, InitProofUploadResponse } from '@paytsek/contracts';
 import { ApiException } from '../common/errors';
 import { loadEnv } from '../config/env';
 import { DbService, isUniqueViolation } from '../db/db.service';

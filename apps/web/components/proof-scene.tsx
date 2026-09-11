@@ -1,6 +1,6 @@
 /**
  * The product in one image: the confirmation screen a customer shows you, and
- * the record PayRecord files after checking it against your own phone's
+ * the record PayTsek files after checking it against your own phone's
  * notification. Drawn in HTML so it stays sharp and stays in sync with the copy.
  */
 

@@ -1,7 +1,7 @@
 {
   "platforms": ["android", "apple"],
   "android": {
-    "modules": ["ph.payrecord.ocr.ReceiptOcrModule"]
+    "modules": ["ph.paytsek.ocr.ReceiptOcrModule"]
   },
   "apple": {
     "modules": ["ReceiptOcrModule"]

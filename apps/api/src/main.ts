@@ -1,14 +1,16 @@
 import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { API_VERSION_HEADER, WORKSPACE_HEADER, IDEMPOTENCY_HEADER } from '@payrecord/contracts';
+import { API_VERSION_HEADER, WORKSPACE_HEADER, IDEMPOTENCY_HEADER } from '@paytsek/contracts';
 import { AppModule } from './app.module';
 import { ApiExceptionFilter } from './common/errors';
 import { loadEnv } from './config/env';
 
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
-  const app = await NestFactory.create(AppModule, { logger: ['log', 'warn', 'error'] });
+  // Retain raw request bytes for PayMongo HMAC verification. JSON is still
+  // parsed normally for every other route.
+  const app = await NestFactory.create(AppModule, { logger: ['log', 'warn', 'error'], rawBody: true });
   app.useGlobalFilters(new ApiExceptionFilter());
   const origins = env.API_CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean);
   app.enableCors({
@@ -17,7 +19,7 @@ async function bootstrap(): Promise<void> {
   });
   app.enableShutdownHooks();
   await app.listen(env.API_PORT);
-  new Logger('Bootstrap').log(`PayRecord API listening on ${env.API_PUBLIC_URL} (port ${env.API_PORT})`);
+  new Logger('Bootstrap').log(`PayTsek API listening on ${env.API_PUBLIC_URL} (port ${env.API_PORT})`);
 }
 
 bootstrap().catch((e) => {

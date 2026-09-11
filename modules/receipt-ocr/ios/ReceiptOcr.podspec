@@ -5,8 +5,8 @@ Pod::Spec.new do |s|
   s.name           = 'ReceiptOcr'
   s.version        = package['version']
   s.summary        = package['description']
-  s.author         = 'PayRecord'
-  s.homepage       = 'https://payrecord.ph'
+  s.author         = 'PayTsek'
+  s.homepage       = 'https://www.paytsek.online'
   s.license        = 'UNLICENSED'
   s.platforms      = { :ios => '16.0' }
   s.swift_version  = '5.9'

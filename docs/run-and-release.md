@@ -1,6 +1,6 @@
 # Run on your phone, build APKs, publish releases, deploy the website
 
-Everything below assumes the repo root `pay_record/` and that `.env` and
+Everything below assumes the repo root `paytsek/` and that `.env` and
 `apps/mobile/.env` are filled in (Supabase URL/keys — already done).
 
 ## 1. Run the app on your Android phone (development)
@@ -31,11 +31,11 @@ npx expo run:android --device             # compiles, installs, starts Metro
 In another two terminals: `pnpm api:dev` and `pnpm api:worker`.
 
 After the first install you only need `npx expo start --dev-client` and open
-the PayRecord app on the phone. Re-run `expo run:android` when native code /
+the PayTsek app on the phone. Re-run `expo run:android` when native code /
 config plugins change.
 
 On the receiving phone: Android Settings → Notifications → *Notification
-access* → allow **PayRecord**, then in the app go to Sources and enable GCash.
+access* → allow **PayTsek**, then in the app go to Sources and enable GCash.
 
 ### No USB cable? Build a dev APK in the cloud
 ```powershell
@@ -58,7 +58,7 @@ to your deployed API URL (see §5) before sharing builds outside your LAN.
 ## 3. Automatic GitHub Releases (APK attached)
 
 `.github/workflows/release-android.yml` builds on EAS and attaches
-`PayRecord-vX.Y.Z.apk` to a GitHub Release whenever you push a `v*` tag. The
+`PayTsek-vX.Y.Z.apk` to a GitHub Release whenever you push a `v*` tag. The
 website's Download page links to the *latest* release automatically.
 
 ### Add these repository secrets once
@@ -81,7 +81,7 @@ GitHub → repo → Settings → Secrets and variables → Actions:
    git push origin main --tags
    ```
 3. Watch Actions → *Release Android APK*. When green, the APK is at
-   https://github.com/danrave1234/pay_record/releases/latest.
+   https://github.com/danrave1234/paytsek/releases/latest.
 
 Keep the same keystore forever: Android only allows in-place updates when the
 signing key matches. Back up `apps/mobile/credentials/android-upload.jks` and
@@ -89,25 +89,25 @@ signing key matches. Back up `apps/mobile/credentials/android-upload.jks` and
 
 ## 4. Website on Vercel
 
-Project: **payrecord-web** (team `danrave1234s-projects`), GitHub repo
-connected. Live at https://payrecord-web.vercel.app.
+Project: **paytsek-web** (team `danrave1234s-projects`), GitHub repo
+connected. Live at https://paytsek-web.vercel.app.
 
 - Manual deploy anytime: `cd apps\web; vercel deploy --prod`.
-- Git auto-deploys: in the Vercel dashboard → payrecord-web → Settings →
+- Git auto-deploys: in the Vercel dashboard → paytsek-web → Settings →
   General → **Root Directory = `apps/web`** (one-time; the CLI cannot set it).
   After that every push to `main` deploys production and PRs get previews.
 - Optional env vars (Settings → Environment Variables):
   `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_PLAY_STORE_URL`,
   `NEXT_PUBLIC_APP_STORE_URL`, `NEXT_PUBLIC_TESTFLIGHT_URL`,
   `NEXT_PUBLIC_ANDROID_APK_URL` (defaults to the latest GitHub release).
-- Custom domain: Settings → Domains → add `payrecord.ph`, then set
-  `NEXT_PUBLIC_SITE_URL=https://payrecord.ph`.
+- Custom domain: Settings → Domains → add `paytsek.ph`, then set
+  `NEXT_PUBLIC_SITE_URL=https://paytsek.ph`.
 
 ## 5. API for phones outside your Wi‑Fi
 
 The NestJS API (`apps/api`) is a long-running Node process + worker, so it
 does not fit Vercel functions. Deploy it to Railway / Render / Fly.io:
-Dockerfile-less Node service, build `pnpm --filter @payrecord/api build`, start
+Dockerfile-less Node service, build `pnpm --filter @paytsek/api build`, start
 `node apps/api/dist/main.js` (and a second service for `dist/worker.js`), with
 the variables from `.env.example`. Then set `EXPO_PUBLIC_API_URL` in
 `apps/mobile/eas.json` (`preview`/`production`) to that URL and rebuild.

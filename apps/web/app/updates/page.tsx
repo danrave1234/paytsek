@@ -4,7 +4,7 @@ import { PageHeader } from '@/components/page-header';
 import { PROVIDER_SUPPORT } from '@/lib/providers';
 import { RELEASES } from '@/lib/releases';
 
-export const metadata: Metadata = { title: 'Updates', description: 'PayRecord release notes and what changed in each version.' };
+export const metadata: Metadata = { title: 'Updates', description: 'PayTsek release notes and what changed in each version.' };
 
 export default function Updates() {
   const newest = RELEASES[0]!;
@@ -120,7 +120,7 @@ export default function Updates() {
 
       <p className="mt-4 border-t border-line pt-8 text-[13.5px] leading-7 text-ink-3 sm:pl-28">
         Android builds are attached to every{' '}
-        <a className="ul" href="https://github.com/danrave1234/pay_record/releases" rel="noreferrer">
+        <a className="ul" href="https://github.com/danrave1234/paytsek/releases" rel="noreferrer">
           GitHub release
         </a>
         .

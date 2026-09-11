@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable, SetMetadata } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { WORKSPACE_HEADER, type MembershipRole } from '@payrecord/contracts';
+import { WORKSPACE_HEADER, type MembershipRole } from '@paytsek/contracts';
 import type { Request } from 'express';
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import { ApiException } from '../common/errors';

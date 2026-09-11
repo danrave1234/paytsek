@@ -13,7 +13,7 @@ const env = Object.fromEntries(
   }),
 );
 const { SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, API_PUBLIC_URL } = env;
-const email = 'smoke-test@payrecord.local';
+const email = 'smoke-test@paytsek.local';
 const password = 'Smoke-Test-Passw0rd!';
 
 const admin = { apikey: SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' };

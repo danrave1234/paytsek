@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { CreateWorkspaceRequest, InviteMemberRequest, MemberSummary, UpdateMemberRequest, WorkspaceSummary } from '@payrecord/contracts';
+import type { CreateWorkspaceRequest, InviteMemberRequest, MemberSummary, UpdateMemberRequest, WorkspaceSummary } from '@paytsek/contracts';
 import { ApiException } from '../common/errors';
 import { generateInviteToken, hashSecret } from '../auth/credentials';
 import { AuditService } from '../db/audit.service';

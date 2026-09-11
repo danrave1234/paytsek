@@ -24,7 +24,7 @@ export class DbService implements OnModuleDestroy {
       connectionString: env.DATABASE_URL,
       max: serverless ? 1 : env.DATABASE_POOL_MAX,
       idleTimeoutMillis: serverless ? 10_000 : undefined,
-      application_name: 'payrecord-api',
+      application_name: 'paytsek-api',
       statement_timeout: 15_000,
     });
   }

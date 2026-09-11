@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Module, Param, Patch, Post, Query } from '@nestjs/common';
-import { CorrectRecordRequest, CreateRecordRequest, FinalizeProofUploadRequest, InitProofUploadRequest, ListRecordsQuery, VoidRecordRequest } from '@payrecord/contracts';
+import { CorrectRecordRequest, CreateRecordRequest, FinalizeProofUploadRequest, InitProofUploadRequest, ListRecordsQuery, VoidRecordRequest } from '@paytsek/contracts';
 import { z } from 'zod';
 import { CurrentUser, Workspace, WorkspaceRoute } from '../auth/decorators';
 import { OwnerOnly, type AuthUser, type WorkspaceContext } from '../auth/guards';

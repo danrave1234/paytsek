@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "node",
+  "buildCommand": "pnpm --filter @paytsek/contracts run build && pnpm --filter @paytsek/receipt-parsers run build",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "functions": {
+    "api/index.ts": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
+  "rewrites": [{ "source": "/:path*", "destination": "/api?paytsek_path=/:path*" }],
+  "crons": [{ "path": "/v1/internal/cron/maintenance", "schedule": "0 3 * * *" }]
+}

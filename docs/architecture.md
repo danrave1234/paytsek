@@ -32,7 +32,7 @@
 
 ## Trust boundaries
 
-- **Mobile ↔ API**: user JWT (Supabase Auth, HS256 verified server-side) + explicit `x-payrecord-workspace`. Membership/role resolved per request; `@OwnerOnly()` on management routes.
+- **Mobile ↔ API**: user JWT (Supabase Auth, HS256 verified server-side) + explicit `x-paytsek-workspace`. Membership/role resolved per request; `@OwnerOnly()` on management routes.
 - **Collector ↔ API**: `Authorization: Collector prc_…`. Only `/v1/collector/*`. Source identity comes from `device_bindings`, never from the payload. Revocation clears the hash → 401 `COLLECTOR_CREDENTIAL_REVOKED`.
 - **Mobile ↔ Supabase**: anon key + user JWT, **read-only** RLS on `organizations, memberships, payment_sources, devices (minus credential_hash), payment_records, payment_matches`; `notification_events` owner-only. All writes go through the API. Storage buckets are private; only API-signed URLs.
 - **API ↔ Supabase**: service role, server only.

@@ -12,10 +12,8 @@ import { useReducedMotion } from '@/components/motion';
  */
 const TABS = [
   { name: 'index', title: 'Home', icon: 'home-variant', iconOutline: 'home-variant-outline' },
-  { name: 'records', title: 'Records', icon: 'file-document-multiple', iconOutline: 'file-document-multiple-outline' },
-  { name: 'scan', title: 'Scan', icon: 'line-scan', iconOutline: 'line-scan', primary: true },
-  { name: 'review', title: 'Review', icon: 'clipboard-search', iconOutline: 'clipboard-search-outline' },
-  { name: 'settings', title: 'More', icon: 'dots-horizontal-circle', iconOutline: 'dots-horizontal-circle-outline' },
+  { name: 'scan', title: 'Scan proof', icon: 'line-scan', iconOutline: 'line-scan', primary: true },
+  { name: 'settings', title: 'Settings', icon: 'cog', iconOutline: 'cog-outline' },
 ] as const;
 
 export default function TabsLayout() {
@@ -31,6 +29,7 @@ export default function TabsLayout() {
       screenOptions={{
         animation: reducedMotion ? 'none' : 'fade',
         headerShown: false,
+        sceneStyle: { backgroundColor: theme.colors.background },
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
         tabBarStyle: {
@@ -79,6 +78,8 @@ export default function TabsLayout() {
           }}
         />
       ))}
+      <Tabs.Screen name="records" options={{ href: null }} />
+      <Tabs.Screen name="review" options={{ href: null }} />
     </Tabs>
   );
 }
