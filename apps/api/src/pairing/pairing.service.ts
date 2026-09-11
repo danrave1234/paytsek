@@ -7,7 +7,7 @@ import type {
   CreatePairingSessionResponse,
   DeviceSummary,
   Provider,
-} from '@payrecord/contracts';
+} from '@paytsek/contracts';
 import { generateCollectorCredential, generatePairingCode, hashSecret, normalizePairingCode } from '../auth/credentials';
 import { ApiException } from '../common/errors';
 import { loadEnv } from '../config/env';
@@ -56,7 +56,7 @@ export class PairingService {
     return {
       pairingSessionId: r.rows[0]!.id,
       code,
-      qrPayload: `payrecord://pair?c=${encodeURIComponent(code)}`,
+      qrPayload: `paytsek://pair?c=${encodeURIComponent(code)}`,
       expiresAt: expiresAt.toISOString(),
     };
   }

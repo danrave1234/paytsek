@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm --filter @payrecord/contracts run build && pnpm --filter @payrecord/receipt-parsers run build",
+  "buildCommand": "pnpm --filter @paytsek/contracts run build && pnpm --filter @paytsek/receipt-parsers run build",
   "installCommand": "pnpm install",
   "functions": {
     "api/index.ts": {
@@ -9,8 +9,5 @@
     }
   },
   "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
-  "crons": [
-    { "path": "/v1/internal/cron/drain", "schedule": "* * * * *" },
-    { "path": "/v1/internal/cron/maintenance", "schedule": "0 * * * *" }
-  ]
+  "crons": [{ "path": "/v1/internal/cron/maintenance", "schedule": "0 3 * * *" }]
 }

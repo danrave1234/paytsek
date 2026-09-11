@@ -4,20 +4,26 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { CaptureSurface } from '@/components/capture-surface';
-import { AppState, Image, Platform, StyleSheet, View } from 'react-native';
-import { Button, Chip, Divider, Menu, Text, TextInput, useTheme } from 'react-native-paper';
+import { ActivityIndicator, AppState, Image, StyleSheet, View } from 'react-native';
+import { Button, IconButton, TextInput, useTheme } from 'react-native-paper';
 import { ReceiptOcr } from 'receipt-ocr';
-import { Loading, Notice, Screen, ScreenTitle, SyncChip } from '@/components/ui';
+import { CaptureSurface } from '@/components/capture-surface';
+import { Notice, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
 import { newId } from '@/lib/device';
 import { saveDraft, stageImage, syncDraft, type Draft } from '@/lib/drafts';
-import { peso } from '@/lib/format';
 import { useInvalidateRecord, useSources } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TOUCH_TARGET } from '@/theme';
 
 type Stage = 'capture' | 'processing' | 'review' | 'saved';
+
+function namespaceFor(fields: ReceiptFields) {
+  if (fields.receiptProvider === 'GOTYME') return 'GOTYME_REF_NO' as const;
+  if (fields.receiptProvider === 'MAYA') return 'MAYA_REF_NO' as const;
+  if (fields.receiptProvider === 'MARIBANK') return 'MARIBANK_REF_NO' as const;
+  return 'GCASH_REF_NO' as const;
+}
 
 export default function Scan() {
   const theme = useTheme();
@@ -26,9 +32,8 @@ export default function Scan() {
   const { workspace } = useSession();
   const sources = useSources();
   const invalidate = useInvalidateRecord();
-  const [perm, requestPerm] = useCameraPermissions();
+  const [permission, requestPermission] = useCameraPermissions();
   const [camera, setCamera] = useState<CameraView | null>(null);
-
   const [stage, setStage] = useState<Stage>('capture');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [origin, setOrigin] = useState<CaptureOrigin>('CAMERA');
@@ -36,14 +41,17 @@ export default function Scan() {
   const [ocrText, setOcrText] = useState('');
   const [fields, setFields] = useState<ReceiptFields | null>(null);
   const [amountText, setAmountText] = useState('');
-  const [customer, setCustomer] = useState('');
-  const [note, setNote] = useState('');
   const [sourceId, setSourceId] = useState<string | null>(null);
-  const [menu, setMenu] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<Draft | null>(null);
   const [focused, setFocused] = useState(false);
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
+  const [torch, setTorch] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const saveLock = useRef(false);
+  const operation = useRef(false);
+
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       setForeground(state === 'active');
@@ -51,83 +59,45 @@ export default function Scan() {
     });
     return () => subscription.remove();
   }, []);
-  const [torch, setTorch] = useState(false);
-  const [cameraReady, setCameraReady] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const saveLock = useRef(false);
-  const operation = useRef(false);
+
   useFocusEffect(useCallback(() => {
     setFocused(true);
     return () => { setFocused(false); setTorch(false); setCameraReady(false); };
   }, []));
 
   useEffect(() => {
-    if (!sourceId && sources.data?.length) setSourceId(sources.data.find((s) => s.isDefault)?.id ?? sources.data[0]!.id);
-  }, [sources.data, sourceId]);
-
-  // Share-sheet arrivals (iOS App Group inbox / Android SEND intent URI).
-  useEffect(() => {
-    if (params.source === 'share') {
-      void (async () => {
-        if (params.uri) return process(params.uri, 'SHARE_SHEET');
-        const shared = await ReceiptOcr.drainSharedInbox();
-        if (shared[0]) await process(shared[0].uri, 'SHARE_SHEET');
-      })();
+    if (!sourceId && sources.data?.length) {
+      setSourceId(sources.data.find((source) => source.isDefault)?.id ?? sources.data[0]!.id);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.source, params.uri]);
+  }, [sourceId, sources.data]);
 
-  const process = useCallback(async (uri: string, from: CaptureOrigin) => {
-    setStage('processing'); setError(null); setOrigin(from);
-    try {
-      const clean = await ReceiptOcr.stripMetadata(uri, 0.92);
-      setImageUri(clean.uri);
-      const ocr = await ReceiptOcr.recognize(clean.uri);
-      setOcrText(ocr.fullText);
-      const ex = extractReceiptFields(ocr.fullText);
-      setExtraction(ex);
-      setFields(ex.fields);
-      setAmountText(ex.fields.amountCentavos ? (ex.fields.amountCentavos / 100).toFixed(2) : '');
-      setStage('review');
-    } catch (e) {
-      setError(`Could not read this image: ${(e as Error).message}`);
-      setStage('capture');
-    }
+  const reset = useCallback(() => {
+    setStage('capture');
+    setImageUri(null);
+    setExtraction(null);
+    setFields(null);
+    setAmountText('');
+    setSaved(null);
+    setError(null);
+    saveLock.current = false;
   }, []);
 
-  const capture = async () => {
-    if (!camera || !cameraReady || operation.current) return;
-    operation.current = true; setBusy(true);
-    try {
-      const photo = await camera.takePictureAsync({ quality: 0.9, skipProcessing: false });
-      if (photo?.uri) await process(photo.uri, 'CAMERA');
-    } catch (e) { setError(`Could not capture receipt: ${(e as Error).message}`); }
-    finally { operation.current = false; setBusy(false); }
-  };
+  const persist = useCallback(async (
+    receipt: ReceiptExtraction,
+    uri: string,
+    from: CaptureOrigin,
+    corrected: ReceiptFields = receipt.fields,
+    rawOcrText: string = ocrText,
+  ) => {
+    const activeSourceId = sourceId ?? sources.data?.find((source) => source.isDefault)?.id ?? sources.data?.[0]?.id;
+    if (!workspace || !activeSourceId || !corrected.amountCentavos || saveLock.current) return false;
 
-  const pick = async () => {
-    if (operation.current) return;
-    operation.current = true; setBusy(true);
-    try {
-      const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
-      if (!res.canceled && res.assets[0]) await process(res.assets[0].uri, 'IMAGE_IMPORT');
-    } catch (e) { setError(`Could not import image: ${(e as Error).message}`); }
-    finally { operation.current = false; setBusy(false); }
-  };
-
-  const reset = () => { setStage('capture'); setImageUri(null); setExtraction(null); setFields(null); setAmountText(''); setCustomer(''); setNote(''); setSaved(null); setError(null); };
-
-  const save = async () => {
-    if (!workspace || !fields || !sourceId || !extraction || saveLock.current) return;
-    const money = parseMoneyExact(amountText.trim());
-    if (!money) return setError('Enter the amount received exactly as printed, e.g. 1,250.00');
-    saveLock.current = true; setSaving(true);
+    saveLock.current = true;
     setError(null);
     const clientRecordId = newId();
-    const corrected = { ...fields, amountCentavos: money.centavos, currency: 'PHP' as const };
     try {
-      const stagedUri = imageUri ? await stageImage(imageUri, clientRecordId, 'jpg') : null;
+      const stagedUri = await stageImage(uri, clientRecordId, 'jpg');
+      const finalFields = { ...corrected, amountCentavos: corrected.amountCentavos, currency: 'PHP' as const };
       const draft = await saveDraft({
         clientRecordId,
         workspaceId: workspace.id,
@@ -135,107 +105,203 @@ export default function Scan() {
         contentType: 'image/jpeg',
         request: {
           clientRecordId,
-          sourceId,
+          sourceId: activeSourceId,
           proofId: null,
-          captureOrigin: origin,
+          captureOrigin: from,
           capturedAt: new Date().toISOString(),
           appVersion: APP_VERSION,
-          receiptParserId: extraction.parserId,
-          receiptParserVersion: extraction.parserVersion,
-          ocr: { engine: 'MLKIT_TEXT_V2', engineVersion: 'mlkit', fullText: ocrText.slice(0, 20000), blocks: [], readabilityScore: extraction.readabilityScore },
-          extracted: extraction.fields,
-          corrected,
+          receiptParserId: receipt.parserId,
+          receiptParserVersion: receipt.parserVersion,
+          ocr: {
+            engine: 'MLKIT_TEXT_V2',
+            engineVersion: 'mlkit',
+            fullText: rawOcrText.slice(0, 20000),
+            blocks: [],
+            readabilityScore: receipt.readabilityScore,
+          },
+          extracted: receipt.fields,
+          corrected: finalFields,
           editedFields: [],
-          customerLabel: customer || null,
-          note: note || null,
+          customerLabel: null,
+          note: null,
         },
       });
+
+      // Local persistence is success. Navigation never waits for image upload,
+      // record creation, matching, or any other backend acknowledgement.
       setSaved(draft);
       setStage('saved');
-      const status = await syncDraft(draft);
-      setSaved({ ...draft, syncStatus: status, quotaBlocked: status === 'LOCAL_DRAFT' && draft.quotaBlocked });
-      invalidate();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      saveLock.current = false; setSaving(false);
+      router.replace({ pathname: '/(tabs)', params: { savedAmount: String(finalFields.amountCentavos) } });
+      void syncDraft(draft).then(() => invalidate()).catch(() => undefined);
+      return true;
+    } catch (saveError) {
+      saveLock.current = false;
+      setError((saveError as Error).message);
+      return false;
     }
+  }, [invalidate, ocrText, router, sourceId, sources.data, workspace]);
+
+  const processImage = useCallback(async (uri: string, from: CaptureOrigin, automatic = false) => {
+    if (!automatic) setStage('processing');
+    setImageUri(uri);
+    setError(null);
+    setOrigin(from);
+    try {
+      const clean = await ReceiptOcr.stripMetadata(uri, 0.92);
+      setImageUri(clean.uri);
+      const ocr = await ReceiptOcr.recognize(clean.uri);
+      setOcrText(ocr.fullText);
+      const receipt = extractReceiptFields(ocr.fullText);
+      setExtraction(receipt);
+      setFields(receipt.fields);
+      setAmountText(receipt.fields.amountCentavos ? (receipt.fields.amountCentavos / 100).toFixed(2) : '');
+
+      const confident = Boolean(
+        receipt.fields.amountCentavos
+        && receipt.fields.referenceValue
+        && receipt.fields.receiptProvider
+        && receipt.fields.receiptStatus !== 'FAILED'
+        && receipt.fields.receiptStatus !== 'PENDING',
+      );
+      const sourceAvailable = Boolean(sourceId ?? sources.data?.[0]?.id);
+      if (confident && sourceAvailable && await persist(receipt, clean.uri, from, receipt.fields, ocr.fullText)) return;
+      if (automatic && (!confident || sourceAvailable)) {
+        reset();
+        return;
+      }
+      setStage('review');
+    } catch {
+      if (automatic) {
+        reset();
+        return;
+      }
+      setError('Could not read the proof. Try again or import a screenshot.');
+      setStage('capture');
+    }
+  }, [persist, reset, sourceId, sources.data]);
+
+  useEffect(() => {
+    if (params.source !== 'share') return;
+    void (async () => {
+      if (params.uri) return processImage(params.uri, 'SHARE_SHEET');
+      const shared = await ReceiptOcr.drainSharedInbox();
+      if (shared[0]) await processImage(shared[0].uri, 'SHARE_SHEET');
+    })();
+  }, [params.source, params.uri, processImage]);
+
+  const capture = useCallback(async (automatic = false) => {
+    if (!camera || !cameraReady || operation.current) return;
+    operation.current = true;
+    setBusy(true);
+    try {
+      const photo = await camera.takePictureAsync({ quality: 0.9, skipProcessing: false });
+      if (photo?.uri) await processImage(photo.uri, 'CAMERA', automatic);
+    } catch {
+      if (!automatic) setError('Could not capture the proof.');
+    } finally {
+      operation.current = false;
+      setBusy(false);
+    }
+  }, [camera, cameraReady, processImage]);
+
+  const pick = useCallback(async () => {
+    if (operation.current) return;
+    operation.current = true;
+    setBusy(true);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
+      if (!result.canceled && result.assets[0]) await processImage(result.assets[0].uri, 'IMAGE_IMPORT');
+    } catch {
+      setError('Could not import the image.');
+    } finally {
+      operation.current = false;
+      setBusy(false);
+    }
+  }, [processImage]);
+
+  const saveReview = async () => {
+    if (!fields || !extraction || !imageUri) return;
+    const amount = parseMoneyExact(amountText.trim());
+    if (!amount) return setError('Check the amount.');
+    const corrected: ReceiptFields = { ...fields, amountCentavos: amount.centavos, currency: 'PHP' };
+    await persist(extraction, imageUri, origin, corrected);
   };
 
-  if (stage === 'processing') return <Screen scroll={false} tabbed><Loading variant="progress" label="Reading receipt on this phone…" /></Screen>;
-
-  if (stage === 'saved' && saved) {
+  if (stage === 'processing') {
     return (
-      <Screen tabbed>
-        <ScreenTitle title="Saved" subtitle="Your payment record is ready" />
-        <SyncChip status={saved.syncStatus} quotaBlocked={saved.quotaBlocked} />
-        <Notice kind="info">
-          Record saved as Unverified. Saving is not payment verification — matching happens on the server when a notification from your payment phone agrees.
-        </Notice>
-        {saved.quotaBlocked ? <Notice kind="warning">Monthly record allowance reached. This scan is kept as a local draft and will sync after the owner tops up or the month resets.</Notice> : null}
-        {saved.lastError && !saved.quotaBlocked ? <Notice kind="warning">{saved.lastError}</Notice> : null}
-        <Button mode="contained" onPress={reset} style={{ minHeight: TOUCH_TARGET }}>Scan another</Button>
-        <Button onPress={() => router.push('/(tabs)/records')}>Go to records</Button>
+      <Screen scroll={false} tabbed style={styles.processingPage}>
+        {imageUri ? <Image source={{ uri: imageUri }} style={styles.processingImage} resizeMode="contain" accessibilityLabel="Captured payment proof" /> : null}
+        <View style={[styles.processingIndicator, { backgroundColor: theme.colors.surface }]}>
+          <ActivityIndicator color={theme.colors.primary} />
+        </View>
       </Screen>
     );
   }
 
+  if (stage === 'saved' && saved) {
+    return <Screen scroll={false} tabbed style={styles.center}><ActivityIndicator color={theme.colors.primary} /></Screen>;
+  }
+
   if (stage === 'review' && fields && extraction) {
-    const selected = sources.data?.find((s) => s.id === sourceId);
-    const low = extraction.readabilityScore < 0.6;
     return (
       <Screen tabbed>
-        <ScreenTitle title="Check the receipt" subtitle="Confirm the details before saving" />
-        {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="contain" accessibilityLabel="Captured receipt" /> : null}
-        {low ? <Notice kind="warning">Low readability — please check every field. Missing values are left blank, never guessed.</Notice> : null}
-        {extraction.warnings.map((w) => <Notice key={w} kind="info">{w}</Notice>)}
-        {fields.receiptStatus === 'FAILED' || fields.receiptStatus === 'PENDING' ? <Notice kind="error">This receipt shows status {fields.receiptStatus}. It can be recorded but will not auto-match.</Notice> : null}
-
-        {(sources.data?.length ?? 0) > 1 ? (
-          <Menu visible={menu} onDismiss={() => setMenu(false)} anchor={<Button mode="outlined" onPress={() => setMenu(true)} icon="cellphone-message" style={{ minHeight: TOUCH_TARGET }}>{selected ? `${selected.provider} on main phone` : 'Choose payment source'}</Button>}>
-            {sources.data?.map((s) => <Menu.Item key={s.id} leadingIcon={s.id === sourceId ? 'check-circle' : 'cellphone-message'} titleStyle={s.id === sourceId ? { color: theme.colors.primary, fontWeight: '700' } : undefined} title={`${s.provider} notifications on main phone`} onPress={() => { setSourceId(s.id); setMenu(false); }} />)}
-          </Menu>
-        ) : selected ? <Notice kind="info">Using {selected.provider} notifications from the main payment phone.</Notice> : null}
-
-        <TextInput label="Amount received (PHP)" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} right={<TextInput.Affix text="₱" />} />
-        {fields.feeCentavos !== null || fields.totalChargedCentavos !== null ? (
-          <Text variant="bodySmall" style={{ opacity: 0.7 }}>
-            Receipt shows fee {fields.feeCentavos !== null ? peso(fields.feeCentavos) : '—'} · total charged {fields.totalChargedCentavos !== null ? peso(fields.totalChargedCentavos) : '—'} (kept separate from the amount received).
-          </Text>
-        ) : null}
-        <TextInput label="Reference number" mode="outlined" value={fields.referenceValue ?? ''} onChangeText={(v) => setFields({ ...fields, referenceValue: v || null, referenceNamespace: v ? (fields.referenceNamespace ?? (fields.receiptProvider === 'GOTYME' ? 'GOTYME_REF_NO' : fields.receiptProvider === 'MAYA' ? 'MAYA_REF_NO' : 'GCASH_REF_NO')) : null })} autoCapitalize="characters" />
-        <TextInput label="Sender (payer) name — as printed" mode="outlined" value={fields.payerName ?? ''} onChangeText={(v) => setFields({ ...fields, payerName: v || null })} />
-        <TextInput label="Recipient (you) — as printed" mode="outlined" value={fields.payeeName ?? ''} onChangeText={(v) => setFields({ ...fields, payeeName: v || null })} />
-        <View style={{ flexDirection: 'row', gap: SPACING.sm, flexWrap: 'wrap' }}>
-          <Chip icon="bank">{fields.receiptProvider ?? 'Provider unknown'}</Chip>
-          <Chip icon="swap-horizontal">{fields.paymentRail ?? 'Rail unknown'}</Chip>
-          <Chip icon="clock-outline">{fields.receiptTransactionAt ? `Time: ${fields.receiptTransactionPrecision.toLowerCase()} precision` : 'No time on receipt'}</Chip>
-        </View>
-        <Divider />
-        <TextInput label="Customer (optional)" mode="outlined" value={customer} onChangeText={setCustomer} />
-        <TextInput label="Order / note (optional)" mode="outlined" value={note} onChangeText={setNote} />
+        <ScreenTitle title="Check details" />
+        {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="contain" accessibilityLabel="Captured payment proof" /> : null}
+        {!fields.amountCentavos || !fields.referenceValue ? <Notice kind="warning">One detail needs attention.</Notice> : null}
+        <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} right={<TextInput.Affix text="₱" />} />
+        <TextInput
+          label="Reference number"
+          mode="outlined"
+          value={fields.referenceValue ?? ''}
+          onChangeText={(value) => setFields({
+            ...fields,
+            referenceValue: value || null,
+            referenceNamespace: value ? (fields.referenceNamespace ?? namespaceFor(fields)) : null,
+          })}
+          autoCapitalize="characters"
+        />
         {error ? <Notice kind="error">{error}</Notice> : null}
-        <Button mode="contained" onPress={() => void save()} loading={saving} disabled={!sourceId || saving} style={{ minHeight: TOUCH_TARGET }}>Save record</Button>
+        {!sourceId && !sources.data?.length ? (
+          <Button mode="contained" onPress={() => router.push('/settings/sources')}>Add payment source</Button>
+        ) : (
+          <Button mode="contained" onPress={() => void saveReview()} disabled={saveLock.current} style={{ minHeight: TOUCH_TARGET }}>Save</Button>
+        )}
         <Button onPress={reset}>Retake</Button>
       </Screen>
     );
   }
 
-  // capture
   return (
-    <Screen scroll={false} tabbed style={{ flex: 1 }}>
-      <ScreenTitle title="Scan" subtitle="Capture a payment proof" />
-      {!workspace ? null : sources.data?.length === 0 ? <Button compact icon="cellphone-message" mode="outlined" onPress={() => router.push('/settings/sources')}>Add payment source</Button> : null}
+    <Screen scroll={false} tabbed style={styles.page}>
+      <View style={styles.header}>
+        <ScreenTitle title="Scan proof" />
+        <IconButton icon="account-circle-outline" accessibilityLabel="Open settings" onPress={() => router.push('/(tabs)/settings')} />
+      </View>
       {error ? <Notice kind="error">{error}</Notice> : null}
-      <CaptureSurface granted={!!perm?.granted} canAskAgain={perm?.canAskAgain !== false} active={focused && foreground} ready={cameraReady} busy={busy}
-        cameraRef={setCamera} onReady={() => setCameraReady(true)} torch={torch} onTorch={() => setTorch((value) => !value)}
-        onPermission={() => void requestPerm()} onCapture={() => void capture()} onImport={() => void pick()} />
-      <Text variant="bodySmall" style={{ opacity: 0.7 }}>Import a screenshot any time. Text is read on this phone only.</Text>
+      <CaptureSurface
+        granted={!!permission?.granted}
+        canAskAgain={permission?.canAskAgain !== false}
+        active={focused && foreground}
+        ready={cameraReady}
+        busy={busy}
+        cameraRef={setCamera}
+        onReady={() => setCameraReady(true)}
+        torch={torch}
+        onTorch={() => setTorch((value) => !value)}
+        onPermission={() => void requestPermission()}
+        onCapture={capture}
+        onImport={pick}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  camera: { flex: 1, minHeight: 320, borderRadius: RADIUS.lg, overflow: 'hidden' },
-  preview: { width: '100%', height: 260, borderRadius: RADIUS.md, backgroundColor: '#00000010' },
+  page: { flex: 1, gap: SPACING.sm },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  processingPage: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  processingImage: { width: '100%', height: '82%', borderRadius: RADIUS.lg, backgroundColor: '#000000' },
+  processingIndicator: { position: 'absolute', bottom: 128, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  preview: { width: '100%', height: 210, borderRadius: RADIUS.lg, backgroundColor: '#000000' },
 });

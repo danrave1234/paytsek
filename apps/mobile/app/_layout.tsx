@@ -39,6 +39,7 @@ function Gate({ children }: { children: React.ReactNode }) {
       return;
     }
     if (!workspace) {
+      if (__DEV__ && top === '(tabs)') return;
       if (top !== 'workspaces') router.replace('/workspaces');
       return;
     }
@@ -48,9 +49,9 @@ function Gate({ children }: { children: React.ReactNode }) {
       void hasSeenOnboarding(session.user.id, workspace.id).catch(() => false).then((seen) => {
         if (cancelled) return;
         onboardingChecked.current = scope;
-        router.replace(seen ? '/(tabs)/scan' : '/onboarding');
+        router.replace(seen ? '/(tabs)' : '/onboarding');
       });
-    } else if (top === '(auth)' || top === 'workspaces' || top === undefined) router.replace('/(tabs)/scan');
+    } else if (top === '(auth)' || top === 'workspaces' || top === undefined) router.replace('/(tabs)');
     return () => { cancelled = true; };
   }, [ready, configured, session, workspace, segments, router]);
 
@@ -115,6 +116,8 @@ function AppNavigator() {
           // Fade between themed surfaces. A native slide can briefly expose
           // Android's default white window while dark mode is active.
           animation: reducedMotion ? 'none' : 'fade',
+          animationDuration: reducedMotion ? 0 : 140,
+          presentation: 'card',
         }}
       >
                   <Stack.Screen name="(tabs)" />

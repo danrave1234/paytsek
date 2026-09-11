@@ -3,7 +3,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/page-header';
 
-export const metadata: Metadata = { title: 'Support', description: 'Help, FAQ and account deletion for PayRecord.' };
+export const metadata: Metadata = { title: 'Support', description: 'Help, FAQ and account deletion for PayTsek.' };
 
 /** Grouped so people can find their own situation instead of reading it all. */
 const groups = [
@@ -33,15 +33,15 @@ const groups = [
     faq: [
       {
         q: 'Can my iPhone read GCash notifications?',
-        a: 'No. iOS does not allow apps to read other apps’ notifications, and PayRecord does not claim otherwise. Use the iPhone to scan and review, and pair an Android phone that receives your payment notifications — or use manual confirmation.',
+        a: 'No. iOS does not allow apps to read other apps’ notifications, and PayTsek does not claim otherwise. Use the iPhone to scan and review, and pair an Android phone that receives your payment notifications — or use manual confirmation.',
       },
       {
         q: 'Which wallets auto-match?',
-        a: 'GCash → GCash Express Send is enabled based on tested templates. GoTyme and Maya notifications are not parsed yet, because no verified samples exist; payments to those wallets can still be recorded and confirmed manually. The support table on the home page is generated from the app’s own capability registry, so it is always current.',
+        a: 'GCash → GCash Express Send is enabled when an exact comparable reference is present. GoTyme, Maya and MariBank incoming notifications are recognised, then sent to Review because those templates do not contain a comparable reference. The support table on the home page is generated from the app’s own capability registry, so it is always current.',
       },
       {
-        q: 'Does PayRecord see my balance or MPIN?',
-        a: 'Never. It only reads the incoming-payment notifications you allow, and never asks for wallet credentials, MPIN, or OTPs. Nobody from PayRecord will ever ask you for them either.',
+        q: 'Does PayTsek see my balance or MPIN?',
+        a: 'Never. It only reads the incoming-payment notifications you allow, and never asks for wallet credentials, MPIN, or OTPs. Nobody from PayTsek will ever ask you for them either.',
       },
     ],
   },
@@ -49,7 +49,7 @@ const groups = [
 
 const deleteSteps: ReactNode[] = [
   <>
-    Open PayRecord → <strong className="font-semibold text-ink">Settings → Privacy &amp; data</strong>.
+    Open PayTsek → <strong className="font-semibold text-ink">Settings → Privacy &amp; data</strong>.
   </>,
   <>
     Tap <em>Export my personal data</em> if you want a copy first. The download link is valid for 24 hours.
@@ -60,8 +60,8 @@ const deleteSteps: ReactNode[] = [
   </>,
   <>
     Cannot sign in any more? Email{' '}
-    <a className="ul" href="mailto:support@payrecord.ph?subject=Account%20deletion">
-      support@payrecord.ph
+    <a className="ul" href="mailto:support@paytsek.online?subject=Account%20deletion">
+      support@paytsek.online
     </a>{' '}
     from the account address and we will complete the deletion within 30 days.
   </>,
@@ -76,8 +76,8 @@ export default function Support() {
         lead={
           <>
             Email{' '}
-            <a className="ul" href="mailto:support@payrecord.ph">
-              support@payrecord.ph
+            <a className="ul" href="mailto:support@paytsek.online">
+              support@paytsek.online
             </a>{' '}
             with your workspace name and app version (Settings → bottom of the screen).{' '}
             <span className="text-ink">Never send your MPIN, OTP or wallet password</span> — we will never ask for them.

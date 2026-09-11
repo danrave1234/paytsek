@@ -6,10 +6,10 @@ export const metadata: Metadata = { title: 'Terms of use' };
 const sections: LegalSection[] = [
   {
     id: 'what-it-is',
-    title: 'What PayRecord is',
+    title: 'What PayTsek is',
     body: (
       <p>
-        PayRecord is recordkeeping software. It stores the payment confirmations you capture and, where you enable it,
+        PayTsek is recordkeeping software. It stores the payment confirmations you capture and, where you enable it,
         incoming-payment notification evidence from your own Android phone, and shows whether the two agree. It is not a
         payment processor, wallet, escrow, bank, or fraud-prevention service, and it does not move money.
       </p>
@@ -38,7 +38,7 @@ const sections: LegalSection[] = [
     body: (
       <p>
         You must be the account holder of the receiving wallet you configure and have the right to read notifications on the
-        phone you pair. Owners are responsible for the cashiers they invite. Do not use PayRecord to collect notifications from
+        phone you pair. Owners are responsible for the cashiers they invite. Do not use PayTsek to collect notifications from
         a phone or account you are not authorised to use.
       </p>
     ),
@@ -48,9 +48,9 @@ const sections: LegalSection[] = [
     title: 'Plans and purchases',
     body: (
       <p>
-        Subscriptions and record packs are sold through the Apple App Store or Google Play and billed by them. One record unit
+        Thirty-day access passes are sold through PayMongo hosted checkout. One record unit
         is consumed when a new payment record is saved; duplicates, retries, matching, review and exports are not charged.
-        Prepaid credits do not expire; monthly allowances reset and do not roll over. Refunds follow the store&apos;s policy;
+        Allowances reset for each access period and do not roll over. QRPh payments are manually approved by you for each new period; paying before the end date extends access from that date. Refunds follow the applicable PayMongo payment method and PayTsek policy;
         revoked purchases remove the corresponding capacity but never delete your records.
       </p>
     ),
@@ -70,7 +70,7 @@ const sections: LegalSection[] = [
     title: 'Availability and liability',
     body: (
       <p>
-        The service is provided as is. To the maximum extent permitted by law, PayRecord is not liable for lost sales,
+        The service is provided as is. To the maximum extent permitted by law, PayTsek is not liable for lost sales,
         undetected payments, or decisions made based on evidence states. Nothing here limits rights you have as a consumer
         under applicable law.
       </p>
@@ -81,7 +81,7 @@ const sections: LegalSection[] = [
     title: 'Trademarks',
     body: (
       <p>
-        GCash, GoTyme and Maya are trademarks of their respective owners. PayRecord is an independent product and is not
+        GCash, GoTyme and Maya are trademarks of their respective owners. PayTsek is an independent product and is not
         affiliated with or endorsed by them.
       </p>
     ),
@@ -93,13 +93,13 @@ export default function Terms() {
     <LegalPage
       eyebrow="Legal · 02"
       title="Terms of use"
-      updated="2026-09-08"
-      lead="What PayRecord is, what it does not promise, and what you are responsible for."
+      updated="2026-09-10"
+      lead="What PayTsek is, what it does not promise, and what you are responsible for."
       summary={[
         { label: 'Moves money', value: 'No', tone: 'ok' },
         { label: 'Confirms with providers', value: 'No', tone: 'warn' },
         { label: 'Charged per', value: 'New record saved' },
-        { label: 'Prepaid credits', value: 'Never expire', tone: 'ok' },
+        { label: 'QRPh auto-renewal', value: 'Not available', tone: 'ok' },
       ]}
       sections={sections}
     />

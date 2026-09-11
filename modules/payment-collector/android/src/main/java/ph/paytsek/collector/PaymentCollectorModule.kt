@@ -1,4 +1,4 @@
-package ph.payrecord.collector
+package ph.paytsek.collector
 
 import android.content.ComponentName
 import android.content.Intent
@@ -76,7 +76,7 @@ class PaymentCollectorModule : Module() {
       prefs.paused = false
       // Ask the system to (re)bind the listener so onListenerConnected fires promptly.
       try {
-        android.service.notification.NotificationListenerService.requestRebind(ComponentName(context, PayRecordNotificationListener::class.java))
+        android.service.notification.NotificationListenerService.requestRebind(ComponentName(context, PayTsekNotificationListener::class.java))
       } catch (_: Throwable) {}
       UploadWorker.enqueue(context, expedited = false)
     }
@@ -149,7 +149,7 @@ class PaymentCollectorModule : Module() {
       val req = okhttp3.Request.Builder()
         .url(prefs.apiBaseUrl!!.trimEnd('/') + "/v1/collector/health")
         .header("Authorization", "Collector " + prefs.credential!!)
-        .header("x-payrecord-api-version", "v1")
+        .header("x-paytsek-api-version", "v1")
         .post(body.toString().toRequestBody("application/json".toMediaType()))
         .build()
       try { okhttp3.OkHttpClient().newCall(req).execute().use { it.isSuccessful } } catch (_: Throwable) { false }
@@ -157,7 +157,7 @@ class PaymentCollectorModule : Module() {
 
     AsyncFunction("recoverActiveNotifications") {
       try {
-        android.service.notification.NotificationListenerService.requestRebind(ComponentName(context, PayRecordNotificationListener::class.java))
+        android.service.notification.NotificationListenerService.requestRebind(ComponentName(context, PayTsekNotificationListener::class.java))
       } catch (_: Throwable) {}
       outbox.pendingCount()
     }

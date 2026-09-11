@@ -3,7 +3,7 @@
 // gated by the user's explicit Notification Access grant in system settings.
 const { withAndroidManifest, AndroidConfig } = require('@expo/config-plugins');
 
-const SERVICE_NAME = 'ph.payrecord.collector.PayRecordNotificationListener';
+const SERVICE_NAME = 'ph.paytsek.collector.PayTsekNotificationListener';
 
 module.exports = function withPaymentCollector(config) {
   return withAndroidManifest(config, (mod) => {
@@ -12,7 +12,7 @@ module.exports = function withPaymentCollector(config) {
     app.service.push({
       $: {
         'android:name': SERVICE_NAME,
-        'android:label': 'PayRecord payment notifications',
+        'android:label': 'PayTsek payment notifications',
         'android:exported': 'true',
         'android:permission': 'android.permission.BIND_NOTIFICATION_LISTENER_SERVICE',
       },
@@ -22,9 +22,9 @@ module.exports = function withPaymentCollector(config) {
     });
     // Re-enqueue pending uploads after reboot via WorkManager's persisted queue.
     const receivers = app.receiver ?? [];
-    if (!receivers.some((r) => r.$['android:name'] === 'ph.payrecord.collector.BootReceiver')) {
+    if (!receivers.some((r) => r.$['android:name'] === 'ph.paytsek.collector.BootReceiver')) {
       receivers.push({
-        $: { 'android:name': 'ph.payrecord.collector.BootReceiver', 'android:exported': 'false' },
+        $: { 'android:name': 'ph.paytsek.collector.BootReceiver', 'android:exported': 'false' },
         'intent-filter': [{ action: [{ $: { 'android:name': 'android.intent.action.BOOT_COMPLETED' } }] }],
       });
     }

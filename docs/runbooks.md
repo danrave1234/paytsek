@@ -6,7 +6,7 @@
 2. **Migrations**: `supabase link --project-ref <ref>` then `supabase db push`. Verify buckets `proof-images` and `exports` exist and are **private**.
 3. **API** (any Node 20 host: Fly, Railway, Render, a VM): set every `[DEPLOYMENT INPUT]` in `.env.example`. Generate `COLLECTOR_TOKEN_HASH_SECRET` with `openssl rand -hex 32`. Run `pnpm build && node apps/api/dist/main.js`. Health: `GET /v1/health`.
 4. **Worker**: run `node apps/api/dist/worker.js` as a separate always-on process (1–3 replicas). It is idempotent and safe to restart.
-5. **RevenueCat**: create the project, add App Store + Play apps, products `payrecord_solo_monthly`, `payrecord_team_monthly`, `payrecord_pack_500`, one offering. Set webhook URL `https://<api>/v1/billing/webhooks/revenuecat` with an Authorization header value equal to `REVENUECAT_WEBHOOK_AUTH_HEADER`. Put public SDK keys in the mobile `.env`.
+5. **RevenueCat**: create the project, add App Store + Play apps, products `paytsek_solo_monthly`, `paytsek_team_monthly`, `paytsek_pack_500`, one offering. Set webhook URL `https://<api>/v1/billing/webhooks/revenuecat` with an Authorization header value equal to `REVENUECAT_WEBHOOK_AUTH_HEADER`. Put public SDK keys in the mobile `.env`.
 6. **Mobile**: `eas build --profile production` (or local `expo run:*`). Fill `EXPO_PUBLIC_*` at build time. Distribute via stores/TestFlight; put URLs in `apps/web` env (`NEXT_PUBLIC_*`).
 7. **Web**: deploy `apps/web` (Vercel or any Node host). Set `NEXT_PUBLIC_SITE_URL` and download URLs.
 8. **Monitoring**: set `SENTRY_DSN` (API) and `EXPO_PUBLIC_SENTRY_DSN` (app). Scrubbing is enforced in `redact()`; verify no amounts/phones in events.
@@ -23,7 +23,7 @@ Symptoms: records stuck UNVERIFIED though notifications exist. Check `select sta
 
 ## 4. Incident: collector uploads failing
 
-Owner sees "Last seen X hours ago". On the phone: Settings → Use this phone as the payment phone shows `lastUploadError`. `COLLECTOR_CREDENTIAL_REVOKED` → re-pair. `HTTP_5xx` → API health. Notification access off → system settings. Force-stopped by OEM battery saver → whitelist the app; PayRecord never asks users to disable OS security controls.
+Owner sees "Last seen X hours ago". On the phone: Settings → Use this phone as the payment phone shows `lastUploadError`. `COLLECTOR_CREDENTIAL_REVOKED` → re-pair. `HTTP_5xx` → API health. Notification access off → system settings. Force-stopped by OEM battery saver → whitelist the app; PayTsek never asks users to disable OS security controls.
 
 ## 5. Provider template change
 

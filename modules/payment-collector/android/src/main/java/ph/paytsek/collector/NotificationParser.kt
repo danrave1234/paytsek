@@ -1,4 +1,4 @@
-package ph.payrecord.collector
+package ph.paytsek.collector
 
 import java.math.BigDecimal
 import java.security.MessageDigest
@@ -44,10 +44,14 @@ object NotificationParser {
    * implement the template here and in the TS adapter in lockstep, bump both
    * parser versions, then update the flow registry and support matrix.
    */
-  private val TEMPLATED_PROVIDERS = setOf("GCASH")
+  private val TEMPLATED_PROVIDERS = setOf("GCASH", "GOTYME", "MAYA", "MARIBANK")
 
   const val GCASH_PARSER_ID = "gcash.incoming.v1"
   const val GCASH_PARSER_VERSION = "1"
+  const val GOTYME_PARSER_ID = "gotyme.incoming.v1"
+  const val MAYA_PARSER_ID = "maya.incoming.v1"
+  const val MARIBANK_PARSER_ID = "maribank.incoming.v1"
+  const val INCOMING_PARSER_VERSION = "1"
 
   data class Input(val packageName: String, val title: String?, val text: String?, val bigText: String?, val textLines: List<String>, val isGroupSummary: Boolean)
 
@@ -114,6 +118,15 @@ object NotificationParser {
     if (FAILED.any { it.containsMatchIn(text) }) return Result.Rejected("FAILED_OR_PENDING")
     if (OUTGOING.any { it.containsMatchIn(text) }) return Result.Rejected("OUTGOING_PAYMENT")
     if (PROMO.any { it.containsMatchIn(text) }) return Result.Rejected("PROMOTION")
+    return when (provider) {
+      "GOTYME" -> parseGoTyme(input, text)
+      "MAYA" -> parseMaya(input, text)
+      "MARIBANK" -> parseMariBank(input, text)
+      else -> parseGcash(text)
+    }
+  }
+
+  private fun parseGcash(text: String): Result {
     if (POSITIVE.none { it.containsMatchIn(text) }) return Result.Rejected("UNKNOWN_TEMPLATE")
 
     val amount: Long = RECEIVED_AMOUNT.find(text)?.groupValues?.get(1)?.let { toCentavos(it) } ?: run {
@@ -153,6 +166,41 @@ object NotificationParser {
         normalizedTextSha256 = sha256(normalized),
       ),
     )
+  }
+
+  private fun notificationBody(input: Input): String = (input.bigText ?: input.text ?: "").replace(Regex("\\s+"), " ").trim()
+
+  private fun accepted(provider: String, parserId: String, rail: String, amount: Long, payer: String?, text: String): Result {
+    if (amount <= 0) return Result.Rejected("NO_AMOUNT")
+    val normalized = text.replace(Regex("\\s+"), " ").trim()
+    return Result.Accepted(Parsed(provider, parserId, INCOMING_PARSER_VERSION, rail, amount, "UNKNOWN", null, payer, null, null, normalized, sha256(normalized)))
+  }
+
+  private fun parseGoTyme(input: Input, text: String): Result {
+    if (!input.title.orEmpty().trim().equals("Transfer received", ignoreCase = true)) return Result.Rejected("UNKNOWN_TEMPLATE")
+    val body = notificationBody(input)
+    val m = Regex("^You received\\s+(?:₱|PHP|P)\\s?((?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d{1,2})?)\\s+from\\s+(.+?)\\.\\s*Your available balance is\\s+(?:₱|PHP|P)\\s?(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d{1,2})?\\.?$", RegexOption.IGNORE_CASE).matchEntire(body)
+      ?: return Result.Rejected("UNKNOWN_TEMPLATE")
+    val amount = toCentavos(m.groupValues[1]) ?: return Result.Rejected("NO_AMOUNT")
+    return accepted("GOTYME", GOTYME_PARSER_ID, "UNKNOWN", amount, m.groupValues[2].trim(), text)
+  }
+
+  private fun parseMaya(input: Input, text: String): Result {
+    if (!input.title.orEmpty().trim().startsWith("money received", ignoreCase = true)) return Result.Rejected("UNKNOWN_TEMPLATE")
+    val body = notificationBody(input)
+    val m = Regex("^You received\\s+(?:₱|PHP|P)?\\s?((?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d{1,2})?)\\s+in your wallet via InstaPay\\.?$", RegexOption.IGNORE_CASE).matchEntire(body)
+      ?: return Result.Rejected("UNKNOWN_TEMPLATE")
+    val amount = toCentavos(m.groupValues[1]) ?: return Result.Rejected("NO_AMOUNT")
+    return accepted("MAYA", MAYA_PARSER_ID, "INSTAPAY", amount, null, text)
+  }
+
+  private fun parseMariBank(input: Input, text: String): Result {
+    if (!input.title.orEmpty().trim().equals("Successful Incoming Transfer", ignoreCase = true)) return Result.Rejected("UNKNOWN_TEMPLATE")
+    val body = notificationBody(input)
+    val m = Regex("^You(?:'|’)ve received\\s+(?:₱|PHP|P)\\s?((?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d{1,2})?)\\s+from bank with account ending\\s+\\d{4}\\.?$", RegexOption.IGNORE_CASE).matchEntire(body)
+      ?: return Result.Rejected("UNKNOWN_TEMPLATE")
+    val amount = toCentavos(m.groupValues[1]) ?: return Result.Rejected("NO_AMOUNT")
+    return accepted("MARIBANK", MARIBANK_PARSER_ID, "UNKNOWN", amount, null, text)
   }
 
   /** Exact decimal -> integer centavos (never floating point). */

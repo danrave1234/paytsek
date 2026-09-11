@@ -197,7 +197,10 @@ export function extractReceiptFields(fullText: string): ReceiptExtraction {
   }
 
   // --- Parties (payer vs payee, never merged) --------------------------------
-  const payee = valueAfterLabel(lines, /\b(?:Sent\s+to|Send\s+to|To|Recipient|Receiver|Pay(?:ed|)\s+to|Paid\s+to|Beneficiary)\b/i);
+  // Party names are high-risk fields: only accept an explicit label at the
+  // start of a line. Matching "to" or "from" inside marketing/legal copy can
+  // silently invent a person (for example "footprint from transportation").
+  const payee = valueAfterLabel(lines, /^[^A-Za-z0-9]{0,3}(?:Sent\s+to|Send\s+to|To|Recipient|Receiver|Pay(?:ed|)\s+to|Paid\s+to|Beneficiary)\b/i);
   if (payee) {
     const { name, phone } = splitNameAndPhone(payee.value);
     fields.payeeName = name;
@@ -205,7 +208,7 @@ export function extractReceiptFields(fullText: string): ReceiptExtraction {
     if (name) provenance.payeeName = payee.line;
     if (phone) provenance.payeePhone = payee.line;
   }
-  const payer = valueAfterLabel(lines, /\b(?:From|Sender|Paid\s+by|Sent\s+by|Payer)\b/i);
+  const payer = valueAfterLabel(lines, /^[^A-Za-z0-9]{0,3}(?:From|Sender|Paid\s+by|Sent\s+by|Payer)\b/i);
   if (payer) {
     const { name, phone } = splitNameAndPhone(payer.value);
     fields.payerName = name;

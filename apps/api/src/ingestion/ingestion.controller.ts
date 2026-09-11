@@ -1,6 +1,6 @@
 import { Body, Controller, Injectable, Module, Post } from '@nestjs/common';
-import { IngestBatchRequest, type IncomingPaymentEventInput, type IngestBatchResponse, type IngestItemAck, type Provider } from '@payrecord/contracts';
-import { providerForPackage } from '@payrecord/receipt-parsers';
+import { IngestBatchRequest, type IncomingPaymentEventInput, type IngestBatchResponse, type IngestItemAck, type Provider } from '@paytsek/contracts';
+import { providerForPackage } from '@paytsek/receipt-parsers';
 import { Collector, CollectorRoute } from '../auth/decorators';
 import type { CollectorContext } from '../auth/guards';
 import { zod } from '../common/zod.pipe';

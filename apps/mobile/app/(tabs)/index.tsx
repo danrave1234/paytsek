@@ -1,195 +1,175 @@
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import type { RecordSummary } from '@paytsek/contracts';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { Button, Card, Icon, ProgressBar, Text, TouchableRipple, useTheme } from 'react-native-paper';
+import { Button, Icon, IconButton, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ErrorState, Loading, Notice, ScreenTitle } from '@/components/ui';
-import { countDrafts, syncAll } from '@/lib/drafts';
-import { lastSeen, peso } from '@/lib/format';
-import { useHome } from '@/lib/queries';
-import { useIsOwner, useSession } from '@/lib/session';
+import { Loading } from '@/components/ui';
+import { listDrafts, type Draft } from '@/lib/drafts';
+import { manilaTime, peso } from '@/lib/format';
+import { useHome, useRecords } from '@/lib/queries';
+import { useSession } from '@/lib/session';
 import { OfflineError } from '@/lib/api';
 import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET } from '@/theme';
+
+type FeedItem =
+  | { kind: 'local'; id: string; draft: Draft; at: string }
+  | { kind: 'remote'; id: string; record: RecordSummary; at: string };
+
+function greeting() {
+  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', hour12: false }).format(new Date()));
+  return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+}
 
 export default function Home() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ savedAmount?: string }>();
   const { workspace } = useSession();
-  const isOwner = useIsOwner();
+  const records = useRecords({});
   const home = useHome();
-  const [pending, setPending] = useState(0);
+  const [drafts, setDrafts] = useState<Draft[]>([]);
 
-  useEffect(() => {
-    if (workspace) void countDrafts(workspace.id).then(setPending).catch(() => setPending(0));
-  }, [workspace, home.dataUpdatedAt]);
-
-  const retrySync = async () => {
+  const refreshLocal = useCallback(() => {
     if (!workspace) return;
-    try {
-      await syncAll(workspace.id);
-      setPending(await countDrafts(workspace.id));
-      await home.refetch();
-    } catch {
-      // The pending local cache is optional; server records remain available.
-      setPending(0);
-    }
-  };
+    void listDrafts(workspace.id).then(setDrafts).catch(() => setDrafts([]));
+  }, [workspace]);
 
-  const offline = home.error instanceof OfflineError;
-  const d = home.data;
-  const quotaRatio = d ? (d.quota.monthlyAllowance ? d.quota.monthlyUsed / d.quota.monthlyAllowance : 1) : 0;
-  const recordedToday = d
-    ? d.today.notificationMatchedCentavos + d.today.confirmedManuallyCentavos + d.today.unverifiedCentavos
-    : 0;
+  useFocusEffect(useCallback(() => {
+    refreshLocal();
+  }, [refreshLocal, records.dataUpdatedAt]));
+
+  const remote = records.data?.items ?? [];
+  const remoteIds = new Set(remote.map((record) => record.id));
+  const feed: FeedItem[] = [
+    ...drafts
+      .filter((draft) => !draft.serverRecordId || !remoteIds.has(draft.serverRecordId))
+      .map((draft): FeedItem => ({ kind: 'local', id: draft.clientRecordId, draft, at: draft.createdAt })),
+    ...remote.map((record): FeedItem => ({ kind: 'remote', id: record.id, record, at: record.createdAt })),
+  ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 6);
+
+  const savedAmount = Number(params.savedAmount);
+  const justSaved = Number.isFinite(savedAmount) && savedAmount > 0;
+  const offline = records.error instanceof OfflineError;
+  const refreshing = records.isRefetching || home.isRefetching;
+  const refresh = () => {
+    refreshLocal();
+    void Promise.all([records.refetch(), home.refetch()]);
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: SPACING.xl, paddingTop: SPACING.lg, gap: SPACING.lg, paddingBottom: insets.bottom + TAB_BAR_CLEARANCE }}
-        refreshControl={<RefreshControl refreshing={home.isRefetching} onRefresh={() => void home.refetch()} />}
+        contentContainerStyle={{ paddingHorizontal: SPACING.xl, paddingTop: SPACING.xlg, paddingBottom: insets.bottom + TAB_BAR_CLEARANCE, gap: SPACING.xlg }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.colors.primary} />}
       >
-        <ScreenTitle title={workspace?.name ?? 'PayTsek'} subtitle="Today’s payment records" />
+        <View style={styles.header}>
+          <Text variant="headlineLarge" style={styles.heading}>{greeting()}</Text>
+          <IconButton icon="account-circle-outline" size={28} onPress={() => router.push('/(tabs)/settings')} accessibilityLabel="Open settings" />
+        </View>
 
-        {offline ? <Notice kind="warning">Offline. Amounts and evidence states may be out of date.</Notice> : null}
-        {pending > 0 ? (
-          <View style={{ gap: SPACING.xs }}>
-            <Notice kind="info">{pending} scan{pending === 1 ? '' : 's'} saved on this phone and waiting to sync.</Notice>
-            <Button mode="text" compact onPress={() => void retrySync()}>Retry sync</Button>
+        {justSaved ? (
+          <View style={[styles.saved, { backgroundColor: theme.colors.secondaryContainer }]} accessibilityRole="alert">
+            <View style={[styles.savedIcon, { backgroundColor: theme.colors.secondary }]}>
+              <Icon source="check" size={24} color={theme.colors.onSecondary} />
+            </View>
+            <Text variant="titleLarge" style={{ flex: 1, color: theme.colors.onSecondaryContainer }}>{peso(savedAmount)}</Text>
+            <Text variant="labelLarge" style={{ color: theme.colors.onSecondaryContainer }}>Recorded</Text>
           </View>
         ) : null}
 
-        {home.isLoading && !d ? <Loading variant="dashboard" label="Loading dashboard" /> : null}
-        {home.error && !d && !offline ? <ErrorState error={home.error} retry={() => void home.refetch()} /> : null}
+        <Button
+          mode="contained"
+          icon="line-scan"
+          contentStyle={{ minHeight: 64 }}
+          labelStyle={{ fontSize: 18, fontWeight: '700' }}
+          style={{ borderRadius: RADIUS.xl }}
+          onPress={() => router.push('/(tabs)/scan')}
+        >
+          Scan proof
+        </Button>
 
-        {d ? (
-          <>
-            <Card mode="contained" style={[styles.hero, { backgroundColor: theme.colors.primary }]}>
-              <Card.Content style={{ gap: SPACING.lg }}>
-                <View>
-                  <Text variant="labelLarge" style={{ color: theme.colors.onPrimary, opacity: 0.76 }}>Recorded today</Text>
-                  <Text variant="displaySmall" style={{ color: theme.colors.onPrimary, fontWeight: '700', letterSpacing: -1.5, marginTop: 2 }}>
-                    {peso(recordedToday)}
-                  </Text>
-                  <Text variant="bodySmall" style={{ color: theme.colors.onPrimary, opacity: 0.76, marginTop: 6 }}>
-                    Evidence totals, never wallet balance
-                  </Text>
-                </View>
-                <Button
-                  mode="contained"
-                  icon="camera-outline"
-                  buttonColor={theme.colors.onPrimary}
-                  textColor={theme.colors.primary}
-                  contentStyle={{ minHeight: TOUCH_TARGET }}
-                  onPress={() => router.push('/(tabs)/scan')}
-                >
-                  Scan payment proof
-                </Button>
-              </Card.Content>
-            </Card>
-
-            <View style={{ gap: SPACING.sm }}>
-              <Text variant="titleMedium" style={{ fontWeight: '700', letterSpacing: -0.3 }}>Verification status</Text>
-              <View style={[styles.metricsGroup, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
-                <MetricRow icon="bell-check-outline" tone="success" title="Notification matched" count={d.today.notificationMatchedCount} amount={d.today.notificationMatchedCentavos} />
-                <View style={[styles.metricDivider, { backgroundColor: theme.colors.outlineVariant }]} />
-                <MetricRow icon="account-check-outline" tone="primary" title="Confirmed manually" count={d.today.confirmedManuallyCount} amount={d.today.confirmedManuallyCentavos} />
-                <View style={[styles.metricDivider, { backgroundColor: theme.colors.outlineVariant }]} />
-                <MetricRow icon="clock-outline" tone="neutral" title="Unverified" count={d.today.unverifiedCount} amount={d.today.unverifiedCentavos} />
-              </View>
-              {d.today.reviewRequiredCount > 0 ? (
-                <TouchableRipple onPress={() => router.push('/(tabs)/review')} borderless style={{ borderRadius: RADIUS.lg }}>
-                  <View style={[styles.attention, { backgroundColor: theme.colors.tertiaryContainer }]}>
-                    <Icon source="alert-outline" size={22} color={theme.colors.onTertiaryContainer} />
-                    <View style={{ flex: 1 }}>
-                      <Text variant="titleSmall" style={{ color: theme.colors.onTertiaryContainer, fontWeight: '700' }}>Needs your review</Text>
-                      <Text variant="bodySmall" style={{ color: theme.colors.onTertiaryContainer, opacity: 0.8 }}>
-                        {d.today.reviewRequiredCount} record{d.today.reviewRequiredCount === 1 ? '' : 's'} need a decision
-                      </Text>
-                    </View>
-                    <Icon source="chevron-right" size={22} color={theme.colors.onTertiaryContainer} />
-                  </View>
-                </TouchableRipple>
-              ) : null}
-            </View>
-
-            <Card mode="contained" style={{ backgroundColor: theme.colors.surface, borderRadius: RADIUS.lg }}>
-              <Card.Content style={{ gap: SPACING.md }}>
-                <View style={styles.cardHeading}>
-                  <Icon source="cellphone-message" size={24} color={theme.colors.primary} />
-                  <View style={{ flex: 1 }}>
-                    <Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment phone</Text>
-                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                      {d.collectors.length === 0 ? 'Not connected' : `${d.collectors.length} connected`}
-                    </Text>
-                  </View>
-                </View>
-
-                {d.collectors.length === 0 ? (
-                  <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, lineHeight: 21 }}>
-                    Connect an Android phone that receives payment notifications to enable automatic matching.
-                  </Text>
-                ) : null}
-                {d.collectors.map((c) => (
-                  <View key={c.deviceId} style={[styles.deviceRow, { borderTopColor: theme.colors.outlineVariant }]}>
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <Text variant="bodyMedium" style={{ fontWeight: '700' }}>{c.label} · {c.sourceLabel}</Text>
-                      <Text variant="bodySmall" style={{ color: c.stale ? theme.colors.error : theme.colors.onSurfaceVariant }}>
-                        {lastSeen(c.lastSeenAt)}{c.stale ? ' · Collection may be interrupted' : ''}
-                      </Text>
-                    </View>
-                    <View style={[styles.statusDot, { backgroundColor: c.stale ? theme.colors.error : theme.colors.secondary }]} />
-                  </View>
-                ))}
-                {isOwner ? <Button mode="text" compact onPress={() => router.push('/settings/devices')}>Manage devices</Button> : null}
-              </Card.Content>
-            </Card>
-
-            <Card mode="contained" style={{ backgroundColor: theme.colors.surface, borderRadius: RADIUS.lg }}>
-              <Card.Content style={{ gap: SPACING.md }}>
-                <View style={styles.cardHeading}>
-                  <Text variant="titleMedium" style={{ flex: 1, fontWeight: '700' }}>Monthly records</Text>
-                  <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant }}>
-                    {d.quota.monthlyUsed} / {d.quota.monthlyAllowance}
-                  </Text>
-                </View>
-                <ProgressBar progress={Math.min(quotaRatio, 1)} color={quotaRatio >= 1 ? theme.colors.error : theme.colors.primary} style={{ height: 8, borderRadius: 999 }} />
-                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                  {d.quota.monthlyAllowance - d.quota.monthlyUsed} records remaining this month
-                </Text>
-                {quotaRatio >= 1 ? <Notice kind="error">Monthly allowance used up. New scans stay as local drafts.</Notice> : quotaRatio >= 0.8 ? <Notice kind="warning">You have used {Math.round(quotaRatio * 100)}% of this month’s records.</Notice> : null}
-                {isOwner ? <Button mode="text" compact onPress={() => router.push('/settings/billing')}>Plan and usage</Button> : null}
-              </Card.Content>
-            </Card>
-          </>
+        {offline ? (
+          <View style={styles.compactStatus} accessibilityRole="alert">
+            <Icon source="cloud-off-outline" size={18} color={theme.colors.tertiary} />
+            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Offline</Text>
+          </View>
         ) : null}
+
+        {(home.data?.today.reviewRequiredCount ?? 0) > 0 ? (
+          <TouchableRipple onPress={() => router.push('/(tabs)/review')} borderless style={{ borderRadius: RADIUS.lg }}>
+            <View style={[styles.attention, { backgroundColor: theme.colors.tertiaryContainer }]}>
+              <Icon source="alert-outline" size={21} color={theme.colors.onTertiaryContainer} />
+              <Text variant="titleSmall" style={{ flex: 1, color: theme.colors.onTertiaryContainer }}>Needs attention</Text>
+              <Text variant="labelLarge" style={{ color: theme.colors.onTertiaryContainer }}>{home.data!.today.reviewRequiredCount}</Text>
+              <Icon source="chevron-right" size={20} color={theme.colors.onTertiaryContainer} />
+            </View>
+          </TouchableRipple>
+        ) : null}
+
+        <View style={{ gap: SPACING.sm }}>
+          <View style={styles.sectionHeading}>
+            <Text variant="titleLarge" style={{ fontWeight: '700' }}>Recent records</Text>
+            <Button compact onPress={() => router.push('/(tabs)/records')}>See all</Button>
+          </View>
+
+          {records.isLoading && feed.length === 0 ? <Loading variant="list" label="Loading records" /> : null}
+          {!records.isLoading && feed.length === 0 ? (
+            <View style={[styles.empty, { borderColor: theme.colors.outlineVariant }]}>
+              <Icon source="receipt-text-outline" size={28} color={theme.colors.onSurfaceVariant} />
+              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>No records yet</Text>
+            </View>
+          ) : null}
+
+          {feed.length ? (
+            <View style={[styles.list, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
+              {feed.map((item, index) => {
+                const amount = item.kind === 'local' ? item.draft.request.corrected.amountCentavos : item.record.amountCentavos;
+                const reference = item.kind === 'local' ? item.draft.request.corrected.referenceValue : item.record.referenceValue;
+                const source = item.kind === 'local' ? (item.draft.request.corrected.receiptProvider ?? 'Payment') : item.record.sourceLabel;
+                return (
+                  <TouchableRipple
+                    key={`${item.kind}.${item.id}`}
+                    onPress={item.kind === 'remote' ? () => router.push(`/record/${item.record.id}`) : undefined}
+                    disabled={item.kind === 'local'}
+                  >
+                    <View style={[styles.row, index > 0 && { borderTopColor: theme.colors.outlineVariant, borderTopWidth: StyleSheet.hairlineWidth }]}>
+                      <View style={[styles.providerIcon, { backgroundColor: theme.colors.primaryContainer }]}>
+                        <Icon source="wallet-outline" size={22} color={theme.colors.primary} />
+                      </View>
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <Text variant="titleMedium" style={{ fontWeight: '700' }}>{peso(amount)}</Text>
+                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>
+                          {source}{reference ? ` · ${reference.slice(-6)}` : ''}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(item.at)}</Text>
+                        {item.kind === 'local' ? <Icon source="cellphone-check" size={16} color={theme.colors.secondary} /> : null}
+                      </View>
+                    </View>
+                  </TouchableRipple>
+                );
+              })}
+            </View>
+          ) : null}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function MetricRow({ icon, tone, title, count, amount }: { icon: string; tone: 'success' | 'primary' | 'neutral'; title: string; count: number; amount: number }) {
-  const theme = useTheme();
-  const iconFg = tone === 'success' ? theme.colors.secondary : tone === 'primary' ? theme.colors.primary : theme.colors.onSurfaceVariant;
-  return (
-    <View style={styles.metric}>
-      <Icon source={icon} size={21} color={iconFg} />
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text variant="bodyMedium" style={{ fontWeight: '700' }}>{title}</Text>
-        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{count} record{count === 1 ? '' : 's'}</Text>
-      </View>
-      <Text variant="titleMedium" style={{ fontWeight: '700', letterSpacing: -0.3 }}>{peso(amount)}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  hero: { borderRadius: RADIUS.xl, overflow: 'hidden' },
-  metricsGroup: { borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  metric: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md },
-  metricDivider: { height: StyleSheet.hairlineWidth, marginLeft: 49 },
-  attention: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: SPACING.md, padding: SPACING.md, borderRadius: RADIUS.lg },
-  cardHeading: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
-  deviceRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: SPACING.md },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  heading: { fontWeight: '700', letterSpacing: -0.8 },
+  saved: { minHeight: 88, borderRadius: RADIUS.xl, padding: SPACING.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  savedIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  compactStatus: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  attention: { minHeight: 60, borderRadius: RADIUS.lg, paddingHorizontal: SPACING.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  sectionHeading: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  list: { borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  row: { minHeight: 76, marginHorizontal: SPACING.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  providerIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+  empty: { minHeight: 128, borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center', gap: SPACING.sm },
 });

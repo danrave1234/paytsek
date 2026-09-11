@@ -1,4 +1,4 @@
-package ph.payrecord.collector
+package ph.paytsek.collector
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -50,7 +50,7 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
       val req = Request.Builder()
         .url("$base/v1/collector/events")
         .header("Authorization", "Collector $credential")
-        .header("x-payrecord-api-version", "v1")
+        .header("x-paytsek-api-version", "v1")
         .post(body.toString().toRequestBody("application/json".toMediaType()))
         .build()
       try {
@@ -99,7 +99,7 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
   }
 
   companion object {
-    private const val UNIQUE = "payrecord-upload"
+    private const val UNIQUE = "paytsek-upload"
     private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
 
     fun enqueue(context: Context, expedited: Boolean) {

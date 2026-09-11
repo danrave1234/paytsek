@@ -4,9 +4,9 @@
 
 | Suite | Command | Covers |
 | --- | --- | --- |
-| Contracts | `pnpm --filter @payrecord/contracts test` | Labels/forbidden wording, plan invariants, schema strictness (integer centavos) |
-| Parsers | `pnpm --filter @payrecord/receipt-parsers test` | Money, reference normalization, Manila time, flow registry, GCash adapter (SYNTHETIC fixtures), GoTyme fail-closed, receipt extraction (payer/payee separation, fee vs amount) |
-| Matcher (adversarial) | `pnpm --filter @payrecord/api test` | Every rule in §6 of the brief: amount+time never auto, cross-provider never maps, 3 same-amount → distinct candidates, delayed exact-ID, edited fields, already-linked, failed/pending, owner approval, capture-time fallback |
+| Contracts | `pnpm --filter @paytsek/contracts test` | Labels/forbidden wording, plan invariants, schema strictness (integer centavos) |
+| Parsers | `pnpm --filter @paytsek/receipt-parsers test` | Money, reference normalization, Manila time, flow registry, GCash adapter (SYNTHETIC fixtures), GoTyme fail-closed, receipt extraction (payer/payee separation, fee vs amount) |
+| Matcher (adversarial) | `pnpm --filter @paytsek/api test` | Every rule in §6 of the brief: amount+time never auto, cross-provider never maps, 3 same-amount → distinct candidates, delayed exact-ID, edited fields, already-linked, failed/pending, owner approval, capture-time fallback |
 | Kotlin parity | `cd apps/mobile/android && ./gradlew :payment-collector:testDebugUnitTest` | Same fixtures as the TS GCash adapter |
 
 **Synthetic fixtures do not demonstrate real GCash notification coverage.** Each fixture file records `provenance: SYNTHETIC`. Replace with `REDACTED_REAL_SAMPLE` entries (with app version and platform) before treating a flow as production-verified.

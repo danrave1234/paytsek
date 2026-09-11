@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import type { CorrectRecordRequest, CreateRecordRequest, CreateRecordResponse, ListRecordsQuery, ListRecordsResponse, RecordDetail, RecordSummary } from '@payrecord/contracts';
-import { AUTO_MATCH_DISCLOSURE, MATCHING_CRITICAL_FIELDS } from '@payrecord/contracts';
+import type { CorrectRecordRequest, CreateRecordRequest, CreateRecordResponse, ListRecordsQuery, ListRecordsResponse, RecordDetail, RecordSummary } from '@paytsek/contracts';
+import { AUTO_MATCH_DISCLOSURE, MATCHING_CRITICAL_FIELDS } from '@paytsek/contracts';
 import { ApiException } from '../common/errors';
 import { AuditService } from '../db/audit.service';
 import { DbService, isUniqueViolation } from '../db/db.service';

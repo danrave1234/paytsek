@@ -1,4 +1,4 @@
-import type { RecordDetail, RecordSummary, ReceiptFields } from '@payrecord/contracts';
+import type { RecordDetail, RecordSummary, ReceiptFields } from '@paytsek/contracts';
 
 export interface RecordRow {
   id: string;

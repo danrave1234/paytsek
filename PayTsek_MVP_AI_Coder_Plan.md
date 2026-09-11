@@ -1,4 +1,4 @@
-# PayRecord — Full MVP implementation brief
+# PayTsek — Full MVP implementation brief
 
 Prepared for Drave's AI coding agent · 8 September 2026
 

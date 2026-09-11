@@ -1,4 +1,4 @@
-package ph.payrecord.collector
+package ph.paytsek.collector
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
@@ -7,7 +7,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Opt-in capture of notification formats PayRecord does not recognise, so a
+ * Opt-in capture of notification formats PayTsek does not recognise, so a
  * wallet can be supported without guessing at its template.
  *
  * Safety rules, in order of importance:
@@ -67,7 +67,7 @@ object TemplateSamples {
     val capturedAt: String,
   )
 
-  private class Db(context: Context) : SQLiteOpenHelper(context, "payrecord_template_samples.db", null, 1) {
+  private class Db(context: Context) : SQLiteOpenHelper(context, "paytsek_template_samples.db", null, 1) {
     override fun onCreate(db: SQLiteDatabase) {
       db.execSQL(
         """

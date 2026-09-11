@@ -1,8 +1,8 @@
-# PayRecord
+# PayTsek
 
 > Scan a payment proof, keep an organized record, and match it with incoming-payment evidence from your receiving phone.
 
-PayRecord is a mobile MVP (Android + iOS) for Philippine sellers paid via **GCash** and **GoTyme**. A cashier scans the customer's receipt; the seller's own **Android** phone reports incoming-payment notifications; the server reconciles the two under a strict, versioned matching policy. Nothing here moves money, asks for wallet credentials, or claims provider verification.
+PayTsek is a mobile MVP (Android + iOS) for Philippine sellers paid via **GCash** and **GoTyme**. A cashier scans the customer's receipt; the seller's own **Android** phone reports incoming-payment notifications; the server reconciles the two under a strict, versioned matching policy. Nothing here moves money, asks for wallet credentials, or claims provider verification.
 
 Working name only; no trademark or domain availability is implied. Not affiliated with GCash, GoTyme, or any bank.
 
@@ -54,7 +54,7 @@ cd apps/mobile; npx expo prebuild; npx expo run:android   # or run:ios on macOS
 npx expo start --dev-client
 
 # Website
-pnpm --filter @payrecord/web dev               # http://localhost:3001
+pnpm --filter @paytsek/web dev               # http://localhost:3001
 ```
 
 ## Tests

@@ -327,4 +327,14 @@ describe('receipt extraction (SYNTHETIC fixtures)', () => {
     expect(r.fields.totalChargedCentavos).toBe(12000);
     expect(r.warnings.some((w) => /does not equal total/.test(w))).toBe(true);
   });
+
+  it('never turns environmental copy into a payer name', () => {
+    const r = extractReceiptFields(`GCash
+Total Amount Sent ₱1.00
+Ref No. 3044933877621
+Sep 11, 2026 4:54 PM
+By going digital, you reduce your carbon footprint from transportation, paper, and plastic.`);
+    expect(r.fields.payerName).toBeNull();
+    expect(r.fields.payerPhone).toBeNull();
+  });
 });

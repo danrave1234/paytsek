@@ -1,4 +1,4 @@
-package ph.payrecord.collector
+package ph.paytsek.collector
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -14,12 +14,12 @@ class CollectorPrefs(context: Context) {
   private val prefs: SharedPreferences
 
   init {
-    val masterKey = MasterKey.Builder(context, "payrecord_collector_master")
+    val masterKey = MasterKey.Builder(context, "paytsek_collector_master")
       .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
       .build()
     prefs = EncryptedSharedPreferences.create(
       context,
-      "payrecord_collector_secure",
+      "paytsek_collector_secure",
       masterKey,
       EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
       EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,

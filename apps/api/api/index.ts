@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { API_VERSION_HEADER, IDEMPOTENCY_HEADER, WORKSPACE_HEADER } from '@payrecord/contracts';
+import { API_VERSION_HEADER, IDEMPOTENCY_HEADER, WORKSPACE_HEADER } from '@paytsek/contracts';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { AppModule } from '../src/app.module';
 import { ApiExceptionFilter } from '../src/common/errors';
@@ -23,7 +23,9 @@ let cached: Promise<(req: IncomingMessage, res: ServerResponse) => void> | null 
 
 async function bootstrap(): Promise<(req: IncomingMessage, res: ServerResponse) => void> {
   const env = loadEnv();
-  const app = await NestFactory.create(AppModule, { logger: ['warn', 'error'] });
+  // PayMongo signatures are calculated over unmodified bytes. Keep rawBody
+  // available to that one route while retaining normal JSON parsing elsewhere.
+  const app = await NestFactory.create(AppModule, { logger: ['warn', 'error'], rawBody: true });
   app.useGlobalFilters(new ApiExceptionFilter());
 
   const origins = env.API_CORS_ORIGINS.split(',')
@@ -39,6 +41,17 @@ async function bootstrap(): Promise<(req: IncomingMessage, res: ServerResponse) 
 }
 
 export default async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  // Vercel functions live below /api. The public API deliberately lives at
+  // /v1, so the rewrite carries the original route in a query parameter.
+  // Restore it before Express/Nest sees the request; retaining regular query
+  // parameters keeps record filtering and pagination intact.
+  const requestUrl = new URL(req.url ?? '/', 'http://localhost');
+  const originalPath = requestUrl.searchParams.get('paytsek_path');
+  if (originalPath?.startsWith('/')) {
+    requestUrl.searchParams.delete('paytsek_path');
+    const remainingQuery = requestUrl.searchParams.toString();
+    req.url = `${originalPath}${remainingQuery ? `?${remainingQuery}` : ''}`;
+  }
   cached ??= bootstrap().catch((e) => {
     // Do not cache a failed bootstrap: a transient failure (e.g. the database
     // being briefly unreachable) would otherwise poison this instance for its

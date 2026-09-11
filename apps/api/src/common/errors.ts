@@ -6,7 +6,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import type { ApiErrorBody, ApiErrorCode } from '@payrecord/contracts';
+import type { ApiErrorBody, ApiErrorCode } from '@paytsek/contracts';
 import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
 

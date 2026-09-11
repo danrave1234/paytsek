@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { JobKind } from '@payrecord/contracts';
+import type { JobKind } from '@paytsek/contracts';
 import { DbService, type Queryable } from '../db/db.service';
 
 export interface JobRow {

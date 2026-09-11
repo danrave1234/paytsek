@@ -1,5 +1,5 @@
-import { PROVIDERS, type Provider } from '@payrecord/contracts';
-import { FLOW_REGISTRY, autoMatchFlowsForReceivingProvider } from '@payrecord/receipt-parsers';
+import { PROVIDERS, type Provider } from '@paytsek/contracts';
+import { FLOW_REGISTRY, autoMatchFlowsForReceivingProvider } from '@paytsek/receipt-parsers';
 
 /**
  * Provider support shown on the marketing pages, DERIVED from the capability

@@ -49,11 +49,14 @@ export const EnvSchema = z.object({
    */
   CRON_SECRET: z.string().optional().default(''),
 
-  REVENUECAT_SECRET_API_KEY: z.string().optional().default(''),
-  REVENUECAT_WEBHOOK_AUTH_HEADER: z.string().optional().default(''),
-  BILLING_PRODUCT_SOLO_MONTHLY: z.string().default('payrecord_solo_monthly'),
-  BILLING_PRODUCT_TEAM_MONTHLY: z.string().default('payrecord_team_monthly'),
-  BILLING_PRODUCT_PACK_500: z.string().default('payrecord_pack_500'),
+  /** PayMongo secret key. Server-only: never expose it to the web or mobile app. */
+  PAYMONGO_SECRET_KEY: z.string().optional().default(''),
+  /** Per-webhook endpoint secret used to verify Paymongo-Signature. */
+  PAYMONGO_WEBHOOK_SECRET: z.string().optional().default(''),
+  /** Optional override for test environments; live PayMongo links are PHP. */
+  PAYMONGO_API_URL: z.string().url().default('https://api.paymongo.com'),
+  /** Public dashboard destination after a hosted PayMongo checkout completes. */
+  PAYTSEK_WEB_URL: z.string().url().default('https://www.paytsek.online'),
 
   RETENTION_UNLINKED_EVENTS_DAYS: int(7),
   RETENTION_PROOF_IMAGE_FREE_DAYS: int(30),
