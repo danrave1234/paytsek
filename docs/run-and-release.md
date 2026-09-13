@@ -1,119 +1,54 @@
-# Run on your phone, build APKs, publish releases, deploy the website
+# Run, release, and deploy PayTsek
 
-Everything below assumes the repo root `paytsek/` and that `.env` and
-`apps/mobile/.env` are filled in (Supabase URL/keys — already done).
+## Development build
 
-## 1. Run the app on your Android phone (development)
-
-The app uses native modules (notification listener, ML Kit OCR), so **Expo Go
-will not work** — you need a development build installed once, after which JS
-changes hot-reload over Wi‑Fi/USB.
-
-### One-time setup on the PC
-1. Android Studio → SDK Manager: Android 15/16 SDK + Platform-Tools. Make sure
-   `adb` is on PATH: `%LOCALAPPDATA%\Android\Sdk\platform-tools`.
-2. JDK 17 (`java -version`).
-3. `pnpm install` at the repo root.
-
-### One-time setup on the phone
-1. Settings → About phone → tap *Build number* 7× → Developer options → enable
-   **USB debugging**. Plug in, accept the RSA prompt. `adb devices` must list it.
-2. Have GCash installed on the phone that will *receive* payments.
-
-### Build & install
-```powershell
-cd apps\mobile
-# point the app at the API on your PC (phone and PC on the same Wi‑Fi)
-# apps\mobile\.env → EXPO_PUBLIC_API_URL=http://<your-PC-LAN-IP>:3000
-npx expo prebuild --platform android      # generates android/ from app.config.ts
-npx expo run:android --device             # compiles, installs, starts Metro
-```
-In another two terminals: `pnpm api:dev` and `pnpm api:worker`.
-
-After the first install you only need `npx expo start --dev-client` and open
-the PayTsek app on the phone. Re-run `expo run:android` when native code /
-config plugins change.
-
-On the receiving phone: Android Settings → Notifications → *Notification
-access* → allow **PayTsek**, then in the app go to Sources and enable GCash.
-
-### No USB cable? Build a dev APK in the cloud
-```powershell
-cd apps\mobile
-eas build --platform android --profile development
-```
-Scan the QR code / open the link on the phone to install. Then run
-`npx expo start --dev-client --tunnel` on the PC and open the app.
-
-## 2. Produce a shareable APK (beta testers)
+PayTsek uses native notification collection and on-device OCR. Expo Go cannot
+run either module.
 
 ```powershell
-cd apps\mobile
-eas build --platform android --profile preview     # signed .apk, ~10–15 min
+pnpm install
+pnpm api:dev
+pnpm api:worker
+
+Copy-Item apps/mobile/.env.example apps/mobile/.env
+cd apps/mobile
+npx expo prebuild --platform android
+npx expo run:android --device
 ```
-`eas.json` uses the local keystore in `apps/mobile/credentials/` (never
-committed). The `preview` profile hard-codes `EXPO_PUBLIC_API_URL` — change it
-to your deployed API URL (see §5) before sharing builds outside your LAN.
 
-## 3. Automatic GitHub Releases (APK attached)
+On the Android phone used as the payment phone, grant **Notification access**
+to PayTsek through Android Settings. The app only collects supported incoming
+payment notifications after the owner has paired the phone to a payment source.
 
-`.github/workflows/release-android.yml` builds on EAS and attaches
-`PayTsek-vX.Y.Z.apk` to a GitHub Release whenever you push a `v*` tag. The
-website's Download page links to the *latest* release automatically.
+## Publish an Android APK
 
-### Add these repository secrets once
-GitHub → repo → Settings → Secrets and variables → Actions:
+1. In `apps/mobile/app.config.ts`, increment both `version` and Android
+   `versionCode`. `versionCode` must be greater than every shipped APK.
+2. Run the checks in `AGENTS.md`, commit, and push the release commit to
+   `main`.
+3. Manually run **Release Android APK** in GitHub Actions.
+4. Wait for the run to succeed. The workflow publishes
+   `PayTsek-v<version>.apk` on the matching GitHub release.
 
-| Secret | Where to get it |
-| --- | --- |
-| `EXPO_TOKEN` | https://expo.dev/accounts/danrave1234/settings/access-tokens |
-| `ANDROID_KEYSTORE_BASE64` | `[Convert]::ToBase64String([IO.File]::ReadAllBytes("apps\mobile\credentials\android-upload.jks")) \| Set-Clipboard` |
-| `ANDROID_KEYSTORE_PASSWORD` | `keystorePassword` in `apps/mobile/credentials.json` |
-| `ANDROID_KEY_ALIAS` | `keyAlias` in `apps/mobile/credentials.json` |
-| `ANDROID_KEY_PASSWORD` | `keyPassword` in `apps/mobile/credentials.json` |
+The workflow requires the Android signing secrets plus the three GitHub Actions
+variables `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_SUPABASE_URL`, and
+`EXPO_PUBLIC_SUPABASE_ANON_KEY`. Never place these values in source files.
 
-### Cut a release
-1. Bump `version` in `apps/mobile/app.config.ts` and add an entry at the top of
-   `apps/web/lib/releases.ts` (this is what /updates shows).
-2. Commit, then:
-   ```powershell
-   git tag v0.1.0
-   git push origin main --tags
-   ```
-3. Watch Actions → *Release Android APK*. When green, the APK is at
-   https://github.com/danrave1234/paytsek/releases/latest.
+## Production deployment
 
-Keep the same keystore forever: Android only allows in-place updates when the
-signing key matches. Back up `apps/mobile/credentials/android-upload.jks` and
-`credentials.json` somewhere safe.
+- API: Vercel project `paytsek-api`, domain `https://api.paytsek.online`.
+  From the repository root, link that project and deploy with
+  `vercel --prod --yes --scope danrave1234s-projects`.
+- Web: Vercel project `paytsek-web`, Root Directory `apps/web`, domains
+  `https://www.paytsek.online` and `https://paytsek.online`. Pushes to `main`
+  deploy it automatically. Its configuration is `apps/web/vercel.json`.
 
-## 4. Website on Vercel
+Do not deploy the repository root while it is linked to `paytsek-web`; the
+root `vercel.json` belongs to the API. Confirm a deployment is **Ready** and
+has the intended domain alias before announcing it.
 
-Project: **paytsek-web** (team `danrave1234s-projects`), GitHub repo
-connected. Live at https://paytsek-web.vercel.app.
+## Current product status
 
-- Manual deploy anytime: `cd apps\web; vercel deploy --prod`.
-- Git auto-deploys: in the Vercel dashboard → paytsek-web → Settings →
-  General → **Root Directory = `apps/web`** (one-time; the CLI cannot set it).
-  After that every push to `main` deploys production and PRs get previews.
-- Optional env vars (Settings → Environment Variables):
-  `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_PLAY_STORE_URL`,
-  `NEXT_PUBLIC_APP_STORE_URL`, `NEXT_PUBLIC_TESTFLIGHT_URL`,
-  `NEXT_PUBLIC_ANDROID_APK_URL` (defaults to the latest GitHub release).
-- Custom domain: Settings → Domains → add `paytsek.ph`, then set
-  `NEXT_PUBLIC_SITE_URL=https://paytsek.ph`.
-
-## 5. API for phones outside your Wi‑Fi
-
-The NestJS API (`apps/api`) is a long-running Node process + worker, so it
-does not fit Vercel functions. Deploy it to Railway / Render / Fly.io:
-Dockerfile-less Node service, build `pnpm --filter @paytsek/api build`, start
-`node apps/api/dist/main.js` (and a second service for `dist/worker.js`), with
-the variables from `.env.example`. Then set `EXPO_PUBLIC_API_URL` in
-`apps/mobile/eas.json` (`preview`/`production`) to that URL and rebuild.
-
-## 6. iPhone
-
-Requires a Mac with Xcode 16 or an EAS iOS build with an Apple Developer
-account (`eas build --platform ios`). TestFlight link → set
-`NEXT_PUBLIC_TESTFLIGHT_URL` on Vercel.
+PayTsek is a free public beta. Billing, subscriptions, checkout, renewal,
+record allowances, and paid usage tracking are disabled. Do not configure a
+payment provider or present paid plans until a future, explicit go-live decision.
