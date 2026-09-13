@@ -15,14 +15,14 @@ export const EvidenceState = z.enum([
 ]);
 export type EvidenceState = z.infer<typeof EvidenceState>;
 
-/** Default user-facing labels. Never "GCash verified" or a bare "VERIFIED". */
+/** User-facing evidence labels. Never imply direct provider verification. */
 export const EVIDENCE_STATE_LABELS: Record<EvidenceState, string> = {
-  UNVERIFIED: 'Unverified',
+  UNVERIFIED: 'Not verified',
   REVIEW_REQUIRED: 'Review needed',
-  MATCHED_AUTO: 'Notification matched',
-  MATCHED_BY_USER: 'Notification matched',
-  CONFIRMED_MANUALLY: 'Confirmed manually',
-  VOIDED: 'Voided',
+  MATCHED_AUTO: 'Verified by notification',
+  MATCHED_BY_USER: 'Verified by notification',
+  CONFIRMED_MANUALLY: 'Verified manually',
+  VOIDED: 'Deleted',
 };
 
 /** Required disclosure shown on any automatic-match detail view. */
