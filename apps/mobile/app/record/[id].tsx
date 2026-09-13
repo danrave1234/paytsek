@@ -17,7 +17,7 @@ function DetailCell({ label, value, wide = false }: { label: string; value: stri
 }
 
 const STATUS_COPY: Record<EvidenceState, { title: string; detail: string; icon: string }> = {
-  UNVERIFIED: { title: 'Waiting for payment notification', detail: 'The receipt is safely recorded. This status updates after the payment phone receives and syncs its notification.', icon: 'clock-outline' },
+  UNVERIFIED: { title: 'Not verified', detail: 'No notification match or manual wallet confirmation is linked to this proof.', icon: 'shield-alert-outline' },
   REVIEW_REQUIRED: { title: 'Needs a quick review', detail: 'More than one notification may fit this payment. Choose the right one or confirm it after checking the wallet.', icon: 'alert-circle-outline' },
   MATCHED_AUTO: { title: 'Matched to payment notification', detail: 'The amount and timing matched an incoming notification on the payment phone.', icon: 'bell-check-outline' },
   MATCHED_BY_USER: { title: 'Notification selected', detail: 'A team member linked this receipt to the selected incoming notification.', icon: 'account-check-outline' },
@@ -99,7 +99,7 @@ export default function RecordDetail() {
     <View style={styles.topBar}><IconButton icon="arrow-left" accessibilityLabel="Back to records" onPress={() => router.back()} /><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment record</Text><View style={{ width: 48 }} /></View>
 
     <View style={[styles.hero, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
-      <View style={styles.heroTop}><View style={[styles.walletIcon, { backgroundColor: theme.colors.primaryContainer }]}><Icon source="wallet-outline" size={23} color={theme.colors.primary} /></View>{r.evidenceState === 'UNVERIFIED' ? <View style={styles.savedPill}><Icon source="check" size={16} color="#86E7C6" /><Text variant="labelSmall" style={{ color: '#86E7C6', fontWeight: '700' }}>Receipt saved</Text></View> : <StateChip state={r.evidenceState} />}</View>
+      <View style={styles.heroTop}><View style={[styles.walletIcon, { backgroundColor: theme.colors.primaryContainer }]}><Icon source="wallet-outline" size={23} color={theme.colors.primary} /></View><StateChip state={r.evidenceState} /></View>
       <Text variant="headlineLarge" style={styles.amount}>{peso(r.amountCentavos)}</Text>
       <Text variant="titleMedium" style={{ fontWeight: '700' }}>{r.sourceLabel}</Text>
       <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(r.createdAt)}</Text>
@@ -146,7 +146,6 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md }, sectionIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   candidate: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.md, padding: SPACING.md, gap: SPACING.sm }, verificationAction: { alignItems: 'flex-start' },
   matchNote: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
-  savedPill: { minHeight: 30, borderRadius: 16, paddingHorizontal: SPACING.sm, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#0B463D' },
   recordActions: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, alignItems: 'center' },
   detailGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: SPACING.md, rowGap: SPACING.lg }, detailCell: { width: '47%', gap: SPACING.xs }, detailCellWide: { width: '100%' },
   proofCard: { borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' }, proofHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SPACING.lg }, proof: { width: '100%', height: 320, borderRadius: 0 },

@@ -16,19 +16,19 @@ type RowItem =
   | { kind: 'record'; id: string; record: RecordSummary; at: string };
 
 function recordStatus(item: RowItem) {
-  if (item.kind === 'draft') return { label: 'Receipt saved', icon: 'check', color: '#86E7C6', background: '#0B463D' };
+  if (item.kind === 'draft') return { label: 'Not verified', icon: 'shield-alert-outline', color: '#B5BCCB', background: '#2D3442' };
   switch (item.record.evidenceState) {
     case 'MATCHED_AUTO':
     case 'MATCHED_BY_USER':
-      return { label: 'Notification matched', icon: 'check', color: '#86E7C6', background: '#0B463D' };
+      return { label: 'Verified by notification', icon: 'shield-check', color: '#86E7C6', background: '#0B463D' };
     case 'CONFIRMED_MANUALLY':
-      return { label: 'Confirmed manually', icon: 'check', color: '#86E7C6', background: '#0B463D' };
+      return { label: 'Verified manually', icon: 'account-check', color: '#86E7C6', background: '#0B463D' };
     case 'REVIEW_REQUIRED':
       return { label: 'Needs review', icon: 'alert-outline', color: '#F5C56A', background: '#513A0B' };
     case 'VOIDED':
-      return { label: 'Voided', icon: 'close', color: '#B5BCCB', background: '#2D3442' };
+      return { label: 'Deleted', icon: 'close', color: '#B5BCCB', background: '#2D3442' };
     default:
-      return { label: 'Receipt saved', icon: 'check', color: '#86E7C6', background: '#0B463D' };
+      return { label: 'Not verified', icon: 'shield-alert-outline', color: '#B5BCCB', background: '#2D3442' };
   }
 }
 

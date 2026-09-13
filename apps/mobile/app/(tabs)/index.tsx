@@ -18,19 +18,19 @@ type FeedItem =
   | { kind: 'remote'; id: string; record: RecordSummary; at: string };
 
 function savedStatus(item: FeedItem) {
-  if (item.kind === 'local') return { label: 'Receipt saved', icon: 'check', tone: 'saved' as const };
+  if (item.kind === 'local') return { label: 'Not verified', icon: 'shield-alert-outline', tone: 'unverified' as const };
   switch (item.record.evidenceState) {
     case 'MATCHED_AUTO':
     case 'MATCHED_BY_USER':
-      return { label: 'Notification matched', icon: 'check', tone: 'matched' as const };
+      return { label: 'Verified by notification', icon: 'shield-check', tone: 'verified' as const };
     case 'CONFIRMED_MANUALLY':
-      return { label: 'Confirmed manually', icon: 'check', tone: 'matched' as const };
+      return { label: 'Verified manually', icon: 'account-check', tone: 'verified' as const };
     case 'REVIEW_REQUIRED':
       return { label: 'Needs review', icon: 'alert-outline', tone: 'review' as const };
     case 'VOIDED':
-      return { label: 'Voided', icon: 'close', tone: 'muted' as const };
+      return { label: 'Deleted', icon: 'close', tone: 'muted' as const };
     default:
-      return { label: 'Receipt saved', icon: 'check', tone: 'saved' as const };
+      return { label: 'Not verified', icon: 'shield-alert-outline', tone: 'unverified' as const };
   }
 }
 
@@ -197,14 +197,15 @@ export default function Home() {
                           styles.statusPill,
                           savedStatus(item).tone === 'review' && { backgroundColor: theme.colors.tertiaryContainer },
                           savedStatus(item).tone === 'muted' && { backgroundColor: theme.colors.surfaceVariant },
-                          (savedStatus(item).tone === 'saved' || savedStatus(item).tone === 'matched') && { backgroundColor: '#0B463D' },
+                          savedStatus(item).tone === 'unverified' && { backgroundColor: theme.colors.surfaceVariant },
+                          savedStatus(item).tone === 'verified' && { backgroundColor: '#0B463D' },
                         ]}>
                           <Icon
                             source={savedStatus(item).icon}
                             size={16}
-                            color={savedStatus(item).tone === 'review' ? theme.colors.onTertiaryContainer : savedStatus(item).tone === 'muted' ? theme.colors.onSurfaceVariant : '#86E7C6'}
+                            color={savedStatus(item).tone === 'verified' ? '#86E7C6' : savedStatus(item).tone === 'review' ? theme.colors.onTertiaryContainer : theme.colors.onSurfaceVariant}
                           />
-                          <Text variant="labelSmall" style={{ color: savedStatus(item).tone === 'review' ? theme.colors.onTertiaryContainer : savedStatus(item).tone === 'muted' ? theme.colors.onSurfaceVariant : '#86E7C6', fontWeight: '700' }}>
+                          <Text variant="labelSmall" style={{ color: savedStatus(item).tone === 'verified' ? '#86E7C6' : savedStatus(item).tone === 'review' ? theme.colors.onTertiaryContainer : theme.colors.onSurfaceVariant, fontWeight: '700' }}>
                             {savedStatus(item).label}
                           </Text>
                         </View>
