@@ -4,7 +4,7 @@ import React, { useCallback, useState } from 'react';
 import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Icon, IconButton, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Loading, StateChip } from '@/components/ui';
+import { Loading } from '@/components/ui';
 import { listDrafts, type Draft } from '@/lib/drafts';
 import { OfflineError } from '@/lib/api';
 import { manilaTime, peso } from '@/lib/format';
@@ -16,6 +16,23 @@ import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET } from '@/theme';
 type FeedItem =
   | { kind: 'local'; id: string; draft: Draft; at: string }
   | { kind: 'remote'; id: string; record: RecordSummary; at: string };
+
+function savedStatus(item: FeedItem) {
+  if (item.kind === 'local') return { label: 'Receipt saved', icon: 'check', tone: 'saved' as const };
+  switch (item.record.evidenceState) {
+    case 'MATCHED_AUTO':
+    case 'MATCHED_BY_USER':
+      return { label: 'Notification matched', icon: 'check', tone: 'matched' as const };
+    case 'CONFIRMED_MANUALLY':
+      return { label: 'Confirmed manually', icon: 'check', tone: 'matched' as const };
+    case 'REVIEW_REQUIRED':
+      return { label: 'Needs review', icon: 'alert-outline', tone: 'review' as const };
+    case 'VOIDED':
+      return { label: 'Voided', icon: 'close', tone: 'muted' as const };
+    default:
+      return { label: 'Receipt saved', icon: 'check', tone: 'saved' as const };
+  }
+}
 
 function greeting() {
   const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', hour12: false }).format(new Date()));
@@ -53,15 +70,6 @@ export default function Home() {
 
   const savedAmount = Number(params.savedAmount);
   const justSaved = Number.isFinite(savedAmount) && savedAmount > 0;
-  // Older API deployments did not expose the all-records dashboard total.
-  // Keep the upgrade usable while the API rolls forward; the fallback still
-  // covers the normal captured/matched/manual states.
-  const recordedCentavos = home.data
-    ? (home.data.today.recordedCentavos ?? (home.data.today.notificationMatchedCentavos + home.data.today.confirmedManuallyCentavos + home.data.today.unverifiedCentavos))
-    : 0;
-  const recordedCount = home.data
-    ? (home.data.today.recordedCount ?? (home.data.today.notificationMatchedCount + home.data.today.confirmedManuallyCount + home.data.today.unverifiedCount + home.data.today.reviewRequiredCount))
-    : 0;
   const offline = home.error instanceof OfflineError;
   const refreshing = home.isRefetching;
   const refresh = () => {
@@ -85,7 +93,10 @@ export default function Home() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.colors.primary} />}
       >
         <View style={styles.header}>
-          <Text variant="titleLarge" style={styles.heading}>{greeting()}</Text>
+          <View style={{ gap: 4 }}>
+            <Text variant="headlineMedium" style={styles.heading}>{greeting()}</Text>
+            <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant }}>Scan payment proofs and we’ll save them</Text>
+          </View>
           <IconButton icon="account-circle-outline" size={28} onPress={() => router.push('/(tabs)/settings')} accessibilityLabel="Open settings" />
         </View>
 
@@ -96,7 +107,6 @@ export default function Home() {
             </View>
             <View style={{ flex: 1, gap: 2 }}>
               <Text variant="titleMedium" style={{ color: theme.colors.onSecondaryContainer }}>{peso(savedAmount)} saved</Text>
-              <Text variant="bodySmall" style={{ color: theme.colors.onSecondaryContainer }}>Waiting for the payment-phone notification</Text>
             </View>
           </View>
         ) : null}
@@ -116,30 +126,6 @@ export default function Home() {
           </TouchableRipple>
         ) : null}
 
-        {home.data ? (
-          <View style={[styles.totalCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
-            <View style={styles.totalHeader}>
-              <View style={{ gap: 2 }}>
-                <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>RECORDED TODAY</Text>
-                <Text variant="headlineMedium" style={styles.totalAmount}>{peso(recordedCentavos)}</Text>
-              </View>
-              <View style={[styles.totalIcon, { backgroundColor: theme.colors.primaryContainer }]}>
-                <Icon source="receipt-text-check-outline" size={24} color={theme.colors.primary} />
-              </View>
-            </View>
-            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-              {recordedCount} payment{recordedCount === 1 ? '' : 's'} recorded · includes payments still awaiting verification
-            </Text>
-            <View style={[styles.statusStrip, { borderTopColor: theme.colors.outlineVariant }]}>
-              {home.data.today.notificationMatchedCount > 0 ? <StateChip state="MATCHED_AUTO" compact /> : null}
-              {home.data.today.confirmedManuallyCount > 0 ? <StateChip state="CONFIRMED_MANUALLY" compact /> : null}
-              {home.data.today.unverifiedCount > 0 ? <StateChip state="UNVERIFIED" compact /> : null}
-              {home.data.today.reviewRequiredCount > 0 ? <StateChip state="REVIEW_REQUIRED" compact /> : null}
-              {recordedCount === 0 ? <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>No payments captured yet</Text> : null}
-            </View>
-          </View>
-        ) : home.isLoading ? <Loading variant="dashboard" label="Loading today’s records" /> : null}
-
         <Button
           mode="contained"
           icon="line-scan"
@@ -148,7 +134,7 @@ export default function Home() {
           style={{ borderRadius: RADIUS.xl }}
           onPress={() => router.push('/(tabs)/scan')}
         >
-          Scan payment
+          Scan proof
         </Button>
 
         {offline ? (
@@ -171,15 +157,16 @@ export default function Home() {
 
         <View style={{ gap: SPACING.sm }}>
           <View style={styles.sectionHeading}>
-            <Text variant="titleLarge" style={{ fontWeight: '700' }}>Recent records</Text>
-            <Button compact onPress={() => router.push('/(tabs)/records')}>See all</Button>
+            <Text variant="headlineSmall" style={{ fontWeight: '700' }}>Today</Text>
+            <Button compact onPress={() => router.push('/(tabs)/records')}>Records</Button>
           </View>
+          <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant, fontWeight: '600' }}>Recent payments</Text>
 
           {home.isLoading && feed.length === 0 ? <Loading variant="list" label="Loading records" /> : null}
           {!home.isLoading && feed.length === 0 ? (
             <View style={[styles.empty, { borderColor: theme.colors.outlineVariant }]}>
               <Icon source="receipt-text-outline" size={28} color={theme.colors.onSurfaceVariant} />
-              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>No records yet</Text>
+              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>Your saved payment proofs will appear here.</Text>
             </View>
           ) : null}
 
@@ -196,8 +183,8 @@ export default function Home() {
                     disabled={item.kind === 'local'}
                   >
                     <View style={[styles.row, index > 0 && { borderTopColor: theme.colors.outlineVariant, borderTopWidth: StyleSheet.hairlineWidth }]}>
-                      <View style={styles.providerIcon}>
-                        <Icon source="wallet-outline" size={22} color={theme.colors.onSurfaceVariant} />
+                      <View style={[styles.providerIcon, { backgroundColor: theme.colors.primaryContainer }]}>
+                        <Icon source="wallet-outline" size={24} color={theme.colors.primary} />
                       </View>
                       <View style={{ flex: 1, gap: 2 }}>
                         <Text variant="titleMedium" style={{ fontWeight: '700' }}>{peso(amount)}</Text>
@@ -205,9 +192,23 @@ export default function Home() {
                           {source}{reference ? ` · ${reference.slice(-6)}` : ''}
                         </Text>
                       </View>
-                      <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                      <View style={{ alignItems: 'flex-end', gap: SPACING.xs }}>
+                        <View style={[
+                          styles.statusPill,
+                          savedStatus(item).tone === 'review' && { backgroundColor: theme.colors.tertiaryContainer },
+                          savedStatus(item).tone === 'muted' && { backgroundColor: theme.colors.surfaceVariant },
+                          (savedStatus(item).tone === 'saved' || savedStatus(item).tone === 'matched') && { backgroundColor: '#0B463D' },
+                        ]}>
+                          <Icon
+                            source={savedStatus(item).icon}
+                            size={16}
+                            color={savedStatus(item).tone === 'review' ? theme.colors.onTertiaryContainer : savedStatus(item).tone === 'muted' ? theme.colors.onSurfaceVariant : '#86E7C6'}
+                          />
+                          <Text variant="labelSmall" style={{ color: savedStatus(item).tone === 'review' ? theme.colors.onTertiaryContainer : savedStatus(item).tone === 'muted' ? theme.colors.onSurfaceVariant : '#86E7C6', fontWeight: '700' }}>
+                            {savedStatus(item).label}
+                          </Text>
+                        </View>
                         <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(item.at)}</Text>
-                        {item.kind === 'local' ? <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Syncing</Text> : <StateChip state={item.record.evidenceState} compact />}
                       </View>
                     </View>
                   </TouchableRipple>
@@ -222,22 +223,18 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  header: { minHeight: 84, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.sm },
   heading: { fontWeight: '700', letterSpacing: -0.8 },
   saved: { minHeight: 88, borderRadius: RADIUS.xl, padding: SPACING.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
   savedIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   update: { minHeight: 72, paddingHorizontal: SPACING.md, borderRadius: RADIUS.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   updateIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  totalCard: { borderRadius: RADIUS.xl, borderWidth: StyleSheet.hairlineWidth, padding: SPACING.lg, gap: SPACING.md },
-  totalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  totalAmount: { fontWeight: '700', letterSpacing: -0.9 },
-  totalIcon: { width: 48, height: 48, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
-  statusStrip: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: SPACING.md, flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
   compactStatus: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   attention: { minHeight: 60, borderRadius: RADIUS.lg, paddingHorizontal: SPACING.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   sectionHeading: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   list: { borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  row: { minHeight: 76, marginHorizontal: SPACING.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
-  providerIcon: { width: 32, height: 44, alignItems: 'flex-start', justifyContent: 'center' },
+  row: { minHeight: 96, marginHorizontal: SPACING.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  providerIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  statusPill: { minHeight: 30, borderRadius: 16, paddingHorizontal: SPACING.sm, flexDirection: 'row', alignItems: 'center', gap: 5 },
   empty: { minHeight: 112, borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center', gap: SPACING.xs },
 });

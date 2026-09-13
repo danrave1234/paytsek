@@ -72,15 +72,22 @@ export async function downloadAndInstallUpdate(
 
   const safeVersion = update.version.replace(/[^0-9A-Za-z.-]/g, '-');
   const destination = `${cacheDirectory}PayTsek-${safeVersion}.apk`;
-  await FileSystem.deleteAsync(destination, { idempotent: true });
+  // Android may send the person to Settings to allow installs from PayTsek.
+  // The app becomes active again afterwards, so reuse the completed, versioned
+  // APK rather than deleting it and downloading it a second time.
+  const existing = await FileSystem.getInfoAsync(destination);
+  let apkUri = existing.exists && (existing.size ?? 0) > 0 ? destination : null;
 
-  const task = FileSystem.createDownloadResumable(update.downloadUrl, destination, {}, ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
-    onProgress(totalBytesExpectedToWrite > 0 ? totalBytesWritten / totalBytesExpectedToWrite : 0);
-  });
-  const result = await task.downloadAsync();
-  if (!result?.uri) throw new Error('The update download did not finish.');
+  if (!apkUri) {
+    const task = FileSystem.createDownloadResumable(update.downloadUrl, destination, {}, ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
+      onProgress(totalBytesExpectedToWrite > 0 ? totalBytesWritten / totalBytesExpectedToWrite : 0);
+    });
+    const result = await task.downloadAsync();
+    if (!result?.uri) throw new Error('The update download did not finish.');
+    apkUri = result.uri;
+  }
 
-  const contentUri = await FileSystem.getContentUriAsync(result.uri);
+  const contentUri = await FileSystem.getContentUriAsync(apkUri);
   await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
     data: contentUri,
     type: APK_MIME_TYPE,
