@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ExportFormat, MembershipRole, PlanCode, Provider } from '../enums';
+import { EvidenceState, ExportFormat, MembershipRole, Provider } from '../enums';
 import { uuid } from './pairing';
 import { RecordSummary } from './records';
 
@@ -15,7 +15,6 @@ export const WorkspaceSummary = z.object({
   name: z.string(),
   timezone: z.string(),
   role: MembershipRole,
-  planCode: PlanCode,
   isDemo: z.boolean(),
   createdAt: z.string().datetime(),
 });
@@ -104,6 +103,8 @@ export const HomeSummary = z.object({
     unverifiedCount: z.number().int(),
     unverifiedCentavos: z.number().int(),
     reviewRequiredCount: z.number().int(),
+    /** Actual recorded amount by local workspace hour, index 0 through 23. */
+    hourlyRecordedCentavos: z.array(z.number().int().nonnegative()).length(24),
   }),
   collectors: z.array(
     z.object({
@@ -118,13 +119,38 @@ export const HomeSummary = z.object({
   ),
   /** Latest records for the mobile home feed. This avoids a second cold-load request. */
   recentRecords: z.array(RecordSummary),
-  quota: z.object({
-    monthlyAllowance: z.number().int(),
-    monthlyUsed: z.number().int(),
-    prepaidCreditsRemaining: z.number().int(),
-  }),
 });
 export type HomeSummary = z.infer<typeof HomeSummary>;
+
+// ---- Analytics -------------------------------------------------------------
+
+export const AnalyticsRange = z.enum(['7D', '30D', '90D']);
+export type AnalyticsRange = z.infer<typeof AnalyticsRange>;
+
+export const AnalyticsSummary = z.object({
+  range: AnalyticsRange,
+  timezone: z.string(),
+  from: z.string(),
+  to: z.string(),
+  recordedCount: z.number().int().nonnegative(),
+  recordedCentavos: z.number().int().nonnegative(),
+  daily: z.array(z.object({
+    date: z.string(),
+    recordedCount: z.number().int().nonnegative(),
+    recordedCentavos: z.number().int().nonnegative(),
+  })),
+  byProvider: z.array(z.object({
+    provider: Provider,
+    recordedCount: z.number().int().nonnegative(),
+    recordedCentavos: z.number().int().nonnegative(),
+  })),
+  byEvidence: z.array(z.object({
+    state: EvidenceState,
+    recordedCount: z.number().int().nonnegative(),
+    recordedCentavos: z.number().int().nonnegative(),
+  })),
+});
+export type AnalyticsSummary = z.infer<typeof AnalyticsSummary>;
 
 // ---- Exports ----------------------------------------------------------------
 

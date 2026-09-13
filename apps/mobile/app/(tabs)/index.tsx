@@ -1,241 +1,261 @@
-import type { RecordSummary } from '@paytsek/contracts';
+import { PROVIDER_LABELS, type EvidenceState, type Provider, type RecordSummary } from '@paytsek/contracts';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
-import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { Button, Icon, IconButton, Text, TouchableRipple, useTheme } from 'react-native-paper';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Icon, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AppUpdateDialog } from '@/components/app-update-dialog';
+import { PaymentRecordRow } from '@/components/payment-record-row';
 import { Loading } from '@/components/ui';
-import { listDrafts, type Draft } from '@/lib/drafts';
 import { OfflineError } from '@/lib/api';
-import { manilaTime, peso } from '@/lib/format';
-import { useHome } from '@/lib/queries';
-import { downloadAndInstallUpdate, useAppUpdate } from '@/lib/release-update';
+import { listDrafts, type Draft } from '@/lib/drafts';
+import { peso, workspaceDate } from '@/lib/format';
+import { prefetchRecord, useHome } from '@/lib/queries';
+import { useAppUpdate } from '@/lib/release-update';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET } from '@/theme';
 
 type FeedItem =
-  | { kind: 'local'; id: string; draft: Draft; at: string }
-  | { kind: 'remote'; id: string; record: RecordSummary; at: string };
+  | { kind: 'local'; id: string; draft: Draft; at: string; source: string; state: EvidenceState; amount: number }
+  | { kind: 'remote'; id: string; record: RecordSummary; at: string; source: string; state: EvidenceState; amount: number };
 
-function savedStatus(item: FeedItem) {
-  if (item.kind === 'local') return { label: 'Not verified', icon: 'shield-alert-outline', tone: 'unverified' as const };
-  switch (item.record.evidenceState) {
-    case 'MATCHED_AUTO':
-    case 'MATCHED_BY_USER':
-      return { label: 'Verified by notification', icon: 'shield-check', tone: 'verified' as const };
-    case 'CONFIRMED_MANUALLY':
-      return { label: 'Verified manually', icon: 'account-check', tone: 'verified' as const };
-    case 'REVIEW_REQUIRED':
-      return { label: 'Needs review', icon: 'alert-outline', tone: 'review' as const };
-    case 'VOIDED':
-      return { label: 'Deleted', icon: 'close', tone: 'muted' as const };
-    default:
-      return { label: 'Not verified', icon: 'shield-alert-outline', tone: 'unverified' as const };
-  }
+function localProvider(provider: Provider | null | undefined): string {
+  return provider ? PROVIDER_LABELS[provider] : 'Payment';
 }
 
-function greeting() {
-  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', hour12: false }).format(new Date()));
-  return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+function localOccurredAt(draft: Draft): string {
+  return draft.request.corrected.receiptTransactionAt ?? draft.request.capturedAt ?? draft.createdAt;
 }
 
-export default function Home() {
+function remoteOccurredAt(record: RecordSummary): string {
+  return record.receiptTransactionAt ?? record.capturedAt ?? record.createdAt;
+}
+
+function hourInZone(iso: string, timezone: string): number {
+  const formatted = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour: '2-digit',
+    hour12: false,
+    hourCycle: 'h23',
+  }).format(new Date(iso));
+  const parsed = Number(formatted);
+  return parsed === 24 ? 0 : parsed;
+}
+
+function HourlyRhythm({ values }: { values: number[] }) {
+  const theme = useTheme();
+  const grouped = Array.from({ length: 12 }, (_, index) => (values[index * 2] ?? 0) + (values[index * 2 + 1] ?? 0));
+  const max = Math.max(...grouped, 1);
+  return (
+    <View accessible accessibilityLabel="Recorded amount by time of day" style={styles.rhythm}>
+      <View style={styles.bars} importantForAccessibility="no-hide-descendants">
+        {grouped.map((value, index) => (
+          <View key={index} style={styles.barSlot}>
+            <View
+              style={[
+                styles.bar,
+                {
+                  height: value > 0 ? Math.max(7, Math.round((value / max) * 58)) : 3,
+                  backgroundColor: value > 0 ? theme.colors.primary : theme.colors.outlineVariant,
+                  opacity: value > 0 ? 0.82 : 0.7,
+                },
+              ]}
+            />
+          </View>
+        ))}
+      </View>
+      <View style={styles.axis} importantForAccessibility="no-hide-descendants">
+        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>12 AM</Text>
+        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>6 AM</Text>
+        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>12 PM</Text>
+        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>6 PM</Text>
+        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>11 PM</Text>
+      </View>
+    </View>
+  );
+}
+
+export default function Today() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ savedAmount?: string }>();
   const { workspace } = useSession();
+  const timezone = workspace?.timezone || 'Asia/Manila';
   const home = useHome();
   const update = useAppUpdate();
   const [drafts, setDrafts] = useState<Draft[]>([]);
-  const [updateProgress, setUpdateProgress] = useState<number | null>(null);
+  const [showUpdate, setShowUpdate] = useState(false);
 
   const refreshLocal = useCallback(() => {
     if (!workspace) return;
-    void listDrafts(workspace.id).then(setDrafts).catch(() => setDrafts([]));
+    void listDrafts(workspace.id, true).then(setDrafts).catch(() => setDrafts([]));
   }, [workspace]);
 
   useFocusEffect(useCallback(() => {
     refreshLocal();
   }, [refreshLocal, home.dataUpdatedAt]));
 
-  const remote = home.data?.recentRecords ?? [];
-  const remoteIds = new Set(remote.map((record) => record.id));
-  const feed: FeedItem[] = [
-    ...drafts
-      .filter((draft) => !draft.serverRecordId || !remoteIds.has(draft.serverRecordId))
-      .map((draft): FeedItem => ({ kind: 'local', id: draft.clientRecordId, draft, at: draft.createdAt })),
-    ...remote.map((record): FeedItem => ({ kind: 'remote', id: record.id, record, at: record.createdAt })),
-  ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 6);
+  const feed = useMemo<FeedItem[]>(() => {
+    const local: FeedItem[] = drafts.map((draft) => ({
+      kind: 'local',
+      id: draft.clientRecordId,
+      draft,
+      at: localOccurredAt(draft),
+      source: localProvider(draft.request.corrected.receiptProvider),
+      state: 'UNVERIFIED',
+      amount: draft.request.corrected.amountCentavos,
+    }));
+    const remote: FeedItem[] = (home.data?.recentRecords ?? []).map((record) => ({
+      kind: 'remote',
+      id: record.id,
+      record,
+      at: remoteOccurredAt(record),
+      source: record.sourceLabel,
+      state: record.evidenceState,
+      amount: record.amountCentavos,
+    }));
+    return [...local, ...remote]
+      .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+      .slice(0, 8);
+  }, [drafts, home.data?.recentRecords]);
+
+  const pendingCentavos = drafts.reduce((sum, draft) => sum + draft.request.corrected.amountCentavos, 0);
+  const totalCentavos = (home.data?.today.recordedCentavos ?? 0) + pendingCentavos;
+  const recordCount = (home.data?.today.recordedCount ?? 0) + drafts.length;
+  const hourly = [...(home.data?.today.hourlyRecordedCentavos ?? Array.from({ length: 24 }, () => 0))];
+  for (const draft of drafts) {
+    const hour = hourInZone(localOccurredAt(draft), timezone);
+    if (Number.isInteger(hour) && hour >= 0 && hour < 24) hourly[hour] = (hourly[hour] ?? 0) + draft.request.corrected.amountCentavos;
+  }
 
   const savedAmount = Number(params.savedAmount);
   const justSaved = Number.isFinite(savedAmount) && savedAmount > 0;
   const offline = home.error instanceof OfflineError;
-  const refreshing = home.isRefetching;
   const refresh = () => {
     refreshLocal();
     void home.refetch();
   };
-  const installUpdate = useCallback(() => {
-    if (!update.data || updateProgress !== null) return;
-    setUpdateProgress(0);
-    void downloadAndInstallUpdate(update.data, setUpdateProgress)
-      .catch((error: unknown) => {
-        Alert.alert('Update could not start', error instanceof Error ? error.message : 'Please try again.');
-      })
-      .finally(() => setUpdateProgress(null));
-  }, [update.data, updateProgress]);
-
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingTop: SPACING.md, paddingBottom: insets.bottom + TAB_BAR_CLEARANCE, gap: SPACING.lg }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={theme.colors.primary} />}
+        contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + TAB_BAR_CLEARANCE }]}
+        refreshControl={<RefreshControl refreshing={home.isRefetching} onRefresh={refresh} tintColor={theme.colors.primary} />}
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <View style={{ gap: 4 }}>
-            <Text variant="headlineMedium" style={styles.heading}>{greeting()}</Text>
-            <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant }}>Scan payment proofs and we’ll save them</Text>
-          </View>
-          <IconButton icon="account-circle-outline" size={28} onPress={() => router.push('/(tabs)/settings')} accessibilityLabel="Open settings" />
+          <Image source={require('../../assets/paytsek-wordmark.png')} resizeMode="contain" accessibilityLabel="PayTsek" style={styles.wordmark} />
         </View>
 
         {justSaved ? (
-          <View style={[styles.saved, { backgroundColor: theme.colors.secondaryContainer }]} accessibilityRole="alert">
-            <View style={[styles.savedIcon, { backgroundColor: theme.colors.secondary }]}>
-              <Icon source="check" size={24} color={theme.colors.onSecondary} />
-            </View>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text variant="titleMedium" style={{ color: theme.colors.onSecondaryContainer }}>{peso(savedAmount)} saved</Text>
-            </View>
+          <View style={[styles.inlineNotice, { backgroundColor: theme.colors.secondaryContainer }]} accessibilityRole="alert">
+            <Icon source="check-circle" size={19} color={theme.colors.primary} />
+            <Text variant="labelLarge" style={{ color: theme.colors.onSecondaryContainer }}>{peso(savedAmount)} recorded</Text>
           </View>
         ) : null}
 
         {update.data ? (
-          <TouchableRipple onPress={installUpdate} disabled={updateProgress !== null} borderless style={{ borderRadius: RADIUS.lg }} accessibilityRole="button" accessibilityLabel={`Update to PayTsek ${update.data.version}`}>
-            <View style={[styles.update, { backgroundColor: theme.colors.primaryContainer }]}>
-              <View style={[styles.updateIcon, { backgroundColor: theme.colors.primary }]}><Icon source="download" size={20} color={theme.colors.onPrimary} /></View>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text variant="titleSmall" style={{ color: theme.colors.onPrimaryContainer }}>PayTsek {update.data.version} is ready</Text>
-                <Text variant="bodySmall" style={{ color: theme.colors.onPrimaryContainer }}>
-                  {updateProgress === null ? 'Tap to download and install the latest signed update.' : `Downloading update ${Math.round(updateProgress * 100)}%`}
-                </Text>
+          <TouchableRipple onPress={() => setShowUpdate(true)} accessibilityRole="button">
+            <View style={[styles.inlineNotice, { backgroundColor: theme.colors.primaryContainer }]}>
+              <Icon source="download" size={19} color={theme.colors.primary} />
+              <Text variant="labelLarge" style={{ color: theme.colors.onPrimaryContainer, flex: 1 }}>
+                PayTsek {update.data.version} is ready
+              </Text>
+              <Icon source="chevron-right" size={18} color={theme.colors.primary} />
+            </View>
+          </TouchableRipple>
+        ) : null}
+
+        <View style={styles.hero}>
+          <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant }}>
+            {workspaceDate(new Date(), timezone)}
+          </Text>
+          <Text variant="headlineSmall" style={styles.heroTitle}>Recorded today</Text>
+          <Text
+            variant="displayMedium"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
+            style={styles.total}
+          >
+            {peso(totalCentavos)}
+          </Text>
+          <View style={styles.countRow}>
+            <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+              {recordCount} {recordCount === 1 ? 'record' : 'records'}
+            </Text>
+            {offline ? (
+              <View style={styles.offline} accessibilityRole="alert">
+                <Icon source="cloud-off-outline" size={15} color={theme.colors.tertiary} />
+                <Text variant="labelSmall" style={{ color: theme.colors.tertiary }}>Offline</Text>
               </View>
-              <Icon source="chevron-right" size={22} color={theme.colors.primary} />
+            ) : null}
+          </View>
+          <HourlyRhythm values={hourly} />
+        </View>
+
+        <View style={[styles.sectionHeader, { borderBottomColor: theme.colors.outlineVariant }]}>
+          <Text variant="titleMedium" style={styles.sectionTitle}>Latest records</Text>
+          <TouchableRipple onPress={() => router.push('/(tabs)/records')} borderless accessibilityRole="button">
+            <View style={styles.viewAll}>
+              <Text variant="labelLarge" style={{ color: theme.colors.primary }}>View all</Text>
+              <Icon source="arrow-right" size={17} color={theme.colors.primary} />
+            </View>
+          </TouchableRipple>
+        </View>
+
+        {home.isLoading && feed.length === 0 ? <Loading variant="list" label="Loading records" /> : null}
+        {!home.isLoading && feed.length === 0 ? (
+          <TouchableRipple onPress={() => router.push('/(tabs)/scan')} borderless accessibilityRole="button">
+            <View style={styles.empty}>
+              <Icon source="qrcode-scan" size={26} color={theme.colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text variant="titleSmall" style={{ fontWeight: '700' }}>Record your first payment</Text>
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Scan a proof or import a screenshot.</Text>
+              </View>
+              <Icon source="arrow-right" size={20} color={theme.colors.primary} />
             </View>
           </TouchableRipple>
         ) : null}
 
-        <Button
-          mode="contained"
-          icon="line-scan"
-          contentStyle={{ minHeight: 58 }}
-          labelStyle={{ fontSize: 16, fontWeight: '700' }}
-          style={{ borderRadius: RADIUS.xl }}
-          onPress={() => router.push('/(tabs)/scan')}
-        >
-          Scan proof
-        </Button>
-
-        {offline ? (
-          <View style={styles.compactStatus} accessibilityRole="alert">
-            <Icon source="cloud-off-outline" size={18} color={theme.colors.tertiary} />
-            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Offline</Text>
-          </View>
-        ) : null}
-
-        {(home.data?.today.reviewRequiredCount ?? 0) > 0 ? (
-          <TouchableRipple onPress={() => router.push('/(tabs)/review')} borderless style={{ borderRadius: RADIUS.lg }}>
-            <View style={[styles.attention, { backgroundColor: theme.colors.tertiaryContainer }]}>
-              <Icon source="alert-outline" size={21} color={theme.colors.onTertiaryContainer} />
-              <Text variant="titleSmall" style={{ flex: 1, color: theme.colors.onTertiaryContainer }}>Needs attention</Text>
-              <Text variant="labelLarge" style={{ color: theme.colors.onTertiaryContainer }}>{home.data!.today.reviewRequiredCount}</Text>
-              <Icon source="chevron-right" size={20} color={theme.colors.onTertiaryContainer} />
-            </View>
-          </TouchableRipple>
-        ) : null}
-
-        <View style={{ gap: SPACING.sm }}>
-          <View style={styles.sectionHeading}>
-            <Text variant="headlineSmall" style={{ fontWeight: '700' }}>Today</Text>
-            <Button compact onPress={() => router.push('/(tabs)/records')}>Records</Button>
-          </View>
-          <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant, fontWeight: '600' }}>Recent payments</Text>
-
-          {home.isLoading && feed.length === 0 ? <Loading variant="list" label="Loading records" /> : null}
-          {!home.isLoading && feed.length === 0 ? (
-            <View style={[styles.empty, { borderColor: theme.colors.outlineVariant }]}>
-              <Icon source="receipt-text-outline" size={28} color={theme.colors.onSurfaceVariant} />
-              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>Your saved payment proofs will appear here.</Text>
-            </View>
-          ) : null}
-
-          {feed.length ? (
-            <View style={[styles.list, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
-              {feed.map((item, index) => {
-                const amount = item.kind === 'local' ? item.draft.request.corrected.amountCentavos : item.record.amountCentavos;
-                const reference = item.kind === 'local' ? item.draft.request.corrected.referenceValue : item.record.referenceValue;
-                const source = item.kind === 'local' ? (item.draft.request.corrected.receiptProvider ?? 'Payment') : item.record.sourceLabel;
-                return (
-                  <TouchableRipple
-                    key={`${item.kind}.${item.id}`}
-                    onPress={item.kind === 'remote' ? () => router.push(`/record/${item.record.id}`) : undefined}
-                    disabled={item.kind === 'local'}
-                  >
-                    <View style={[styles.row, index > 0 && { borderTopColor: theme.colors.outlineVariant, borderTopWidth: StyleSheet.hairlineWidth }]}>
-                      <View style={[styles.providerIcon, { backgroundColor: theme.colors.primaryContainer }]}>
-                        <Icon source="wallet-outline" size={24} color={theme.colors.primary} />
-                      </View>
-                      <View style={{ flex: 1, gap: 2 }}>
-                        <Text variant="titleMedium" style={{ fontWeight: '700' }}>{peso(amount)}</Text>
-                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>
-                          {source}{reference ? ` · ${reference.slice(-6)}` : ''}
-                        </Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end', gap: SPACING.xs }}>
-                        <View style={[
-                          styles.statusPill,
-                          savedStatus(item).tone === 'review' && { backgroundColor: theme.colors.tertiaryContainer },
-                          savedStatus(item).tone === 'muted' && { backgroundColor: theme.colors.surfaceVariant },
-                          savedStatus(item).tone === 'unverified' && { backgroundColor: theme.colors.surfaceVariant },
-                          savedStatus(item).tone === 'verified' && { backgroundColor: '#0B463D' },
-                        ]}>
-                          <Icon
-                            source={savedStatus(item).icon}
-                            size={16}
-                            color={savedStatus(item).tone === 'verified' ? '#86E7C6' : savedStatus(item).tone === 'review' ? theme.colors.onTertiaryContainer : theme.colors.onSurfaceVariant}
-                          />
-                          <Text variant="labelSmall" style={{ color: savedStatus(item).tone === 'verified' ? '#86E7C6' : savedStatus(item).tone === 'review' ? theme.colors.onTertiaryContainer : theme.colors.onSurfaceVariant, fontWeight: '700' }}>
-                            {savedStatus(item).label}
-                          </Text>
-                        </View>
-                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(item.at)}</Text>
-                      </View>
-                    </View>
-                  </TouchableRipple>
-                );
-              })}
-            </View>
-          ) : null}
+        <View>
+          {feed.map((item, index) => (
+            <PaymentRecordRow
+              key={`${item.kind}.${item.id}`}
+              amountCentavos={item.amount}
+              occurredAt={item.at}
+              sourceLabel={item.source}
+              state={item.state}
+              timezone={timezone}
+              divider={index > 0}
+              onPress={item.kind === 'remote' ? () => router.push(`/record/${item.record.id}`) : undefined}
+              onPressIn={item.kind === 'remote' ? () => { void prefetchRecord(item.record.id); } : undefined}
+            />
+          ))}
         </View>
       </ScrollView>
+      <AppUpdateDialog update={update.data} visible={showUpdate} onDismiss={() => setShowUpdate(false)} />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  header: { minHeight: 84, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.sm },
-  heading: { fontWeight: '700', letterSpacing: -0.8 },
-  saved: { minHeight: 88, borderRadius: RADIUS.xl, padding: SPACING.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
-  savedIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  update: { minHeight: 72, paddingHorizontal: SPACING.md, borderRadius: RADIUS.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  updateIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  compactStatus: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  attention: { minHeight: 60, borderRadius: RADIUS.lg, paddingHorizontal: SPACING.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  sectionHeading: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  list: { borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
-  row: { minHeight: 96, marginHorizontal: SPACING.lg, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
-  providerIcon: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  statusPill: { minHeight: 30, borderRadius: 16, paddingHorizontal: SPACING.sm, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  empty: { minHeight: 112, borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center', gap: SPACING.xs },
+  page: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm },
+  header: { minHeight: 70, flexDirection: 'row', alignItems: 'center' },
+  wordmark: { width: 142, height: 48 },
+  inlineNotice: { minHeight: TOUCH_TARGET, paddingHorizontal: SPACING.md, borderRadius: RADIUS.md, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.sm },
+  hero: { paddingTop: SPACING.lg },
+  heroTitle: { marginTop: SPACING.xs, fontWeight: '800', letterSpacing: -0.45 },
+  total: { marginTop: 2, fontWeight: '800', letterSpacing: -1.45, fontVariant: ['tabular-nums'] },
+  countRow: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  offline: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  rhythm: { marginTop: SPACING.lg },
+  bars: { height: 62, flexDirection: 'row', alignItems: 'flex-end', gap: 5 },
+  barSlot: { flex: 1, height: 62, justifyContent: 'flex-end' },
+  bar: { width: '100%', borderRadius: 3 },
+  axis: { marginTop: 7, flexDirection: 'row', justifyContent: 'space-between' },
+  sectionHeader: { minHeight: 58, marginTop: SPACING.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth },
+  sectionTitle: { fontWeight: '800', letterSpacing: -0.2 },
+  viewAll: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  empty: { minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
 });

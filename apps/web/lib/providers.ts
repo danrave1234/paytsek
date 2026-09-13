@@ -31,10 +31,10 @@ export const PROVIDER_SUPPORT: readonly ProviderSupport[] = PROVIDERS.map(({ val
     provider: value,
     name: label,
     autoMatch,
-    short: autoMatch ? 'Record + auto-match' : 'Record + manual confirm',
+    short: autoMatch ? 'Strong-match evidence' : 'Recorded evidence',
     note: autoMatch
-      ? `Enabled for tested flows: ${flows.join(', ')}. Everything else goes to Review.`
+      ? `Strong-match evidence is available for tested flows: ${flows.join(', ')}. Everything else stays recorded for review.`
       : disabledReasonFor(value) ??
-        'Recording and manual confirmation only until real notification samples are verified.',
+        'Payment proofs stay recorded while notification evidence for this wallet is still being validated.',
   };
 });

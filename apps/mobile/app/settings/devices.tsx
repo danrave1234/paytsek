@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { PROVIDER_LABELS } from '@paytsek/contracts';
 import React, { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { Button, Card, Icon, List, Text, useTheme } from 'react-native-paper';
@@ -17,6 +18,8 @@ export default function Devices() {
   const isOwner = useIsOwner();
   const [local, setLocal] = useState<CollectorStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const localCollecting = Boolean(local?.configured && (local.enabledProviders?.length ?? 0) > 0);
+  const localReady = Boolean(localCollecting && local?.notificationAccessGranted && local.listenerConnected);
 
   useEffect(() => {
     if (Platform.OS === 'android') void collectorStatus().then(setLocal).then(() => reportHealth()).then(() => q.refetch());
@@ -36,11 +39,16 @@ export default function Devices() {
       <Notice kind="info">Device status shows the latest contact with PayTsek—not a guarantee that every wallet notification was received.</Notice>
       {local?.supported ? (
         <Card mode="outlined">
-          <Card.Title title="This phone" subtitle={local.notificationAccessGranted && local.listenerConnected ? 'Ready' : 'Needs attention'} left={(props) => <Icon {...props} source={local.notificationAccessGranted && local.listenerConnected ? 'check-circle-outline' : 'alert-circle-outline'} />} />
+          <Card.Title
+            title="This phone"
+            subtitle={localCollecting ? (localReady ? 'Ready' : 'Needs attention') : 'Not collecting wallet notifications'}
+            left={(props) => <Icon {...props} source={localReady ? 'check-circle-outline' : localCollecting ? 'alert-circle-outline' : 'cellphone'} />}
+          />
           <List.Accordion title="Local diagnostics">
           <Card.Content>
             <Row label="Notification access" value={local.notificationAccessGranted ? 'Granted' : 'Not granted'} />
             <Row label="Listener connected" value={local.listenerConnected ? 'Yes' : 'No'} />
+            <Row label="Listening for" value={(local.enabledProviders ?? []).map((provider) => PROVIDER_LABELS[provider]).join(', ') || 'Not configured'} />
             <Row label="Pending uploads" value={String(local.pendingUploadCount)} />
             <Row label="Paused" value={local.paused ? 'Yes' : 'No'} />
             <Row label="Last upload error" value={local.lastUploadError ?? '—'} />

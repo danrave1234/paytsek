@@ -17,12 +17,12 @@ export type EvidenceState = z.infer<typeof EvidenceState>;
 
 /** User-facing evidence labels. Never imply direct provider verification. */
 export const EVIDENCE_STATE_LABELS: Record<EvidenceState, string> = {
-  UNVERIFIED: 'Not verified',
-  REVIEW_REQUIRED: 'Review needed',
-  MATCHED_AUTO: 'Verified by notification',
-  MATCHED_BY_USER: 'Verified by notification',
-  CONFIRMED_MANUALLY: 'Verified manually',
-  VOIDED: 'Deleted',
+  UNVERIFIED: 'Recorded',
+  REVIEW_REQUIRED: 'Possible match',
+  MATCHED_AUTO: 'Strong match',
+  MATCHED_BY_USER: 'Strong match',
+  CONFIRMED_MANUALLY: 'Owner confirmed',
+  VOIDED: 'Voided',
 };
 
 /** Required disclosure shown on any automatic-match detail view. */

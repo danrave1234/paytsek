@@ -9,7 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { queryClient } from '@/lib/queries';
 import { SessionProvider, useSession } from '@/lib/session';
 import { syncAll, pruneSynced } from '@/lib/drafts';
-import { reportHealth } from '@/lib/collector';
+import { reportHealth, restoreCollectorFilters } from '@/lib/collector';
 import { SPACING } from '@/theme';
 import { Loading } from '@/components/ui';
 import { ThemeModeProvider } from '@/lib/theme-mode';
@@ -62,15 +62,17 @@ function Gate({ children }: { children: React.ReactNode }) {
     // A paired payment phone has no reason to wait for its Settings page to
     // report that the Android listener is healthy. This also makes an upgrade
     // clear a stale health indicator as soon as the app is opened.
-    if (Platform.OS === 'android') void reportHealth();
+    if (Platform.OS === 'android') {
+      void restoreCollectorFilters().then(reportHealth);
+    }
     const sub = AppState.addEventListener('change', (s) => {
       focusManager.setFocused(s === 'active');
       if (s === 'active' && workspace && !syncing) {
-        if (Platform.OS === 'android') void reportHealth();
+        if (Platform.OS === 'android') void restoreCollectorFilters().then(reportHealth);
         syncing = true;
         void syncAll(workspace.id).then(async ({ synced }) => {
           if (synced > 0) {
-            await Promise.all(['records', 'home', 'usage', 'inbox'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
+            await Promise.all(['records', 'home', 'inbox'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
           }
           await pruneSynced(workspace.id);
         }).catch(() => { /* Durable drafts will retry on the next resume. */ }).finally(() => { syncing = false; });
@@ -134,7 +136,6 @@ function AppNavigator() {
                   <Stack.Screen name="settings/sources" options={{ headerShown: true, title: 'Payment sources' }} />
                   <Stack.Screen name="settings/devices" options={{ headerShown: true, title: 'Devices & health' }} />
                   <Stack.Screen name="settings/team" options={{ headerShown: true, title: 'Team' }} />
-                  <Stack.Screen name="settings/billing" options={{ headerShown: true, title: 'Beta access' }} />
                   <Stack.Screen name="settings/privacy" options={{ headerShown: true, title: 'Privacy & data' }} />
                   <Stack.Screen name="settings/account" options={{ headerShown: true, title: 'Account' }} />
                   <Stack.Screen name="settings/notifications" options={{ headerShown: true, title: 'Notifications' }} />

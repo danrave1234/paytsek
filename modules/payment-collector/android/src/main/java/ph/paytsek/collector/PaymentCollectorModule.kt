@@ -42,8 +42,10 @@ class PaymentCollectorModule : Module() {
       val appVersion = try { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "" } catch (_: Throwable) { "" }
       mapOf(
         "supported" to true,
+        "configured" to prefs.isConfigured,
         "notificationAccessGranted" to NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName),
         "listenerConnected" to prefs.listenerConnected,
+        "enabledProviders" to prefs.enabledProviders.toList().sorted(),
         "pendingUploadCount" to outbox.pendingCount(),
         "lastObservedEventAt" to prefs.lastObservedEventAt,
         "lastUploadAt" to prefs.lastUploadAt,
@@ -81,6 +83,15 @@ class PaymentCollectorModule : Module() {
       UploadWorker.enqueue(context, expedited = false)
       HealthWorker.enqueue(context)
       HealthWorker.schedule(context)
+    }
+
+    // Restore provider filters after an app upgrade without moving or
+    // re-exposing the Keystore-backed collector credential to JavaScript.
+    AsyncFunction("setEnabledProviders") { providers: List<String> ->
+      prefs.enabledProviders = providers.toSet()
+      try {
+        android.service.notification.NotificationListenerService.requestRebind(ComponentName(context, PayTsekNotificationListener::class.java))
+      } catch (_: Throwable) {}
     }
 
     AsyncFunction("clearConfiguration") {

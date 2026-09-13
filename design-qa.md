@@ -232,3 +232,57 @@ No actionable P0, P1, or P2 design issue remains in the inspected states.
 - SHA-256: `A65BEDD6E85D0A4150A024042914A149FD3A7B5BD7EB06606338311B91480337`.
 
 final result: passed
+
+---
+
+## PayTsek V2 mobile QA — 2026-09-14
+
+### Source of truth
+
+- Selected visual direction: `C:/Users/Danrave/.codex/generated_images/01a09c4a-a548-72d1-ba68-4dfa7813b956/exec-4fbc83f8-99be-4e03-8eea-13d6a16e7e47.png` (853 × 1844).
+- Product constraints: receipt-derived facts only; Today / Records / centered Scan / Analytics / Settings navigation; text-only PayTsek wordmark; light and dark themes.
+
+### Implementation evidence
+
+- Native Android Today screen: `.artifacts/android-v2-final-today.png` (1080 × 2400, API 36 emulator, 420 dpi, light theme).
+- Native Android Analytics screen: `.artifacts/android-v2-analytics-loaded.png`.
+- Native Android record filters: `.artifacts/android-v2-record-filters-loaded.png`.
+- Native Android Settings hierarchy: `.artifacts/android-v2-settings-fresh.png`.
+- Native Android collector diagnostics: `.artifacts/android-v2-dev-gcash-diagnostics.png`.
+- Full normalized comparison: `.artifacts/v2-mobile-source-vs-implementation-final.png`.
+- Focused navigation comparison: `.artifacts/v2-mobile-nav-source-vs-implementation-final.png`.
+
+### Same-input matrix
+
+| Surface | Source | Implementation | Viewport normalization | State |
+| --- | --- | --- | --- | --- |
+| Today full view | selected visual direction | native Android render | both scaled to 1844 px height | authenticated owner, light theme |
+| Bottom navigation | bottom 420 px of full composite | bottom 420 px of full composite | identical crop after normalization | Today selected |
+
+The source contains populated sample records while the connected development workspace is empty. Dynamic row density and chart values therefore cannot be compared literally; the comparison covers layout, hierarchy, type, color, empty-state treatment, and navigation. No fabricated records were inserted for visual QA.
+
+### Baseline and iteration history
+
+- [P1] The first native V2 launch exposed a stale cached update object whose older shape omitted release notes. Fixed with a backward-compatible empty-note fallback; the clean restart renders normally.
+- [P1] The first production-architecture debug install could not launch on the x86_64 emulator because the public APK correctly contains phone-only ARM libraries. Rebuilt the same source with an emulator-only architecture override; version 0.2.0 / code 19 launched and rendered successfully. The release configuration remains ARM-only.
+- [P1] Collector diagnostics could label a phone Ready when notification access was granted but no collector credential or provider binding existed. Added explicit configured state and source visibility; unpaired phones now say they are not collecting wallet notifications.
+- [P2] Three destinations did not leave persistent access to analytics and settings. Final navigation uses five balanced destinations with a larger, elevated, blue Scan/QR control at the exact center.
+- [P2] The source header included a workspace subtitle and profile affordance that add friction to the primary daily-recording task. The final Today header uses only the PayTsek wordmark, date, recorded amount/count, chart, and latest records.
+- [P2] Record search previously relied on hidden payer/reference/note data. It now searches visible wallet source or exact amount and exposes evidence/source filters only when meaningful.
+
+### Fidelity and interaction assessment
+
+- Typography and hierarchy: passed. The wordmark, date, recorded-total stack, compact chart labels, section title, and row typography preserve the visual direction while removing secondary header clutter.
+- Spacing and layout: passed. Content uses consistent gutters and clears the floating navigation; the empty state occupies the same information region as populated rows without inventing data.
+- Colors and tokens: passed. Warm neutral surfaces, dark ink, restrained blue action color, semantic status colors, and system dark mode share one token system.
+- Images and icons: passed. Local GCash, Maya, GoTyme, and MariBank artwork is used only for payment sources. Navigation uses one icon family, and the Scan/QR mark is centered and visually dominant.
+- Copy and data fidelity: passed. Record surfaces show only amount, time, payment source, and evidence status unless a proof actually supplies another supported field. Notification evidence is described as supplementary.
+- Navigation and states: passed. Today, Records filters, Scan, Analytics, Settings, collector diagnostics, loading skeletons, and empty states were rendered natively. The centered Scan target remains at least 48 dp and clears the Android gesture area.
+- Native notification path: passed. A synthetic GCash fixture was accepted by the allowlisted package parser, stored in the encrypted outbox, uploaded to the API, acknowledged as `ACCEPTED`, and then removed from the test database together with its isolated source/device fixture.
+- Release updater: passed by implementation inspection and type checking. GitHub release metadata supplies version, APK asset, patch notes, checksum companion asset, and the Android installer flow. A future-version prompt cannot be rendered honestly until a release newer than the installed build exists.
+
+### Final evidence check
+
+The implementation source and native render were both opened immediately before this comparison. The full-view and focused composites were inspected after generation. No actionable P0, P1, or P2 visual issue remains in the inspected V2 surfaces.
+
+passed

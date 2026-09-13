@@ -102,7 +102,18 @@ export class RecordsService {
   async list(orgId: string, q: ListRecordsQuery): Promise<ListRecordsResponse> {
     const params: unknown[] = [orgId];
     const where: string[] = ['r.organization_id = $1'];
-    if (q.q) { params.push(`%${q.q}%`); where.push(`(r.reference_value ilike $${params.length} or r.customer_label ilike $${params.length} or r.note ilike $${params.length} or r.payer_name ilike $${params.length})`); }
+    if (q.q) {
+      const raw = q.q.trim();
+      params.push(`%${raw}%`);
+      const textParam = params.length;
+      const visibleFields = [`s.label ilike $${textParam}`, `s.provider::text ilike $${textParam}`];
+      const pesos = Number(raw.replace(/[PHP\s,₱]/gi, ''));
+      if (Number.isFinite(pesos) && pesos > 0) {
+        params.push(Math.round(pesos * 100));
+        visibleFields.push(`r.amount_centavos = $${params.length}`);
+      }
+      where.push(`(${visibleFields.join(' or ')})`);
+    }
     if (q.state?.length) { params.push(q.state); where.push(`r.evidence_state = any($${params.length}::evidence_state[])`); }
     if (q.sourceId) { params.push(q.sourceId); where.push(`r.source_id = $${params.length}`); }
     if (q.staffUserId) { params.push(q.staffUserId); where.push(`r.created_by = $${params.length}`); }

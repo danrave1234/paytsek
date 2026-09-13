@@ -5,14 +5,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Image, StyleSheet, View } from 'react-native';
-import { Button, IconButton, TextInput, useTheme } from 'react-native-paper';
+import { Button, IconButton, Text, TextInput, useTheme } from 'react-native-paper';
 import { ReceiptOcr } from 'receipt-ocr';
 import { CaptureSurface } from '@/components/capture-surface';
 import { Notice, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
 import { newId } from '@/lib/device';
 import { saveDraft, stageImage, syncDraft, type Draft } from '@/lib/drafts';
-import { useInvalidateRecord, useSources } from '@/lib/queries';
+import { useHome, useInvalidateRecord, useSources } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TOUCH_TARGET } from '@/theme';
 
@@ -24,6 +24,7 @@ export default function Scan() {
   const params = useLocalSearchParams<{ source?: string; uri?: string }>();
   const { workspace } = useSession();
   const sources = useSources();
+  const home = useHome();
   const invalidate = useInvalidateRecord();
   const [permission, requestPermission] = useCameraPermissions();
   const [camera, setCamera] = useState<CameraView | null>(null);
@@ -211,8 +212,9 @@ export default function Scan() {
     return (
       <Screen scroll={false} tabbed style={styles.processingPage}>
         {imageUri ? <Image source={{ uri: imageUri }} style={styles.processingImage} resizeMode="contain" accessibilityLabel="Captured payment proof" /> : null}
-        <View style={[styles.processingIndicator, { backgroundColor: theme.colors.surface }]}>
+        <View style={[styles.processingIndicator, { backgroundColor: theme.colors.surface }]} accessibilityLiveRegion="polite">
           <ActivityIndicator color={theme.colors.primary} />
+          <Text variant="labelLarge">Reading proof</Text>
         </View>
       </Screen>
     );
@@ -243,7 +245,22 @@ export default function Scan() {
   return (
     <Screen scroll={false} tabbed style={styles.page}>
       <View style={styles.header}>
-        <ScreenTitle title="Scan payment" />
+        <View>
+          <ScreenTitle title="Scan proof" />
+          <View style={styles.sourceHealth}>
+            <View
+              style={[
+                styles.healthDot,
+                { backgroundColor: home.data?.collectors.some((collector) => !collector.stale) ? '#12B76A' : theme.colors.outline },
+              ]}
+            />
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+              {home.data?.collectors.some((collector) => !collector.stale)
+                ? 'Wallet evidence ready'
+                : 'Wallet evidence is optional'}
+            </Text>
+          </View>
+        </View>
         <IconButton icon="account-circle-outline" accessibilityLabel="Open settings" onPress={() => router.push('/(tabs)/settings')} />
       </View>
       {error ? <Notice kind="error">{error}</Notice> : null}
@@ -271,6 +288,8 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   processingPage: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   processingImage: { width: '100%', height: '82%', borderRadius: RADIUS.lg, backgroundColor: '#000000' },
-  processingIndicator: { position: 'absolute', bottom: 128, width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  processingIndicator: { position: 'absolute', bottom: 128, minHeight: 48, borderRadius: RADIUS.full, paddingHorizontal: SPACING.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm },
   preview: { width: '100%', height: 210, borderRadius: RADIUS.lg, backgroundColor: '#000000' },
+  sourceHealth: { minHeight: 24, flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: -SPACING.xs },
+  healthDot: { width: 8, height: 8, borderRadius: 4 },
 });

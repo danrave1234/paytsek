@@ -32,7 +32,7 @@ export function StateChip({ state, compact = false }: { state: EvidenceState; co
 export function SyncChip({ status, quotaBlocked }: { status: SyncStatus; quotaBlocked?: boolean }) {
   const theme = useTheme();
   const label = quotaBlocked
-    ? 'Pending — quota reached'
+    ? 'Sync paused'
     : status === 'SYNCED' ? 'Synced' : status === 'UPLOADING' ? 'Uploading…' : status === 'PARTIAL_UPLOAD' ? 'Partially uploaded' : status === 'FAILED' ? 'Sync failed' : 'Saved on this phone';
   const icon = status === 'SYNCED' ? 'cloud-check-outline' : status === 'FAILED' ? 'cloud-alert' : 'cloud-upload-outline';
   return (

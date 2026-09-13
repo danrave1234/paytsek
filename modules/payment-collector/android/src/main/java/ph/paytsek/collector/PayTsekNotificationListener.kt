@@ -4,6 +4,7 @@ import android.app.Notification
 import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import org.json.JSONObject
 import java.util.UUID
 
@@ -52,9 +53,19 @@ class PayTsekNotificationListener : NotificationListenerService() {
   override fun onNotificationRemoved(sbn: StatusBarNotification) { /* removal is not evidence of anything */ }
 
   private fun handle(sbn: StatusBarNotification, recovery: Boolean) {
-    if (!prefs.isConfigured || prefs.paused) return
     val provider = ProviderApps.providerFor(sbn.packageName) ?: return
-    if (!prefs.enabledProviders.contains(provider)) return
+    if (!prefs.isConfigured) {
+      Log.d("PayTsekCollector", "Ignored $provider notification: collector is not configured")
+      return
+    }
+    if (prefs.paused) {
+      Log.d("PayTsekCollector", "Ignored notification: collector is paused")
+      return
+    }
+    if (!prefs.enabledProviders.contains(provider)) {
+      Log.d("PayTsekCollector", "Ignored $provider notification: provider is not enabled")
+      return
+    }
     val appInfo = ProviderApps.inspect(this, sbn.packageName, provider)
     if (!appInfo.installed || !ProviderApps.signerAcceptable(appInfo)) return
 
@@ -69,6 +80,7 @@ class PayTsekNotificationListener : NotificationListenerService() {
     val result = NotificationParser.parse(NotificationParser.Input(sbn.packageName, title, text, bigText, lines, isSummary))
     val parsed = when (result) {
       is NotificationParser.Result.Rejected -> {
+        Log.d("PayTsekCollector", "Rejected $provider notification: ${result.reason}")
         if (result.reason == "UNKNOWN_TEMPLATE") prefs.unknownTemplateCount = prefs.unknownTemplateCount + 1
         // Opt-in only, and only for shapes we failed to recognise — never for
         // anything classified as OTP/security, outgoing, promo or failed.
@@ -133,7 +145,11 @@ class PayTsekNotificationListener : NotificationListenerService() {
         outcome = null,
       ),
     )
-    if (!inserted) return // repost/update of a known notification
+    if (!inserted) {
+      Log.d("PayTsekCollector", "Ignored duplicate $provider notification")
+      return // repost/update of a known notification
+    }
+    Log.d("PayTsekCollector", "Queued parsed $provider payment notification")
     prefs.lastObservedEventAt = Iso.of(nowMs)
     UploadWorker.enqueue(this, expedited = !recovery)
   }
