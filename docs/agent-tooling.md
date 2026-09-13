@@ -29,7 +29,6 @@ Never enable Supabase MCP write access against production. Never paste service-r
 | Offline drafts | expo-sqlite + expo-file-system | Durable pre-upload queue |
 | Camera / import | expo-camera, expo-image-picker | Development-build native |
 | OCR | ML Kit Text Recognition v2 via `modules/receipt-ocr` | On-device, bundled model, free |
-| Billing | react-native-purchases (RevenueCat) | StoreKit/Play Billing wrapper; server verifies entitlements |
 | Web | Next.js 16 + Tailwind v4 | Same brand tokens as the app theme |
 
 ## Prompts that work well

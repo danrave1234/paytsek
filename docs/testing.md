@@ -16,8 +16,7 @@
 Run `supabase start && supabase db reset`, then with `psql "$DATABASE_URL"`:
 
 - Two inserts into `payment_matches` with the same `event_id` and `active = true` → second fails (`payment_matches_one_active_per_event_idx`).
-- `select consume_record_quota(org, rec, user)` twice for the same record → `'MONTHLY'` then `'ALREADY'`; 51st record on FREE without credits → `'NONE'`.
-- Concurrent quota: two sessions calling `consume_record_quota` for different records at the 50th unit → exactly one `'MONTHLY'`, one `'NONE'` (row lock on `quota_locks`).
+- Create the same record twice with the same client record ID → one canonical record and a deduplicated response; public beta must not create a usage entry or block either request.
 - Insert into `payment_matches` joining a record and an event from different sources → trigger `check_match_scope` raises.
 - As `authenticated` role with a cashier JWT: `select * from notification_events` → 0 rows (owner-only policy); `select credential_hash from devices` → permission denied.
 
@@ -38,7 +37,7 @@ Prereqs: two Android phones (one receives real GCash notifications), one iPhone,
 | 9 | Cross-provider refs differ | GoTyme receipt vs GCash notification | NO_COMPARABLE_NAMESPACE, no auto | ✔ unit |
 | 10 | Three same-amount payments | 3 events, 1 record | 3 distinct candidates sorted by Δt | ✔ unit |
 | 11 | Two cashiers claim one event | Confirm from two phones within 1 s | One MATCHED_BY_USER, one MATCH_CONFLICT | ☐ (DB constraint verified) |
-| 12 | Same receipt scanned repeatedly | Same image bytes / same clientRecordId | One record, one usage charge, `deduplicated: true` | ☐ |
+| 12 | Same receipt scanned repeatedly | Same image bytes / same clientRecordId | One record, `deduplicated: true`; no beta usage charge | ☐ |
 | 13 | Same notification updated/grouped | GCash updates text / groups | One event (lifecycle key), summary ignored | ☐ needs real GCash |
 | 14 | Provider reuses notification key | Same key, different amount | AMBIGUOUS_LIFECYCLE_KEY rejection, first event preserved | ✔ ingestion logic / ☐ real |
 | 15 | OTP / promo / outgoing / pending | Trigger each | Never in outbox, never uploaded | ✔ unit (Kotlin+TS) / ☐ device |
@@ -48,9 +47,6 @@ Prereqs: two Android phones (one receives real GCash notifications), one iPhone,
 | 19 | Force-stop / revoke | Revoke from owner app | Uploads get 401; health shows revoked; re-pair works | ☐ |
 | 20 | GCash open / notifications disabled / locked screen | Vary | Document observed behaviour here | ☐ |
 | 21 | Unknown notification format | Unrelated GCash message | `unknownTemplateCount` increments, nothing stored | ☐ |
-| 22 | Quota exhausted after save | Set FREE allowance reached | Matching continues; new scans stay drafts | ☐ (SQL verified) |
-| 23 | Duplicate / forged billing webhook | Replay event id; bad Authorization | Idempotent; 401 | ☐ needs RevenueCat sandbox |
-| 24 | Refund / restore / cancel | RevenueCat sandbox | Entitlement correct; records retained | ☐ |
 | 25 | Cross-workspace access | Cashier of A requests B's record | 403 NOT_A_MEMBER; RLS returns 0 rows | ☐ |
 | 26 | Staff requests owner inbox | Cashier GET /v1/inbox | 403 OWNER_ONLY | ☐ |
 | 27 | Retention / deletion | Run PURGE_RETENTION; delete account | Files removed, events purged, profile gone | ☐ |
