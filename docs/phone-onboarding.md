@@ -10,7 +10,7 @@ The first-run guide is scoped to signed-in user, workspace, and installation. Co
 4. Accept sharing and grant Android notification access. Inspect listener health afterward.
 5. Invite employees from Team. Each employee signs in, accepts the invite, and registers their scanner from onboarding.
 
-Scanner registration uses POST /v1/devices/register-scanner with the install ID and phone label. It does not configure the notification collector or copy wallet credentials. Server plan limits remain authoritative.
+Scanner registration uses POST /v1/devices/register-scanner with the install ID and phone label. It does not configure the notification collector or copy wallet credentials. Public beta does not apply plan limits.
 
 The pairing screen can be opened from sign-in without a user session. All other workspace routes retain the existing authentication gate.
 

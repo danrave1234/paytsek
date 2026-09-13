@@ -1,42 +1,47 @@
-# Deployment & operations runbooks
+# Deployment and operations runbook
 
-## 1. First deployment
+## First deployment
 
-1. **Supabase project**: create; enable Email auth with confirmations; disable phone auth. Copy URL, anon key, service-role key, JWT secret.
-2. **Migrations**: `supabase link --project-ref <ref>` then `supabase db push`. Verify buckets `proof-images` and `exports` exist and are **private**.
-3. **API** (any Node 20 host: Fly, Railway, Render, a VM): set every `[DEPLOYMENT INPUT]` in `.env.example`. Generate `COLLECTOR_TOKEN_HASH_SECRET` with `openssl rand -hex 32`. Run `pnpm build && node apps/api/dist/main.js`. Health: `GET /v1/health`.
-4. **Worker**: run `node apps/api/dist/worker.js` as a separate always-on process (1–3 replicas). It is idempotent and safe to restart.
-5. **RevenueCat**: create the project, add App Store + Play apps, products `paytsek_solo_monthly`, `paytsek_team_monthly`, `paytsek_pack_500`, one offering. Set webhook URL `https://<api>/v1/billing/webhooks/revenuecat` with an Authorization header value equal to `REVENUECAT_WEBHOOK_AUTH_HEADER`. Put public SDK keys in the mobile `.env`.
-6. **Mobile**: `eas build --profile production` (or local `expo run:*`). Fill `EXPO_PUBLIC_*` at build time. Distribute via stores/TestFlight; put URLs in `apps/web` env (`NEXT_PUBLIC_*`).
-7. **Web**: deploy `apps/web` (Vercel or any Node host). Set `NEXT_PUBLIC_SITE_URL` and download URLs.
-8. **Monitoring**: set `SENTRY_DSN` (API) and `EXPO_PUBLIC_SENTRY_DSN` (app). Scrubbing is enforced in `redact()`; verify no amounts/phones in events.
+1. Create the Supabase project and configure Google OAuth plus the production
+   redirect URLs. Keep public sign-up behavior aligned with the current auth
+   configuration.
+2. Apply migrations with `pnpm db:migrate:direct`, then run `pnpm db:check`.
+   Verify `proof-images` and `exports` are private buckets.
+3. Configure all required API environment values from `.env.example` in the
+   `paytsek-api` Vercel project. Deploy and confirm `GET /v1/health` through
+   `https://api.paytsek.online`.
+4. Configure the web project's public API and Supabase environment values,
+   then confirm `https://www.paytsek.online` is serving the current commit.
+5. Build an Android APK through the GitHub release workflow. Verify Google
+   sign-in, source pairing, a proof scan, and one notification sync on-device.
 
-## 2. Rotate secrets
+## Current beta policy
 
-- `COLLECTOR_TOKEN_HASH_SECRET`: rotating invalidates **all** collector credentials (hashes no longer match). Announce, then owners re-pair. Prefer per-device rotation via `POST /v1/collector/rotate` instead.
-- Supabase service-role key: rotate in dashboard, update API env, restart API + worker.
-- RevenueCat webhook header: update both sides; replayed events are idempotent by id.
+The service is in free public beta. Do not add PayMongo, RevenueCat, paid
+plans, checkout links, renewal jobs, credits, or quota enforcement. The API's
+`BETA_MODE` keeps billing and record metering inactive.
 
-## 3. Incident: reconciliation lag
+## Incident: notification matching is delayed
 
-Symptoms: records stuck UNVERIFIED though notifications exist. Check `select status, count(*) from jobs group by 1`. If many `LEASED` with old `leased_until`, a worker died — leases expire automatically. If `DEAD`, inspect `last_error`; fix; `update jobs set status='PENDING', attempts=0 where status='DEAD' and kind='RECONCILE_RECORD'`.
+1. Confirm the record was saved; a payment record remains valid while
+   unverified.
+2. In the app, check the paired payment phone's last contact and notification
+   access state.
+3. On the payment phone, ensure Android notification access is still enabled
+   and the app was not force-stopped or restricted by battery optimization.
+4. Check API health and collector upload errors. Re-pair only when the device
+   credential was revoked or the source binding is no longer active.
 
-## 4. Incident: collector uploads failing
+## Provider template change
 
-Owner sees "Last seen X hours ago". On the phone: Settings → Use this phone as the payment phone shows `lastUploadError`. `COLLECTOR_CREDENTIAL_REVOKED` → re-pair. `HTTP_5xx` → API health. Notification access off → system settings. Force-stopped by OEM battery saver → whitelist the app; PayTsek never asks users to disable OS security controls.
+Obtain a redacted sample and its wallet-app version. Add a labelled fixture,
+update the TypeScript adapter and Kotlin parser together, run parser tests, and
+ship a new Android version. Do not widen automatic matching rules merely to
+accept an unfamiliar message.
 
-## 5. Provider template change
+## Retention and account deletion
 
-Signal: `unknownTemplateCount` rising in health reports. Procedure: obtain a **redacted real sample** with app version; add to `tests/fixtures/notifications/*.json` with `provenance: REDACTED_REAL_SAMPLE`; update TS adapter and Kotlin parser in lockstep; bump parser version; run both test suites; ship. Never widen the matcher to compensate.
-
-## 6. Retention
-
-`PURGE_RETENTION` runs hourly from the worker: purges unlinked events past `purge_after`, deletes proof images past `retention_until`, expires exports, hard-deletes soft-deleted workspaces. Verify storage usage monthly.
-
-## 7. Account deletion (support request)
-
-User cannot sign in: verify identity via account email, then `DELETE /v1/me` semantics manually: remove memberships/profile (SQL), then delete the Auth user via Supabase admin API. Sole-owner workspaces must be transferred or deleted first.
-
-## 8. Backups
-
-Enable Supabase PITR (paid) or daily backups. Storage buckets are not covered by DB backups — enable bucket versioning/replication if image retention matters commercially.
+The maintenance job removes expired exports, proof images past their retention
+period, and unlinked notification events past their purge date. Handle account
+deletion through the authenticated API flow; sole owners must transfer or
+delete their workspace first.

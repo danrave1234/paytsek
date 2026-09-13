@@ -16,7 +16,7 @@
  │  auth guards → zod validation → services → parameterized SQL    │
  │  /workspaces /sources /pairing /devices /collector/events        │
  │  /proofs /records /candidates /confirm-* /unlink /void           │
- │  /billing (RevenueCat reconcile + webhook) /exports /home /me    │
+ │  /exports /home /me                                               │
  └───────────────┬────────────────────────────────┬───────────────┘
                  │                                │ jobs table (SKIP LOCKED)
                  ▼                                ▼
@@ -24,7 +24,7 @@
  │ Supabase Postgres        │        │ Worker process (apps/api) │
  │  RLS (read-only client)  │◄──────►│  RECONCILE_RECORD/EVENT   │
  │  partial unique indexes  │        │  GENERATE_EXPORT          │
- │  consume_record_quota()  │        │  PURGE_RETENTION          │
+ │  record constraints      │        │  PURGE_RETENTION          │
  │  Supabase Auth, Storage  │        │  RECONCILE_ENTITLEMENT    │
  │  Realtime (scoped)       │        └──────────────────────────┘
  └──────────────────────────┘
@@ -42,7 +42,7 @@
 - `payment_records` — one canonical recorded payment; `evidence_state` is separate from client sync state.
 - `notification_events` — unique `(device_id, client_event_id)` and `(source_id, lifecycle_dedup_key)`; owner-restricted; `purge_after` for 7-day retention.
 - `payment_matches` — partial unique indexes: one active per `event_id`, one active per `record_id`. Trigger `check_match_scope` enforces same org + same source.
-- `usage_ledger` / `credit_ledger` — exactly-once by record and by store transaction id; `consume_record_quota()` serializes per org with `quota_locks`.
+- Legacy usage and credit tables remain in the schema for a future commercial launch. During public beta, `BETA_MODE` prevents quota reads, consumption, and billing writes.
 - `jobs` — dedupe key coalescing, `lease_jobs()` with `FOR UPDATE SKIP LOCKED`, exponential backoff, DEAD after `max_attempts`.
 
 ## Matching policy v1 (`apps/api/src/matching/matcher.ts`)
@@ -52,7 +52,7 @@ AUTO requires: same source (query scope) · exact currency+amount · reference o
 ## Idempotency & recovery
 
 - Client-generated UUIDs for records, proofs, events, batches. Replays return the same result and never charge twice.
-- Scanner: draft persisted in SQLite before any network; sync order init → PUT → finalize → create; quota exhaustion keeps the draft labelled locally.
+- Scanner: draft persisted in SQLite before any network; sync order init → PUT → finalize → create. Records stay safely saved even while notification matching is pending.
 - Collector: outbox row persisted before the listener callback returns; WorkManager retries with network constraint; reboot receiver re-enqueues; 401 stops uploads and surfaces truthfully.
 - Worker: periodic `PURGE_RETENTION`; leases expire so crashed workers' jobs are reclaimed.
 
