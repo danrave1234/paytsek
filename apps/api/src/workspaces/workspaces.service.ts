@@ -13,13 +13,13 @@ export class WorkspacesService {
   ) {}
 
   async listMine(userId: string): Promise<WorkspaceSummary[]> {
-    const r = await this.db.query<{ id: string; name: string; timezone: string; role: WorkspaceSummary['role']; plan_code: WorkspaceSummary['planCode']; is_demo: boolean; created_at: Date }>(
-      `select o.id, o.name, o.timezone, m.role, o.plan_code, o.is_demo, o.created_at
+    const r = await this.db.query<{ id: string; name: string; timezone: string; role: WorkspaceSummary['role']; is_demo: boolean; created_at: Date }>(
+      `select o.id, o.name, o.timezone, m.role, o.is_demo, o.created_at
          from memberships m join organizations o on o.id = m.organization_id
         where m.user_id = $1 and o.deleted_at is null order by o.created_at`,
       [userId],
     );
-    return r.rows.map((x) => ({ id: x.id, name: x.name, timezone: x.timezone, role: x.role, planCode: x.plan_code, isDemo: x.is_demo, createdAt: x.created_at.toISOString() }));
+    return r.rows.map((x) => ({ id: x.id, name: x.name, timezone: x.timezone, role: x.role, isDemo: x.is_demo, createdAt: x.created_at.toISOString() }));
   }
 
   async create(userId: string, email: string | null, input: CreateWorkspaceRequest): Promise<WorkspaceSummary> {
@@ -36,7 +36,7 @@ export class WorkspacesService {
       const orgId = org.rows[0]!.id;
       await c.query(`insert into memberships (organization_id, user_id, role, can_confirm_matches) values ($1,$2,'OWNER',true)`, [orgId, userId]);
       await this.audit.record({ organizationId: orgId, actorUserId: userId, action: 'MEMBER_INVITED', subjectType: 'organization', subjectId: orgId, after: { role: 'OWNER', email } }, c);
-      return { id: orgId, name: input.name, timezone: input.timezone, role: 'OWNER', planCode: 'FREE', isDemo: false, createdAt: org.rows[0]!.created_at.toISOString() };
+      return { id: orgId, name: input.name, timezone: input.timezone, role: 'OWNER', isDemo: false, createdAt: org.rows[0]!.created_at.toISOString() };
     });
   }
 
@@ -93,12 +93,12 @@ export class WorkspacesService {
         [row.organization_id, userId, row.role, row.can_confirm_matches],
       );
       await c.query(`update invitations set accepted_at = now(), accepted_by = $2 where id = $1`, [row.id, userId]);
-      const org = await c.query<{ id: string; name: string; timezone: string; plan_code: WorkspaceSummary['planCode']; is_demo: boolean; created_at: Date }>(
-        `select id, name, timezone, plan_code, is_demo, created_at from organizations where id = $1`,
+      const org = await c.query<{ id: string; name: string; timezone: string; is_demo: boolean; created_at: Date }>(
+        `select id, name, timezone, is_demo, created_at from organizations where id = $1`,
         [row.organization_id],
       );
       const o = org.rows[0]!;
-      return { id: o.id, name: o.name, timezone: o.timezone, role: row.role, planCode: o.plan_code, isDemo: o.is_demo, createdAt: o.created_at.toISOString() };
+      return { id: o.id, name: o.name, timezone: o.timezone, role: row.role, isDemo: o.is_demo, createdAt: o.created_at.toISOString() };
     });
   }
 

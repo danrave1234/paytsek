@@ -13,16 +13,12 @@ const groups = [
     lead: 'The most common reason to open this page.',
     faq: [
       {
-        q: 'A payment shows "Unverified" but the customer paid. Is it lost?',
-        a: 'No. Unverified only means no notification has been associated yet. Check that the Android payment phone is on, connected, and still has Notification Access enabled — Settings → Devices & health will tell you. An owner can also confirm manually after checking the wallet app directly.',
+        q: 'A payment only shows "Recorded". Is it lost?',
+        a: 'No. Recorded means the proof was saved but no notification evidence is linked yet. Check that the Android payment phone is connected and still has Notification Access, or confirm after checking the wallet directly.',
       },
       {
         q: 'Why didn’t a payment auto-match, even though the amount and time agree?',
-        a: 'By design. Amount plus time alone never confirms a payment, because several customers can pay the same amount at the same moment. Automatic matching needs the same reference number on both the customer’s confirmation screen and your notification, on a supported flow. Everything else goes to Review, where you decide.',
-      },
-      {
-        q: 'What happens when I reach my monthly record limit?',
-        a: 'There is no paid record limit during public beta. Save the payment first; verification can happen afterwards when a notification is available.',
+        a: 'By design. Amount and nearby time can be useful evidence but are not a provider confirmation. PayTsek only marks a strong match when the tested wallet flow has enough comparable evidence; otherwise it stays a Possible match for review.',
       },
     ],
   },

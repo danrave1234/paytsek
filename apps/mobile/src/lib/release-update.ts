@@ -8,12 +8,22 @@ const RELEASES_URL = 'https://api.github.com/repos/danrave1234/paytsek/releases/
 
 type GitHubRelease = {
   tag_name: string;
+  name: string | null;
+  body: string | null;
   html_url: string;
   published_at: string | null;
-  assets: Array<{ name: string; browser_download_url: string }>;
+  assets: Array<{ name: string; browser_download_url: string; size: number }>;
 };
 
-export type AppUpdate = { version: string; downloadUrl: string; publishedAt: string | null };
+export type AppUpdate = {
+  version: string;
+  title: string;
+  notes: string[];
+  downloadUrl: string;
+  releaseUrl: string;
+  publishedAt: string | null;
+  sizeBytes: number;
+};
 
 const APK_MIME_TYPE = 'application/vnd.android.package-archive';
 const FLAG_GRANT_READ_URI_PERMISSION = 1;
@@ -32,13 +42,37 @@ export function isNewerVersion(candidate: string, current: string) {
   return false;
 }
 
+export function parseReleaseNotes(body: string | null): string[] {
+  if (!body) return ['Reliability and usability improvements.'];
+  const notes = body
+    .split(/\r?\n/)
+    .map((line) => line
+      .replace(/^\s*(?:[-*+]\s+|#{1,6}\s*)/, '')
+      .replace(/\[([^\]]+)]\([^)]+\)/g, '$1')
+      .replace(/[*_`]/g, '')
+      .trim())
+    .filter((line) => line && !/^what'?s changed:?$/i.test(line) && !/^full changelog:?/i.test(line))
+    .slice(0, 8)
+    .map((line) => line.slice(0, 180));
+  return notes.length ? notes : ['Reliability and usability improvements.'];
+}
+
 async function latestRelease(): Promise<AppUpdate | null> {
   const response = await fetch(RELEASES_URL, { headers: { Accept: 'application/vnd.github+json' } });
   if (!response.ok) return null; // Offline, rate-limited, or not yet released: never block the app.
   const release = await response.json() as GitHubRelease;
   const apk = release.assets.find((asset) => asset.name.toLowerCase().endsWith('.apk'));
   if (!apk || !isNewerVersion(release.tag_name, APP_VERSION)) return null;
-  return { version: release.tag_name.replace(/^v/i, ''), downloadUrl: apk.browser_download_url, publishedAt: release.published_at };
+  const version = release.tag_name.replace(/^v/i, '');
+  return {
+    version,
+    title: release.name?.trim() || `PayTsek ${version}`,
+    notes: parseReleaseNotes(release.body),
+    downloadUrl: apk.browser_download_url,
+    releaseUrl: release.html_url,
+    publishedAt: release.published_at,
+    sizeBytes: apk.size,
+  };
 }
 
 /** Checks infrequently and only displays an update when a signed APK is actually published. */
@@ -46,9 +80,11 @@ export function useAppUpdate() {
   return useQuery({
     queryKey: ['app-update', APP_VERSION],
     queryFn: latestRelease,
-    staleTime: 6 * 60 * 60_000,
+    staleTime: 60 * 60_000,
     gcTime: 24 * 60 * 60_000,
     retry: 0,
+    refetchOnReconnect: true,
+    refetchOnWindowFocus: true,
   });
 }
 

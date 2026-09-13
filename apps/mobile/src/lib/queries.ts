@@ -1,4 +1,6 @@
 import type {
+  AnalyticsRange,
+  AnalyticsSummary,
   CandidatesResponse,
   CorrectRecordRequest,
   DeviceSummary,
@@ -10,7 +12,7 @@ import type {
   SourceSummary,
   WorkspaceSummary,
 } from '@paytsek/contracts';
-import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -43,12 +45,25 @@ export const keys = {
   members: ['members'] as const,
   inbox: ['inbox'] as const,
   records: (filters: Record<string, unknown>) => ['records', filters] as const,
+  recordsInfinite: (filters: Record<string, unknown>) => ['records', 'infinite', filters] as const,
   record: (id: string) => ['record', id] as const,
   candidates: (id: string) => ['candidates', id] as const,
+  analytics: (range: AnalyticsRange) => ['analytics', range] as const,
 };
 
 export const useWorkspaces = () => useQuery({ queryKey: keys.workspaces, queryFn: ({ signal }) => api<WorkspaceSummary[]>('/v1/workspaces', { noWorkspace: true, signal }) });
-export const useHome = () => useQuery({ queryKey: keys.home, queryFn: ({ signal }) => api<HomeSummary>('/v1/home', { signal }), refetchInterval: useVisiblePolling(30_000) });
+export const useHome = () => useQuery({
+  queryKey: keys.home,
+  queryFn: ({ signal }) => api<HomeSummary>('/v1/home', { signal }),
+  staleTime: 30_000,
+  refetchInterval: useVisiblePolling(30_000),
+});
+export const useAnalytics = (range: AnalyticsRange) => useQuery({
+  queryKey: keys.analytics(range),
+  queryFn: ({ signal }) => api<AnalyticsSummary>(`/v1/analytics?range=${range}`, { signal }),
+  staleTime: 2 * 60_000,
+  refetchInterval: useVisiblePolling(2 * 60_000),
+});
 export const useSources = () => useQuery({ queryKey: keys.sources, queryFn: ({ signal }) => api<SourceSummary[]>('/v1/sources', { signal }), staleTime: 5 * 60_000 });
 export const useDevices = () => useQuery({ queryKey: keys.devices, queryFn: ({ signal }) => api<DeviceSummary[]>('/v1/devices', { signal }), refetchInterval: useVisiblePolling(60_000) });
 export const useMembers = () => useQuery({ queryKey: keys.members, queryFn: ({ signal }) => api<MemberSummary[]>('/v1/workspaces/current/members', { signal }) });
@@ -67,9 +82,38 @@ export function useRecords(filters: { q?: string; state?: string[]; sourceId?: s
   return useQuery({ queryKey: keys.records(filters), queryFn: ({ signal }) => api<ListRecordsResponse>(`/v1/records?${qs.toString()}`, { signal }), refetchInterval: useVisiblePolling(30_000) });
 }
 
+/** Full ledger pagination. It is mounted only by Records and fetches the next page near scroll end. */
+export function useInfiniteRecords(filters: { q?: string; state?: string[]; sourceId?: string; staffUserId?: string; from?: string; to?: string }) {
+  return useInfiniteQuery({
+    queryKey: keys.recordsInfinite(filters),
+    initialPageParam: null as string | null,
+    queryFn: ({ signal, pageParam }) => {
+      const qs = new URLSearchParams();
+      if (filters.q) qs.set('q', filters.q);
+      if (filters.state?.length) qs.set('state', filters.state.join(','));
+      if (filters.sourceId) qs.set('sourceId', filters.sourceId);
+      if (filters.staffUserId) qs.set('staffUserId', filters.staffUserId);
+      if (filters.from) qs.set('from', filters.from);
+      if (filters.to) qs.set('to', filters.to);
+      if (pageParam) qs.set('cursor', pageParam);
+      qs.set('limit', '30');
+      return api<ListRecordsResponse>(`/v1/records?${qs.toString()}`, { signal });
+    },
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    staleTime: 60_000,
+  });
+}
+
 /** Keep an open record current while a notification from the payment phone is arriving. */
 export const useRecord = (id: string) => useQuery({ queryKey: keys.record(id), queryFn: ({ signal }) => api<RecordDetail>(`/v1/records/${id}`, { signal }), enabled: !!id, refetchInterval: useVisiblePolling(15_000) });
 export const useCandidates = (id: string) => useQuery({ queryKey: keys.candidates(id), queryFn: ({ signal }) => api<CandidatesResponse>(`/v1/records/${id}/candidates`, { signal }), enabled: !!id, refetchInterval: useVisiblePolling(30_000) });
+
+/** Warm a record while the user is pressing its row; navigation still owns rendering. */
+export const prefetchRecord = (id: string) => queryClient.prefetchQuery({
+  queryKey: keys.record(id),
+  queryFn: ({ signal }) => api<RecordDetail>(`/v1/records/${id}`, { signal }),
+  staleTime: 2 * 60_000,
+});
 
 /** Invalidate everything that a record-state change can affect. */
 export function useInvalidateRecord() {

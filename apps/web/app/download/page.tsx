@@ -47,7 +47,7 @@ const requirements: [string, string][] = [
     'What leaves the phone',
     'Only positive incoming-payment notifications from wallets you enable. OTPs, security prompts, outgoing payments and promos are dropped on the device.',
   ],
-  ['Plans', 'Free includes the remote payment-phone workflow, CSV export and the full evidence trail. Paid plans add capacity, devices and staff.'],
+  ['Public beta', 'All current recording, evidence, export, device and team features are available without payment.'],
 ];
 
 export default function Download() {

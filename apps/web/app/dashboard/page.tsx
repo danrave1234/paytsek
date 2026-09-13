@@ -3,7 +3,7 @@ import { DashboardClient } from '@/components/dashboard-client';
 
 export const metadata: Metadata = {
   title: 'Workspace dashboard',
-  description: 'Payment records, collectors, team members and billing for your PayTsek workspace.',
+  description: 'Today’s payment records, payment phone and team for your PayTsek workspace.',
   robots: { index: false, follow: false },
 };
 

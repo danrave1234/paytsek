@@ -74,7 +74,7 @@ export async function countDrafts(workspaceId: string): Promise<number> {
 export async function saveDraft(draft: Omit<Draft, 'syncStatus' | 'proofId' | 'lastError' | 'quotaBlocked' | 'createdAt' | 'updatedAt' | 'serverRecordId'>): Promise<Draft> {
   const d = await open();
   const pending = await countDrafts(draft.workspaceId);
-  if (pending >= LOCAL_DRAFT_CAP) throw new Error(`Local draft limit (${LOCAL_DRAFT_CAP}) reached. Reconnect or upgrade to sync pending scans before adding more.`);
+  if (pending >= LOCAL_DRAFT_CAP) throw new Error(`This phone has ${LOCAL_DRAFT_CAP} scans waiting to sync. Reconnect, then try again.`);
   const now = new Date().toISOString();
   const full: Draft = { ...draft, syncStatus: 'LOCAL_DRAFT', proofId: null, lastError: null, quotaBlocked: false, createdAt: now, updatedAt: now, serverRecordId: null };
   await d.runAsync(
@@ -166,7 +166,7 @@ export async function syncAll(workspaceId: string): Promise<{ synced: number; pe
   for (const d of drafts) {
     const s = await syncDraft(d);
     if (s === 'SYNCED') synced += 1;
-    if (s === 'LOCAL_DRAFT' && d.quotaBlocked) break; // no point continuing while quota is exhausted
+    if (s === 'LOCAL_DRAFT' && d.quotaBlocked) break; // Legacy server state; beta UI never exposes quotas.
   }
   return { synced, pending: drafts.length - synced };
 }

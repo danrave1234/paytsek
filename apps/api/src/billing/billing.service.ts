@@ -139,6 +139,9 @@ export class BillingService {
   }
 
   async paymongoWebhook(rawBody: Buffer | undefined, signature: string | undefined): Promise<{ ok: true }> {
+    // Beta is a hard server-side kill switch: do not validate, persist or
+    // fulfill legacy billing events while payments are disabled.
+    if (this.env.BETA_MODE) return { ok: true };
     if (!rawBody || !this.verifySignature(rawBody, signature)) throw new ApiException('WEBHOOK_UNAUTHORIZED', 'Invalid PayMongo webhook signature');
     const body = JSON.parse(rawBody.toString('utf8')) as Record<string, unknown>;
     const eventType = containsString(body, 'checkout_session.payment.paid') ? 'checkout_session.payment.paid' : containsString(body, 'link.payment.paid') ? 'link.payment.paid' : null;

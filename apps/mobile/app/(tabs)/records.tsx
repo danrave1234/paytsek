@@ -1,78 +1,119 @@
-import type { RecordSummary } from '@paytsek/contracts';
+import { PROVIDER_LABELS, type EvidenceState, type Provider, type RecordSummary } from '@paytsek/contracts';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
-import { Icon, Searchbar, Text, TouchableRipple, useTheme } from 'react-native-paper';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Searchbar, Text, useTheme } from 'react-native-paper';
+import { ProviderLogo } from '@/components/provider-logo';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { PaymentRecordRow } from '@/components/payment-record-row';
 import { EmptyState, ErrorState, Loading } from '@/components/ui';
 import { listDrafts, type Draft } from '@/lib/drafts';
-import { manilaTime, peso } from '@/lib/format';
-import { useRecords } from '@/lib/queries';
+import { prefetchRecord, useInfiniteRecords, useSources } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TAB_BAR_CLEARANCE } from '@/theme';
 
 type RowItem =
-  | { kind: 'draft'; id: string; draft: Draft; at: string }
-  | { kind: 'record'; id: string; record: RecordSummary; at: string };
+  | { kind: 'draft'; id: string; draft: Draft; at: string; source: string; amount: number; state: EvidenceState }
+  | { kind: 'record'; id: string; record: RecordSummary; at: string; source: string; amount: number; state: EvidenceState };
 
-function recordStatus(item: RowItem) {
-  if (item.kind === 'draft') return { label: 'Not verified', icon: 'shield-alert-outline', color: '#B5BCCB', background: '#2D3442' };
-  switch (item.record.evidenceState) {
-    case 'MATCHED_AUTO':
-    case 'MATCHED_BY_USER':
-      return { label: 'Verified by notification', icon: 'shield-check', color: '#86E7C6', background: '#0B463D' };
-    case 'CONFIRMED_MANUALLY':
-      return { label: 'Verified manually', icon: 'account-check', color: '#86E7C6', background: '#0B463D' };
-    case 'REVIEW_REQUIRED':
-      return { label: 'Needs review', icon: 'alert-outline', color: '#F5C56A', background: '#513A0B' };
-    case 'VOIDED':
-      return { label: 'Deleted', icon: 'close', color: '#B5BCCB', background: '#2D3442' };
-    default:
-      return { label: 'Not verified', icon: 'shield-alert-outline', color: '#B5BCCB', background: '#2D3442' };
-  }
-}
+const providerLabel = (provider: Provider | null | undefined) => provider ? PROVIDER_LABELS[provider] : 'Payment';
+const draftTime = (draft: Draft) => draft.request.corrected.receiptTransactionAt ?? draft.request.capturedAt ?? draft.createdAt;
+const recordTime = (record: RecordSummary) => record.receiptTransactionAt ?? record.capturedAt ?? record.createdAt;
 
-const manilaDayKey = (iso: string) => new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
+type EvidenceFilter = 'ALL' | 'STRONG' | 'POSSIBLE' | 'RECORDED' | 'CONFIRMED' | 'VOIDED';
+const EVIDENCE_FILTERS: Array<{ value: EvidenceFilter; label: string; states?: EvidenceState[] }> = [
+  { value: 'ALL', label: 'All' },
+  { value: 'STRONG', label: 'Strong', states: ['MATCHED_AUTO', 'MATCHED_BY_USER'] },
+  { value: 'POSSIBLE', label: 'Possible', states: ['REVIEW_REQUIRED'] },
+  { value: 'RECORDED', label: 'Recorded', states: ['UNVERIFIED'] },
+  { value: 'CONFIRMED', label: 'Confirmed', states: ['CONFIRMED_MANUALLY'] },
+  { value: 'VOIDED', label: 'Voided', states: ['VOIDED'] },
+];
+
+const dayKey = (iso: string, timezone: string) => new Intl.DateTimeFormat('en-CA', {
+  timeZone: timezone,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
 }).format(new Date(iso));
 
-function dayLabel(iso: string) {
-  const key = manilaDayKey(iso);
-  const today = manilaDayKey(new Date().toISOString());
-  const yesterday = manilaDayKey(new Date(Date.now() - 86_400_000).toISOString());
+function dayLabel(iso: string, timezone: string) {
+  const key = dayKey(iso, timezone);
+  const today = dayKey(new Date().toISOString(), timezone);
+  const yesterday = dayKey(new Date(Date.now() - 86_400_000).toISOString(), timezone);
   if (key === today) return 'Today';
   if (key === yesterday) return 'Yesterday';
-  return new Intl.DateTimeFormat('en-PH', { timeZone: 'Asia/Manila', month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(iso));
+  return new Intl.DateTimeFormat('en-PH', {
+    timeZone: timezone,
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(iso));
 }
 
 export default function Records() {
   const theme = useTheme();
   const router = useRouter();
   const { workspace } = useSession();
+  const timezone = workspace?.timezone || 'Asia/Manila';
   const [text, setText] = useState('');
   const [search, setSearch] = useState('');
   const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [evidenceFilter, setEvidenceFilter] = useState<EvidenceFilter>('ALL');
+  const [sourceId, setSourceId] = useState<string | undefined>();
+  const sources = useSources();
 
   useEffect(() => {
     const timer = setTimeout(() => setSearch(text.trim()), 250);
     return () => clearTimeout(timer);
   }, [text]);
 
-  const query = useRecords({ q: search || undefined });
+  const evidenceStates = EVIDENCE_FILTERS.find((item) => item.value === evidenceFilter)?.states;
+  const query = useInfiniteRecords({ q: search || undefined, state: evidenceStates, sourceId });
   const refreshLocal = useCallback(() => {
     if (!workspace) return;
-    void listDrafts(workspace.id).then(setDrafts).catch(() => setDrafts([]));
+    void listDrafts(workspace.id, true).then(setDrafts).catch(() => setDrafts([]));
   }, [workspace]);
   useFocusEffect(useCallback(() => { refreshLocal(); }, [refreshLocal, query.dataUpdatedAt]));
 
-  const remote = query.data?.items ?? [];
-  const remoteIds = new Set(remote.map((record) => record.id));
-  const rows: RowItem[] = [
-    ...drafts
-      .filter((draft) => !draft.serverRecordId || !remoteIds.has(draft.serverRecordId))
-      .map((draft): RowItem => ({ kind: 'draft', id: draft.clientRecordId, draft, at: draft.createdAt })),
-    ...remote.map((record): RowItem => ({ kind: 'record', id: record.id, record, at: record.createdAt })),
-  ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const rows = useMemo<RowItem[]>(() => {
+    const remote = query.data?.pages.flatMap((page) => page.items) ?? [];
+    const normalizedSearch = search.toLowerCase().replace(/[₱,\s]/g, '');
+    const localRows: RowItem[] = drafts.filter((draft) => {
+      if (sourceId && draft.request.sourceId !== sourceId) return false;
+      if (evidenceStates && !evidenceStates.includes('UNVERIFIED')) return false;
+      if (!normalizedSearch) return true;
+      const source = providerLabel(draft.request.corrected.receiptProvider).toLowerCase();
+      const amount = (draft.request.corrected.amountCentavos / 100).toFixed(2);
+      return source.includes(search.toLowerCase()) || amount.includes(normalizedSearch);
+    }).map((draft) => ({
+      kind: 'draft',
+      id: draft.clientRecordId,
+      draft,
+      at: draftTime(draft),
+      source: providerLabel(draft.request.corrected.receiptProvider),
+      amount: draft.request.corrected.amountCentavos,
+      state: 'UNVERIFIED',
+    }));
+    const remoteRows: RowItem[] = remote.map((record) => ({
+      kind: 'record',
+      id: record.id,
+      record,
+      at: recordTime(record),
+      source: record.sourceLabel,
+      amount: record.amountCentavos,
+      state: record.evidenceState,
+    }));
+    return [...localRows, ...remoteRows].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  }, [drafts, evidenceStates, query.data?.pages, search, sourceId]);
+
+  const hasFilters = Boolean(search || sourceId || evidenceFilter !== 'ALL');
+  const clearFilters = () => {
+    setText('');
+    setSearch('');
+    setSourceId(undefined);
+    setEvidenceFilter('ALL');
+  };
 
   const refresh = () => {
     refreshLocal();
@@ -86,26 +127,73 @@ export default function Records() {
         keyExtractor={(item) => `${item.kind}.${item.id}`}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
-        refreshing={query.isRefetching}
+        refreshing={query.isRefetching && !query.isFetchingNextPage}
         onRefresh={refresh}
+        onEndReachedThreshold={0.3}
+        onEndReached={() => {
+          if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
+        }}
         ListHeaderComponent={(
           <View style={styles.header}>
             <View style={styles.titleRow}>
-              <View>
-                <Text variant="titleLarge" style={styles.title}>Records</Text>
-                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                  {rows.length ? `${rows.length} recent payment${rows.length === 1 ? '' : 's'}` : 'Your payment history'}
-                </Text>
-              </View>
+              <Text variant="headlineSmall" style={styles.title}>Records</Text>
+              {hasFilters ? <Pressable onPress={clearFilters} hitSlop={10}><Text variant="labelLarge" style={{ color: theme.colors.primary }}>Clear</Text></Pressable> : null}
             </View>
             <Searchbar
-              placeholder="Search records"
+              placeholder="Search wallet or amount"
               value={text}
               onChangeText={setText}
               elevation={0}
               style={[styles.search, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}
-              inputStyle={{ minHeight: 0 }}
+              inputStyle={styles.searchInput}
             />
+            <Text variant="labelSmall" style={[styles.filterLabel, { color: theme.colors.onSurfaceVariant }]}>EVIDENCE</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+              {EVIDENCE_FILTERS.map((filter) => {
+                const selected = evidenceFilter === filter.value;
+                return (
+                  <Pressable
+                    key={filter.value}
+                    onPress={() => setEvidenceFilter(filter.value)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    style={[styles.filter, { borderColor: selected ? theme.colors.primary : theme.colors.outlineVariant, backgroundColor: selected ? theme.colors.primaryContainer : theme.colors.surface }]}
+                  >
+                    <Text variant="labelMedium" style={{ color: selected ? theme.colors.primary : theme.colors.onSurface }}>{filter.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {(sources.data?.length ?? 0) > 0 ? (
+              <>
+                <Text variant="labelSmall" style={[styles.filterLabel, { color: theme.colors.onSurfaceVariant }]}>PAYMENT SOURCE</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+                  <Pressable
+                    onPress={() => setSourceId(undefined)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: !sourceId }}
+                    style={[styles.sourceFilter, { borderColor: !sourceId ? theme.colors.primary : theme.colors.outlineVariant, backgroundColor: !sourceId ? theme.colors.primaryContainer : theme.colors.surface }]}
+                  >
+                    <Text variant="labelMedium" style={{ color: !sourceId ? theme.colors.primary : theme.colors.onSurface }}>All sources</Text>
+                  </Pressable>
+                  {sources.data?.map((source) => {
+                    const selected = sourceId === source.id;
+                    return (
+                      <Pressable
+                        key={source.id}
+                        onPress={() => setSourceId(source.id)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        style={[styles.sourceFilter, { borderColor: selected ? theme.colors.primary : theme.colors.outlineVariant, backgroundColor: selected ? theme.colors.primaryContainer : theme.colors.surface }]}
+                      >
+                        <ProviderLogo provider={source.provider} size={22} />
+                        <Text variant="labelMedium" numberOfLines={1} style={{ color: selected ? theme.colors.primary : theme.colors.onSurface }}>{source.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </>
+            ) : null}
           </View>
         )}
         ListEmptyComponent={query.isLoading
@@ -114,41 +202,30 @@ export default function Records() {
             ? <EmptyState icon="folder-outline" title="Choose a workspace" action={{ label: 'Choose workspace', onPress: () => router.push('/workspaces') }} />
           : query.error
             ? <ErrorState error={query.error} retry={refresh} />
-            : <EmptyState icon="receipt-text-outline" title="No records" action={{ label: 'Scan payment', onPress: () => router.push('/(tabs)/scan') }} />}
+            : hasFilters
+              ? <EmptyState icon="filter-outline" title="No matching records" action={{ label: 'Clear filters', onPress: clearFilters }} />
+              : <EmptyState icon="receipt-text-outline" title="No records yet" body="Your saved payment proofs will appear here." action={{ label: 'Scan payment', onPress: () => router.push('/(tabs)/scan') }} />}
+        ListFooterComponent={query.isFetchingNextPage ? <ActivityIndicator style={styles.footer} /> : <View style={styles.footer} />}
         renderItem={({ item, index }) => {
-          const amount = item.kind === 'draft' ? item.draft.request.corrected.amountCentavos : item.record.amountCentavos;
-          const reference = item.kind === 'draft' ? item.draft.request.corrected.referenceValue : item.record.referenceValue;
-          const source = item.kind === 'draft' ? (item.draft.request.corrected.receiptProvider ?? 'Payment') : item.record.sourceLabel;
-          const needsAttention = item.kind === 'record' && item.record.evidenceState === 'REVIEW_REQUIRED';
-          const status = recordStatus(item);
-          const showDay = index === 0 || manilaDayKey(rows[index - 1]!.at) !== manilaDayKey(item.at);
+          const showDay = index === 0 || dayKey(rows[index - 1]!.at, timezone) !== dayKey(item.at, timezone);
+          const previousSameDay = index > 0 && !showDay;
           return (
             <View>
-              {showDay ? <Text variant="labelMedium" style={[styles.day, { color: theme.colors.onSurfaceVariant }]}>{dayLabel(item.at)}</Text> : null}
-              <TouchableRipple
+              {showDay ? (
+                <Text variant="labelMedium" style={[styles.day, { color: theme.colors.onSurfaceVariant }]}>
+                  {dayLabel(item.at, timezone)}
+                </Text>
+              ) : null}
+              <PaymentRecordRow
+                amountCentavos={item.amount}
+                occurredAt={item.at}
+                sourceLabel={item.source}
+                state={item.state}
+                timezone={timezone}
+                divider={previousSameDay}
                 onPress={item.kind === 'record' ? () => router.push(`/record/${item.record.id}`) : undefined}
-                disabled={item.kind === 'draft'}
-                borderless
-                style={[styles.recordCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}
-              >
-                <View style={styles.row}>
-                  <View style={[styles.providerMark, { backgroundColor: needsAttention ? theme.colors.tertiary : theme.colors.primary }]} />
-                  <View style={{ flex: 1, gap: 3 }}>
-                    <Text variant="titleMedium" style={{ fontWeight: '700' }}>{source}</Text>
-                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>
-                      {reference ? `Ref •••• ${reference.slice(-4)}` : 'No reference'} · {manilaTime(item.at).split(',').pop()?.trim()}
-                    </Text>
-                    <View style={[styles.status, { backgroundColor: status.background }]}>
-                      <Icon source={status.icon} size={13} color={status.color} />
-                      <Text variant="labelSmall" style={{ color: status.color, fontWeight: '700' }}>{status.label}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.amountBlock}>
-                    <Text variant="titleMedium" style={{ fontWeight: '700' }}>{peso(amount)}</Text>
-                    {item.kind === 'record' ? <Icon source="chevron-right" size={20} color={theme.colors.onSurfaceVariant} /> : null}
-                  </View>
-                </View>
-              </TouchableRipple>
+                onPressIn={item.kind === 'record' ? () => { void prefetchRecord(item.record.id); } : undefined}
+              />
             </View>
           );
         }}
@@ -158,15 +235,16 @@ export default function Records() {
 }
 
 const styles = StyleSheet.create({
-  list: { paddingHorizontal: SPACING.lg, paddingBottom: TAB_BAR_CLEARANCE + SPACING.lg },
-  header: { paddingTop: SPACING.md, paddingBottom: SPACING.lg, gap: SPACING.md },
-  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontWeight: '700', letterSpacing: -0.3 },
-  search: { minHeight: 48, borderRadius: RADIUS.md, borderWidth: StyleSheet.hairlineWidth },
-  day: { marginTop: SPACING.sm, marginBottom: SPACING.sm, textTransform: 'uppercase', letterSpacing: 0.7 },
-  recordCard: { borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, marginBottom: SPACING.sm, overflow: 'hidden' },
-  row: { minHeight: 88, flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.md },
-  providerMark: { width: 4, alignSelf: 'stretch', minHeight: 54, borderRadius: RADIUS.full },
-  amountBlock: { alignItems: 'flex-end', justifyContent: 'space-between', alignSelf: 'stretch', paddingVertical: 2 },
-  status: { alignSelf: 'flex-start', minHeight: 24, paddingHorizontal: 8, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 4 },
+  list: { paddingHorizontal: SPACING.lg, paddingBottom: TAB_BAR_CLEARANCE + SPACING.xl },
+  header: { paddingTop: SPACING.lg, paddingBottom: SPACING.md, gap: SPACING.xs },
+  titleRow: { minHeight: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  title: { fontWeight: '800', letterSpacing: -0.45 },
+  search: { minHeight: 48, marginTop: SPACING.md, borderRadius: RADIUS.md, borderWidth: StyleSheet.hairlineWidth },
+  searchInput: { minHeight: 0, fontSize: 15 },
+  filterLabel: { marginTop: SPACING.sm, letterSpacing: 0.7 },
+  filters: { gap: 8, paddingVertical: 2, paddingRight: SPACING.md },
+  filter: { minHeight: 38, minWidth: 58, paddingHorizontal: SPACING.md, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth },
+  sourceFilter: { minHeight: 42, maxWidth: 180, paddingHorizontal: SPACING.sm, flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: RADIUS.md, borderWidth: StyleSheet.hairlineWidth },
+  day: { marginTop: SPACING.lg, marginBottom: SPACING.xs, textTransform: 'uppercase', letterSpacing: 0.7 },
+  footer: { minHeight: 56, justifyContent: 'center' },
 });

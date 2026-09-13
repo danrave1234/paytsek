@@ -74,22 +74,22 @@ export const lightTheme: MD3Theme = {
     errorContainer: '#F9DEDC',
     onErrorContainer: '#410E0B',
 
-    background: '#F7F8FB',
-    onBackground: '#101828',
-    surface: '#FFFFFF',
-    onSurface: '#101828',
-    surfaceVariant: '#EEF1F5',
+    background: '#FBFAF7',
+    onBackground: '#111827',
+    surface: '#FFFEFC',
+    onSurface: '#111827',
+    surfaceVariant: '#F0F1F3',
     onSurfaceVariant: '#475467',
     outline: '#667085',
     outlineVariant: '#E4E7EC',
 
     elevation: {
       level0: 'transparent',
-      level1: '#FFFFFF',
-      level2: '#F4F6F9',
-      level3: '#EEF1F5',
-      level4: '#E9EDF3',
-      level5: '#E4E8EF',
+      level1: '#FFFEFC',
+      level2: '#F7F6F2',
+      level3: '#F1F1EE',
+      level4: '#ECECE8',
+      level5: '#E7E7E2',
     },
   },
 };
@@ -117,11 +117,11 @@ export const darkTheme: MD3Theme = {
     errorContainer: '#93000A',
     onErrorContainer: '#FFDAD6',
 
-    background: '#0C111D',
+    background: '#0E1117',
     onBackground: '#F2F4F7',
-    surface: '#161B26',
+    surface: '#171B22',
     onSurface: '#F2F4F7',
-    surfaceVariant: '#1F2633',
+    surfaceVariant: '#212731',
     onSurfaceVariant: '#CED3DC',
     outline: '#98A2B3',
     outlineVariant: '#344054',
@@ -143,20 +143,20 @@ export const darkTheme: MD3Theme = {
  * of staying a bright card on a dark surface.
  */
 const lightStates = {
-  UNVERIFIED: { bg: '#EEF0F4', fg: '#3C4451', icon: 'clock-outline' },
+  UNVERIFIED: { bg: '#EEF2F6', fg: '#48617F', icon: 'receipt-text-check-outline' },
   REVIEW_REQUIRED: { bg: '#FFF1D6', fg: '#7A4D00', icon: 'alert-circle-outline' },
-  MATCHED_AUTO: { bg: '#DDF5EE', fg: '#00513F', icon: 'bell-check-outline' },
-  MATCHED_BY_USER: { bg: '#DDF5EE', fg: '#00513F', icon: 'account-check-outline' },
-  CONFIRMED_MANUALLY: { bg: '#E3EEFF', fg: '#0B3D91', icon: 'check-decagram-outline' },
+  MATCHED_AUTO: { bg: '#E3EEFF', fg: '#0B4EC4', icon: 'bell-check-outline' },
+  MATCHED_BY_USER: { bg: '#E3EEFF', fg: '#0B4EC4', icon: 'account-check-outline' },
+  CONFIRMED_MANUALLY: { bg: '#DDF5EE', fg: '#00664E', icon: 'check-decagram-outline' },
   VOIDED: { bg: '#F3E5E5', fg: '#7A1F1F', icon: 'cancel' },
 } as const;
 
 const darkStates = {
-  UNVERIFIED: { bg: '#333840', fg: '#CBD2DD', icon: 'clock-outline' },
+  UNVERIFIED: { bg: '#303843', fg: '#C4D0DE', icon: 'receipt-text-check-outline' },
   REVIEW_REQUIRED: { bg: '#4A3200', fg: '#FFDDB3', icon: 'alert-circle-outline' },
-  MATCHED_AUTO: { bg: '#0B4438', fg: '#8FE3CE', icon: 'bell-check-outline' },
-  MATCHED_BY_USER: { bg: '#0B4438', fg: '#8FE3CE', icon: 'account-check-outline' },
-  CONFIRMED_MANUALLY: { bg: '#123566', fg: '#C6DBFF', icon: 'check-decagram-outline' },
+  MATCHED_AUTO: { bg: '#123566', fg: '#B2CCFF', icon: 'bell-check-outline' },
+  MATCHED_BY_USER: { bg: '#123566', fg: '#B2CCFF', icon: 'account-check-outline' },
+  CONFIRMED_MANUALLY: { bg: '#0B4438', fg: '#8FE3CE', icon: 'check-decagram-outline' },
   VOIDED: { bg: '#5A2222', fg: '#FFCFCB', icon: 'cancel' },
 } as const;
 

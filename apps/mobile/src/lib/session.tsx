@@ -52,11 +52,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const client = supabase();
-    void client.auth.getSession().then(async ({ data }) => {
-      setSession(data.session);
-      if (data.session) await refreshWorkspaces();
-      setReady(true);
-    });
+    void client.auth.getSession()
+      .then(({ data }) => {
+        setSession(data.session);
+        setReady(true);
+        if (data.session) void refreshWorkspaces();
+      })
+      .catch(() => setReady(true));
     const { data: sub } = client.auth.onAuthStateChange(async (_e, s) => {
       setSession(s);
       if (s) await refreshWorkspaces();

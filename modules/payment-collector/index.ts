@@ -7,10 +7,14 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
  */
 export interface CollectorStatus {
   supported: boolean;
+  /** A collector credential and API endpoint are stored on this installation. */
+  configured: boolean;
   /** User granted Notification Access to PayTsek in system settings. */
   notificationAccessGranted: boolean;
   /** The listener service is currently connected to the system notification manager. */
   listenerConnected: boolean;
+  /** Wallet providers this installation was paired to collect. */
+  enabledProviders: Array<'GCASH' | 'GOTYME' | 'MAYA' | 'MARIBANK'>;
   pendingUploadCount: number;
   lastObservedEventAt: string | null;
   lastUploadAt: string | null;
@@ -65,6 +69,7 @@ interface NativeModule {
   getStatus(): Promise<CollectorStatus>;
   detectProviderApps(): Promise<DetectedProviderApp[]>;
   configure(config: CollectorConfig): Promise<void>;
+  setEnabledProviders(providers: CollectorConfig['enabledProviders']): Promise<void>;
   clearConfiguration(): Promise<void>;
   setPaused(paused: boolean): Promise<void>;
   flushNow(): Promise<{ attempted: number; acknowledged: number }>;
@@ -85,8 +90,10 @@ const native = requireOptionalNativeModule<NativeModule>('PaymentCollector');
 
 const unsupportedStatus = (): CollectorStatus => ({
   supported: false,
+  configured: false,
   notificationAccessGranted: false,
   listenerConnected: false,
+  enabledProviders: [],
   pendingUploadCount: 0,
   lastObservedEventAt: null,
   lastUploadAt: null,
@@ -104,6 +111,8 @@ export const PaymentCollector = {
   getStatus: (): Promise<CollectorStatus> => native?.getStatus() ?? Promise.resolve(unsupportedStatus()),
   detectProviderApps: (): Promise<DetectedProviderApp[]> => native?.detectProviderApps() ?? Promise.resolve([]),
   configure: (config: CollectorConfig): Promise<void> => native?.configure(config) ?? Promise.resolve(),
+  setEnabledProviders: (providers: CollectorConfig['enabledProviders']): Promise<void> =>
+    native?.setEnabledProviders(providers) ?? Promise.resolve(),
   clearConfiguration: (): Promise<void> => native?.clearConfiguration() ?? Promise.resolve(),
   setPaused: (paused: boolean): Promise<void> => native?.setPaused(paused) ?? Promise.resolve(),
   flushNow: (): Promise<{ attempted: number; acknowledged: number }> => native?.flushNow() ?? Promise.resolve({ attempted: 0, acknowledged: 0 }),

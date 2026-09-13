@@ -20,6 +20,7 @@ export default function Workspaces() {
   const emailName = session?.user.email?.split('@')[0]?.replace(/[._-]+/g, ' ').trim();
   const metadataName = session?.user.user_metadata?.full_name;
   const displayName = typeof metadataName === 'string' && metadataName.trim() ? metadataName.trim() : (emailName || 'Owner');
+  const deviceTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Manila';
 
   const create = async () => {
     if (busy) return;
@@ -29,7 +30,7 @@ export default function Workspaces() {
       const workspace = await api<WorkspaceSummary>('/v1/workspaces', {
         method: 'POST',
         noWorkspace: true,
-        body: { name: businessName.trim() || 'My records', timezone: 'Asia/Manila', ownerDisplayName: displayName },
+        body: { name: businessName.trim() || 'My records', timezone: deviceTimezone, ownerDisplayName: displayName },
       });
       await refreshWorkspaces();
       await selectWorkspace(workspace.id);

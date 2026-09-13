@@ -21,11 +21,11 @@ const sections: LegalSection[] = [
     body: (
       <ul>
         <li>
-          A &ldquo;Notification matched&rdquo; state means a notification on your phone agreed with a record. It is not a
+          A &ldquo;Strong match&rdquo; state means a notification on your phone agreed with a record. It is not a
           confirmation from GCash, GoTyme, Maya, or any bank, and does not guarantee funds were or will remain received.
         </li>
         <li>
-          An &ldquo;Unverified&rdquo; record does not mean a payment failed. Notification delivery depends on your phone, the
+          A &ldquo;Recorded&rdquo; item does not mean a payment failed. It means notification evidence is not linked. Delivery depends on your phone, the
           wallet app, and your network.
         </li>
         <li>You remain responsible for checking your wallet and for your own accounting, tax and legal obligations.</li>
@@ -44,14 +44,12 @@ const sections: LegalSection[] = [
     ),
   },
   {
-    id: 'plans',
+    id: 'beta',
     title: 'Public beta access',
     body: (
       <p>
-        PayTsek is currently offered as a public beta. There is no checkout, subscription, automatic charge or payment
-        requirement for beta access. If paid plans are introduced, we will publish the terms and give notice before any
-        charge is made. Beta access can change or end as we improve the product, but we will not delete your records merely
-        because pricing changes.
+        PayTsek is currently offered as a free public beta, and no payment details are required. Beta access can change or end
+        as we improve the product; material changes will be reflected in these terms before they apply.
       </p>
     ),
   },
@@ -93,7 +91,7 @@ export default function Terms() {
     <LegalPage
       eyebrow="Legal · 02"
       title="Terms of use"
-      updated="2026-09-10"
+      updated="2026-09-14"
       lead="What PayTsek is, what it does not promise, and what you are responsible for."
       summary={[
         { label: 'Moves money', value: 'No', tone: 'ok' },

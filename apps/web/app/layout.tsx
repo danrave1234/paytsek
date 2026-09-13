@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
-export const viewport: Viewport = { themeColor: '#f7f8fb', width: 'device-width', initialScale: 1 };
+export const viewport: Viewport = { themeColor: [{ media: '(prefers-color-scheme: light)', color: '#f7f5ef' }, { media: '(prefers-color-scheme: dark)', color: '#0c1016' }], width: 'device-width', initialScale: 1 };
 
 const footerLinks = [
   {

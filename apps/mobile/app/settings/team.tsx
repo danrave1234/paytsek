@@ -30,7 +30,7 @@ export default function Team() {
 
   return (
     <Screen>
-      <Notice kind="info">Cashiers can scan and view their own records. Owner data and billing stay private.</Notice>
+      <Notice kind="info">Cashiers can scan and view their own records. Workspace settings stay with the owner.</Notice>
       {q.isLoading ? <Loading /> : q.error ? <ErrorState error={q.error} retry={() => void q.refetch()} /> : null}
       {q.data?.map((m) => (
         <Card key={m.userId} mode="outlined">

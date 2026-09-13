@@ -23,13 +23,35 @@ export function lastSeenWithTime(iso: string | null): string {
   return `${lastSeen(iso)} · ${manilaTime(iso, 'TIME')}`;
 }
 
-export function manilaTime(iso: string | null, precision?: string): string {
+export function manilaTime(iso: string | null, precision?: string, timezone = 'Asia/Manila'): string {
   if (!iso) return '—';
   const d = new Date(iso);
-  const opts: Intl.DateTimeFormatOptions = { timeZone: 'Asia/Manila', year: 'numeric', month: 'short', day: '2-digit' };
+  const opts: Intl.DateTimeFormatOptions = { timeZone: timezone, year: 'numeric', month: 'short', day: '2-digit' };
   if (precision !== 'DAY') Object.assign(opts, { hour: '2-digit', minute: '2-digit' });
   if (precision === 'SECOND') Object.assign(opts, { second: '2-digit' });
   return new Intl.DateTimeFormat('en-PH', opts).format(d);
+}
+
+/** Compact transaction time in the workspace's configured IANA timezone. */
+export function transactionTime(iso: string | null, timezone = 'Asia/Manila'): string {
+  if (!iso) return '—';
+  return new Intl.DateTimeFormat('en-PH', {
+    timeZone: timezone,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(new Date(iso));
+}
+
+/** Calendar heading for the workspace day, derived from the phone's current time. */
+export function workspaceDate(now: Date, timezone = 'Asia/Manila'): string {
+  return new Intl.DateTimeFormat('en-PH', {
+    timeZone: timezone,
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(now);
 }
 
 export function maskPhone(phone: string): string {

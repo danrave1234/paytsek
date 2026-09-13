@@ -15,13 +15,30 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.2.0',
+    date: '2026-09-14',
+    channel: 'beta',
+    highlights: [
+      'A new five-destination navigation bar keeps Scan prominent while adding Analytics and Settings.',
+      'Analytics summarizes recorded amounts by day, payment source, and evidence status.',
+      'Records can be filtered by evidence and payment source, and searched by wallet or amount.',
+      'GCash, Maya, GoTyme, and MariBank artwork now makes payment sources easier to recognize.',
+      'Update prompts show release notes and can open Android’s installer directly inside PayTsek.',
+    ],
+    fixes: [
+      'Improves offline draft sync, notification-collector recovery after upgrades, light and dark themes, caching, and loading behavior.',
+      'Keeps receipt records even when notification evidence is unavailable and limits visible record facts to data the proof can supply.',
+    ],
+    notes: 'PayTsek remains a free public beta. Notification matching is supplementary evidence, not confirmation from a wallet provider.',
+  },
+  {
     version: '0.1.8',
     date: '2026-09-11',
     channel: 'beta',
     highlights: [
       'A scan-first mobile refresh gives payment capture the primary action while tightening navigation, loading states, spacing and visual hierarchy.',
       'PayTsek branding, app identifiers and native notification-collector packages are now consistent across the Android app, web experience and backend.',
-      'The web dashboard, plans and download experience have been refreshed to reflect the current PayTsek product and billing flow.',
+      'The web dashboard and download experience now reflect the current PayTsek recording flow.',
     ],
     fixes: [
       'Improves dark-mode transitions with an explicit native app background to prevent a white flash during navigation.',
@@ -75,9 +92,9 @@ export const RELEASES: Release[] = [
       'GoTyme, Maya and MariBank incoming-payment notifications are recognised on the Android payment phone and appear in Review when no matching reference is available.',
       'Owner-only incoming inbox, team invites, CSV export, and full account/workspace deletion.',
       'Unknown formats: opt in on the payment phone to collect redacted notification shapes, so a wallet that cannot auto-match yet can be supported.',
-      'Clearer billing: Free, Starter and Business plans, exact access end dates, and early renewal that preserves unused paid time.',
+      'Earlier account-capacity experiments were removed when PayTsek moved to a free public beta.',
     ],
-    notes: 'Automatic matching remains limited to flows with an exact comparable reference. GoTyme, Maya and MariBank incoming notifications are captured as payment evidence and sent to Review when confirmation is needed. QRPh renewals are manually approved each 30-day period; automatic billing is not available for QRPh.',
+    notes: 'Automatic matching remains limited to flows with exact comparable evidence. GoTyme, Maya and MariBank incoming notifications are captured as supporting evidence and sent to Review when confirmation is needed.',
   },
 ];
 

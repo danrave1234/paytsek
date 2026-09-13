@@ -12,7 +12,7 @@ const sections: LegalSection[] = [
         <p>
           <strong>Confirmation images.</strong> When you scan or import a customer&apos;s payment confirmation, the image is
           stored in a private bucket for your workspace with location metadata removed. Text is extracted on your phone. Images
-          are kept 30 days on the Free plan and 90 days for paid plans or purchases, then deleted; the structured record stays.
+          are kept for 30 days during the public beta, then deleted; the structured record stays.
         </p>
         <p>
           <strong>Payment notifications (Android payment phone only).</strong> If a workspace owner pairs an Android phone and
@@ -23,6 +23,17 @@ const sections: LegalSection[] = [
           notifications are deleted after 7 days unless linked to a record.
         </p>
       </>
+    ),
+  },
+  {
+    id: 'controller-purpose',
+    title: 'Who is responsible and why we process data',
+    body: (
+      <p>
+        PayTsek is the personal information controller for account and service data. We process it to provide the service you
+        request, secure accounts, keep auditable payment records, support your team, and meet legal obligations. Questions or
+        privacy requests can be sent to <a href="mailto:support@paytsek.online">support@paytsek.online</a>.
+      </p>
     ),
   },
   {
@@ -55,13 +66,25 @@ const sections: LegalSection[] = [
     body: (
       <ul>
         <li>Unmatched notifications: 7 days.</li>
-        <li>Confirmation images: 30 days (Free) / 90 days (paid), fixed when the image is saved.</li>
+        <li>Confirmation images: 30 days during the public beta, fixed when the image is saved.</li>
         <li>
           Structured records and audit trail: 12 months by default, exportable and deletable. This is operational
           recordkeeping, not a tax-record guarantee.
         </li>
         <li>Export files: 24 hours.</li>
       </ul>
+    ),
+  },
+  {
+    id: 'rights',
+    title: 'Your data privacy rights',
+    body: (
+      <p>
+        Under the Philippine Data Privacy Act, you may ask to be informed, access or correct your data, object to or request
+        erasure of qualifying processing, request portability where applicable, and raise a complaint with the National
+        Privacy Commission. Contact us first at <a href="mailto:support@paytsek.online">support@paytsek.online</a> so we can
+        verify and act on the request.
+      </p>
     ),
   },
   {
@@ -80,9 +103,21 @@ const sections: LegalSection[] = [
     title: 'Processors',
     body: (
       <p>
-        Hosting and authentication: Supabase. PayTsek does not process payments or collect payment details during public beta.
-        Error monitoring is configured to scrub amounts, names, phone numbers, references, tokens and image
-        URLs.
+        Hosting, database, private file storage and authentication: Supabase. Service infrastructure may process data outside
+        the Philippines under the provider&apos;s contractual and security safeguards. PayTsek does not process payments or
+        collect wallet credentials. Error monitoring is configured to scrub amounts, names, phone numbers, references, tokens
+        and image URLs.
+      </p>
+    ),
+  },
+  {
+    id: 'security-incidents',
+    title: 'Security and incidents',
+    body: (
+      <p>
+        Data is encrypted in transit, workspace access is restricted by role, and proof images use short-lived private links.
+        We investigate suspected incidents and notify affected people and the National Privacy Commission when Philippine law
+        requires it.
       </p>
     ),
   },
@@ -91,7 +126,7 @@ const sections: LegalSection[] = [
     title: 'Honesty about matching',
     body: (
       <p>
-        &ldquo;Notification matched&rdquo; means PayTsek saw a notification on your own phone that agreed with the record. It
+        &ldquo;Strong match&rdquo; means PayTsek saw a notification on your own phone that agreed with the record. It
         is not a confirmation from GCash, GoTyme, Maya or any bank, and PayTsek is not affiliated with them.
       </p>
     ),
@@ -103,10 +138,10 @@ export default function Privacy() {
     <LegalPage
       eyebrow="Legal · 01"
       title="Privacy policy"
-      updated="2026-09-08"
+      updated="2026-09-14"
       lead="What PayTsek collects, why, how long it is kept, and how to delete it."
       summary={[
-        { label: 'Credentials collected', value: 'None, ever', tone: 'ok' },
+        { label: 'Wallet credentials', value: 'Never collected', tone: 'ok' },
         { label: 'Notifications read', value: 'Incoming payments only' },
         { label: 'Unmatched notifications', value: 'Deleted after 7 days' },
         { label: 'Data sold', value: 'Never', tone: 'ok' },

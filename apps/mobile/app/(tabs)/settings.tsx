@@ -4,6 +4,7 @@ import { clearInactiveCache } from '@/lib/queries';
 import { pruneSynced } from '@/lib/drafts';
 import { Linking, Platform, View } from 'react-native';
 import { IconButton, Text, useTheme } from 'react-native-paper';
+import { AppUpdateDialog } from '@/components/app-update-dialog';
 import { Group, ListRow, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
 import { useAppUpdate } from '@/lib/release-update';
@@ -19,6 +20,7 @@ export default function Settings() {
   const update = useAppUpdate();
   const [cacheMessage, setCacheMessage] = useState('');
   const [clearing, setClearing] = useState(false);
+  const [showUpdate, setShowUpdate] = useState(false);
   const clearCache = async () => {
     if (clearing) return;
     setClearing(true);
@@ -68,17 +70,11 @@ export default function Settings() {
       </Group>
 
       {isOwner ? (
-        <Group title="Business">
+        <Group title="Workspace">
           <ListRow
             icon="account-multiple-outline"
             title="Team"
             onPress={() => router.push('/settings/team')}
-          />
-          <ListRow
-            icon="credit-card-outline"
-            title="Beta access"
-            subtitle="All features are free during beta"
-            onPress={() => router.push('/settings/billing')}
           />
           <ListRow icon="file-export-outline" title="Export records" onPress={() => router.push('/settings/exports')} />
         </Group>
@@ -102,18 +98,26 @@ export default function Settings() {
         />
       </Group>
 
+      <Group title="App">
+        <ListRow
+          icon={update.data ? 'cellphone-arrow-down' : 'check-circle-outline'}
+          title={update.data ? `PayTsek ${update.data.version} is ready` : update.isFetching ? 'Checking for updates…' : 'PayTsek is up to date'}
+          subtitle={update.data ? 'View patch notes and install' : `Version ${APP_VERSION}`}
+          onPress={() => update.data ? setShowUpdate(true) : void update.refetch()}
+        />
+      </Group>
+
       <Group title="Advanced">
         {Platform.OS === 'android' && isOwner ? <ListRow icon="text-search" title="Unknown notification formats" onPress={() => router.push('/settings/samples')} /> : null}
         <ListRow icon="broom" title={clearing ? 'Clearing cache…' : 'Clear unused cache'} subtitle={cacheMessage || undefined} onPress={() => void clearCache()} />
       </Group>
-
-      {update.data ? <Group title="App update"><ListRow icon="download" title={`PayTsek ${update.data.version} is ready`} subtitle="Download the latest signed installer from the Home screen." /></Group> : null}
 
       <ListRow icon="logout" title="Sign out" destructive onPress={() => void signOut()} />
 
       <Text variant="bodySmall" style={{ opacity: 0.5, textAlign: 'center' }}>
         PayTsek {APP_VERSION}
       </Text>
+      <AppUpdateDialog update={update.data} visible={showUpdate} onDismiss={() => setShowUpdate(false)} />
     </Screen>
   );
 }

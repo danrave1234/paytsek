@@ -6,7 +6,7 @@ import { StyleSheet, View } from 'react-native';
 import { Button, Dialog, Icon, IconButton, List, Portal, Text, TextInput, useTheme } from 'react-native-paper';
 import { ErrorState, Loading, Notice, Screen, StateChip } from '@/components/ui';
 import { isApiError } from '@/lib/api';
-import { lastSeenWithTime, manilaTime, peso } from '@/lib/format';
+import { lastSeenWithTime, manilaTime, peso, stateLabel } from '@/lib/format';
 import { useConfirmCandidate, useConfirmManually, useCorrectRecord, useRecord, useUnlink, useVoid } from '@/lib/queries';
 import { useIsOwner, useSession } from '@/lib/session';
 import { RADIUS, SPACING, stateColorsFor } from '@/theme';
@@ -17,10 +17,10 @@ function DetailCell({ label, value, wide = false }: { label: string; value: stri
 }
 
 const STATUS_COPY: Record<EvidenceState, { title: string; detail: string; icon: string }> = {
-  UNVERIFIED: { title: 'Not verified', detail: 'No notification match or manual wallet confirmation is linked to this proof.', icon: 'shield-alert-outline' },
-  REVIEW_REQUIRED: { title: 'Needs a quick review', detail: 'More than one notification may fit this payment. Choose the right one or confirm it after checking the wallet.', icon: 'alert-circle-outline' },
-  MATCHED_AUTO: { title: 'Matched to payment notification', detail: 'The amount and timing matched an incoming notification on the payment phone.', icon: 'bell-check-outline' },
-  MATCHED_BY_USER: { title: 'Notification selected', detail: 'A team member linked this receipt to the selected incoming notification.', icon: 'account-check-outline' },
+  UNVERIFIED: { title: 'Recorded', detail: 'Saved from the proof. No wallet evidence is linked yet.', icon: 'shield-outline' },
+  REVIEW_REQUIRED: { title: 'Possible match', detail: 'A nearby incoming notification may fit this proof. Review it before linking.', icon: 'alert-circle-outline' },
+  MATCHED_AUTO: { title: 'Strong match', detail: 'The proof aligns with an incoming notification on the payment phone. This is supporting evidence, not a bank guarantee.', icon: 'bell-check-outline' },
+  MATCHED_BY_USER: { title: 'Strong match', detail: 'A team member linked this proof to the selected incoming notification.', icon: 'account-check-outline' },
   CONFIRMED_MANUALLY: { title: 'Confirmed after wallet check', detail: 'An owner confirmed this payment directly in the wallet app.', icon: 'check-decagram-outline' },
   VOIDED: { title: 'Voided', detail: 'This record is kept in history but excluded from recorded totals.', icon: 'cancel' },
 };
@@ -30,7 +30,7 @@ export default function RecordDetail() {
   const router = useRouter();
   const theme = useTheme();
   const isOwner = useIsOwner();
-  const { session } = useSession();
+  const { session, workspace } = useSession();
   const rec = useRecord(id);
   const confirm = useConfirmCandidate(id);
   const manual = useConfirmManually(id);
@@ -40,8 +40,6 @@ export default function RecordDetail() {
   const [dialog, setDialog] = useState<'unlink' | 'void' | 'manual' | 'edit' | null>(null);
   const [reason, setReason] = useState('');
   const [amountText, setAmountText] = useState('');
-  const [referenceText, setReferenceText] = useState('');
-  const [noteText, setNoteText] = useState('');
   const [msg, setMsg] = useState<{ kind: 'info' | 'error' | 'warning'; text: string } | null>(null);
 
   if (rec.isLoading) return <Screen scroll={false}><Loading variant="detail" label="Loading payment record" /></Screen>;
@@ -73,11 +71,7 @@ export default function RecordDetail() {
         const amount = parseMoneyExact(amountText.trim());
         if (!amount) throw new Error('Enter a valid amount.');
         await correct.mutateAsync({
-          corrected: {
-            amountCentavos: amount.centavos,
-            referenceValue: referenceText.trim() || undefined,
-          },
-          note: noteText.trim() || undefined,
+          corrected: { amountCentavos: amount.centavos },
           reason: 'Updated from the app',
         });
         setMsg({ kind: 'info', text: 'Record updated.' });
@@ -90,8 +84,6 @@ export default function RecordDetail() {
 
   const openEdit = () => {
     setAmountText((r.amountCentavos / 100).toFixed(2));
-    setReferenceText(r.corrected.referenceValue ?? '');
-    setNoteText(r.note ?? '');
     setDialog('edit');
   };
 
@@ -102,7 +94,7 @@ export default function RecordDetail() {
       <View style={styles.heroTop}><View style={[styles.walletIcon, { backgroundColor: theme.colors.primaryContainer }]}><Icon source="wallet-outline" size={23} color={theme.colors.primary} /></View><StateChip state={r.evidenceState} /></View>
       <Text variant="headlineLarge" style={styles.amount}>{peso(r.amountCentavos)}</Text>
       <Text variant="titleMedium" style={{ fontWeight: '700' }}>{r.sourceLabel}</Text>
-      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(r.createdAt)}</Text>
+      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(r.corrected.receiptTransactionAt ?? r.capturedAt, r.corrected.receiptTransactionPrecision, workspace?.timezone)}</Text>
     </View>
 
     {r.evidenceState !== 'UNVERIFIED' ? <View style={[styles.statusCard, { backgroundColor: stateColor.bg }]} accessibilityLiveRegion="polite"><Icon source={status.icon} size={22} color={stateColor.fg} /><View style={{ flex: 1, gap: 3 }}><Text variant="titleSmall" style={{ color: stateColor.fg }}>{status.title}</Text><Text variant="bodySmall" style={{ color: stateColor.fg }}>{status.detail}</Text></View></View> : null}
@@ -112,26 +104,26 @@ export default function RecordDetail() {
     {open && cands?.candidates.length ? <View style={[styles.surface, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
       <View style={styles.sectionHeader}><View style={[styles.sectionIcon, { backgroundColor: theme.colors.surfaceVariant }]}><Icon source="bell-sync-outline" size={20} color={theme.colors.primary} /></View><View style={{ flex: 1 }}><Text variant="titleMedium" style={{ fontWeight: '700' }}>Possible notification match</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{cands.candidates.length} option{cands.candidates.length === 1 ? '' : 's'} found</Text></View></View>
       {cands.collectorStale ? <Notice kind="warning">Payment phone {lastSeenWithTime(cands.collectorLastSeenAt).toLowerCase()}.</Notice> : null}
-      {cands?.candidates.map((c) => <View key={c.eventId} style={[styles.candidate, { borderColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surfaceVariant }]}><View style={{ flex: 1, gap: 2 }}><Text variant="titleSmall">{peso(c.amountCentavos)} · {c.payerMaskedName ?? c.payerMaskedPhone ?? 'Unknown sender'}</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(c.eventAt, 'SECOND')}{c.deltaSeconds !== null ? ` · ${Math.abs(c.deltaSeconds) < 60 ? `${Math.abs(c.deltaSeconds)}s` : `${Math.round(Math.abs(c.deltaSeconds) / 60)} min`} from receipt` : ''}</Text></View>{c.alreadyLinkedToOtherRecord ? <Text variant="labelSmall" style={{ color: theme.colors.error }}>Already linked</Text> : null}<Button mode="contained" compact disabled={c.alreadyLinkedToOtherRecord || confirm.isPending || !canConfirm} onPress={() => void onConfirm(c.eventId)}>Use this match</Button></View>)}
+      {cands?.candidates.map((c) => <View key={c.eventId} style={[styles.candidate, { borderColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surfaceVariant }]}><View style={{ flex: 1, gap: 2 }}><Text variant="titleSmall">{peso(c.amountCentavos)}</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(c.eventAt, 'SECOND', workspace?.timezone)}{c.deltaSeconds !== null ? ` · ${Math.abs(c.deltaSeconds) < 60 ? `${Math.abs(c.deltaSeconds)}s` : `${Math.round(Math.abs(c.deltaSeconds) / 60)} min`} from proof` : ''}</Text></View>{c.alreadyLinkedToOtherRecord ? <Text variant="labelSmall" style={{ color: theme.colors.error }}>Already linked</Text> : null}<Button mode="contained" compact disabled={c.alreadyLinkedToOtherRecord || confirm.isPending || !canConfirm} onPress={() => void onConfirm(c.eventId)}>Use this match</Button></View>)}
     </View> : null}
 
     {r.matchExplanation.kind ? <View style={[styles.matchNote, { borderColor: theme.colors.outlineVariant }]}><Icon source="information-outline" size={18} color={theme.colors.onSurfaceVariant} /><Text variant="bodySmall" style={{ flex: 1, color: theme.colors.onSurfaceVariant }}>{r.matchExplanation.disclosure ?? (r.matchExplanation.supportingFields.length ? `Matched using ${r.matchExplanation.supportingFields.join(' and ')}.` : 'Confirmation evidence recorded.')}</Text>{isOwner && r.evidenceState !== 'VOIDED' ? <Button compact onPress={() => setDialog('unlink')}>Unlink</Button> : null}</View> : null}
 
     <View style={[styles.surface, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
       <View style={styles.sectionHeader}><View style={[styles.sectionIcon, { backgroundColor: theme.colors.surfaceVariant }]}><Icon source="text-box-outline" size={20} color={theme.colors.primary} /></View><View><Text variant="titleMedium" style={{ fontWeight: '700' }}>Receipt details</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Read from the payment proof</Text></View></View>
-      <View style={styles.detailGrid}><DetailCell label="Reference" value={r.corrected.referenceValue ?? 'Not shown'} wide /><DetailCell label="Wallet" value={r.corrected.receiptProvider ?? r.sourceLabel} />{r.corrected.paymentRail && r.corrected.paymentRail !== 'UNKNOWN' ? <DetailCell label="Payment rail" value={r.corrected.paymentRail.replace(/_/g, ' ')} /> : null}{r.corrected.payerName || r.corrected.payerPhone ? <DetailCell label="Sender" value={r.corrected.payerName ?? r.corrected.payerPhone!} wide /> : null}{r.customerLabel || r.note ? <DetailCell label="Customer / note" value={[r.customerLabel, r.note].filter(Boolean).join(' · ')} wide /> : null}<DetailCell label="Receipt time" value={r.corrected.receiptTransactionAt ? manilaTime(r.corrected.receiptTransactionAt, r.corrected.receiptTransactionPrecision) : 'Not shown'} wide /></View>
+      <View style={styles.detailGrid}><DetailCell label="Amount" value={peso(r.amountCentavos)} /><DetailCell label="Wallet" value={r.corrected.receiptProvider ?? r.sourceLabel} /><DetailCell label="Status" value={stateLabel(r.evidenceState)} /><DetailCell label="Time" value={manilaTime(r.corrected.receiptTransactionAt ?? r.capturedAt, r.corrected.receiptTransactionPrecision, workspace?.timezone)} /></View>
     </View>
 
     {r.proofImageUrl ? <View style={[styles.proofCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}><View style={styles.proofHeader}><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment proof</Text><Icon source="image-outline" size={20} color={theme.colors.onSurfaceVariant} /></View><List.Image source={{ uri: r.proofImageUrl }} style={[styles.proof, { backgroundColor: theme.colors.surfaceVariant }]} /></View> : r.hasProofImage ? <Notice kind="info">The proof image is no longer available.</Notice> : null}
     <View style={[styles.surface, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}><List.Accordion title="Activity" description={`${r.history.length} recorded event${r.history.length === 1 ? '' : 's'}`} left={(props) => <List.Icon {...props} icon="history" />}><View style={styles.history}>{r.history.map((h, i) => <View key={i} style={styles.historyRow}><View style={[styles.historyDot, { backgroundColor: theme.colors.outline }]} /><View style={{ flex: 1 }}><Text variant="bodySmall" style={{ fontWeight: '600' }}>{h.action.replace(/_/g, ' ').toLowerCase()}</Text><Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(h.at, 'SECOND')}{h.actorDisplayName ? ` · ${h.actorDisplayName}` : ''}</Text></View></View>)}</View></List.Accordion></View>
     {r.voidReason ? <Notice kind="error">Voided: {r.voidReason}</Notice> : null}
     {r.evidenceState !== 'VOIDED' ? <View style={styles.recordActions}>
-      {canEdit ? <Button icon="pencil-outline" onPress={openEdit}>Edit details</Button> : null}
+      {canEdit ? <Button icon="pencil-outline" onPress={openEdit}>Correct amount</Button> : null}
       {isOwner && open ? <Button icon="check-circle-outline" onPress={() => setDialog('manual')}>I checked the wallet</Button> : null}
       {isOwner ? <Button icon="delete-outline" textColor={theme.colors.error} onPress={() => setDialog('void')}>Delete record</Button> : null}
     </View> : null}
 
-    <Portal><Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}><Dialog.Title>{dialog === 'edit' ? 'Edit record' : dialog === 'unlink' ? 'Unlink association' : dialog === 'void' ? 'Delete record' : 'Confirm after wallet check'}</Dialog.Title><Dialog.Content style={{ gap: 8 }}>{dialog === 'edit' ? <><Text variant="bodySmall">Your original proof and the edit are both kept in Activity.</Text><TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} /><TextInput label="Reference number" mode="outlined" value={referenceText} onChangeText={setReferenceText} autoCapitalize="characters" /><TextInput label="Note" mode="outlined" value={noteText} onChangeText={setNoteText} /></> : <><Text variant="bodySmall">{dialog === 'manual' ? 'Use this only after checking the receiving wallet. It is recorded as an owner confirmation, not a provider verification.' : dialog === 'void' ? 'This removes the record from active totals while preserving the proof and Activity history.' : 'The previous state remains in Activity.'}</Text><TextInput label={dialog === 'manual' ? 'Note (optional)' : 'Reason'} mode="outlined" value={reason} onChangeText={setReason} /></>}</Dialog.Content><Dialog.Actions><Button onPress={() => setDialog(null)}>Cancel</Button><Button onPress={() => void runDialog()} disabled={dialog !== 'edit' && dialog !== 'manual' && reason.trim().length < 3}>{dialog === 'edit' ? 'Save changes' : 'Confirm'}</Button></Dialog.Actions></Dialog></Portal>
+    <Portal><Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}><Dialog.Title>{dialog === 'edit' ? 'Correct amount' : dialog === 'unlink' ? 'Unlink association' : dialog === 'void' ? 'Delete record' : 'Confirm after wallet check'}</Dialog.Title><Dialog.Content style={{ gap: 8 }}>{dialog === 'edit' ? <><Text variant="bodySmall">The proof and correction stay in Activity.</Text><TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} /></> : <><Text variant="bodySmall">{dialog === 'manual' ? 'Use this only after checking the receiving wallet. It is recorded as an owner confirmation, not a provider verification.' : dialog === 'void' ? 'This removes the record from active totals while preserving the proof and Activity history.' : 'The previous state remains in Activity.'}</Text><TextInput label={dialog === 'manual' ? 'Note (optional)' : 'Reason'} mode="outlined" value={reason} onChangeText={setReason} /></>}</Dialog.Content><Dialog.Actions><Button onPress={() => setDialog(null)}>Cancel</Button><Button onPress={() => void runDialog()} disabled={dialog !== 'edit' && dialog !== 'manual' && reason.trim().length < 3}>{dialog === 'edit' ? 'Save' : 'Confirm'}</Button></Dialog.Actions></Dialog></Portal>
   </Screen>;
 }
 
