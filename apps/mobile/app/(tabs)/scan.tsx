@@ -28,7 +28,7 @@ function namespaceFor(fields: ReceiptFields) {
 export default function Scan() {
   const theme = useTheme();
   const router = useRouter();
-  const params = useLocalSearchParams<{ source?: string; uri?: string; sourceId?: string; fromEventId?: string }>();
+  const params = useLocalSearchParams<{ source?: string; uri?: string }>();
   const { workspace } = useSession();
   const sources = useSources();
   const invalidate = useInvalidateRecord();
@@ -51,10 +51,6 @@ export default function Scan() {
   const [busy, setBusy] = useState(false);
   const saveLock = useRef(false);
   const operation = useRef(false);
-
-  useEffect(() => {
-    if (params.sourceId) setSourceId(params.sourceId);
-  }, [params.sourceId]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -128,9 +124,6 @@ export default function Scan() {
           editedFields: [],
           customerLabel: null,
           note: null,
-          // The notification arrived first. It remains supplementary evidence
-          // until this proof is recorded and the normal matcher evaluates it.
-          fromEventId: params.fromEventId ?? null,
         },
       });
 
@@ -146,7 +139,7 @@ export default function Scan() {
       setError((saveError as Error).message);
       return false;
     }
-  }, [invalidate, ocrText, params.fromEventId, router, sourceId, sources.data, workspace]);
+  }, [invalidate, ocrText, router, sourceId, sources.data, workspace]);
 
   const processImage = useCallback(async (uri: string, from: CaptureOrigin) => {
     setStage('processing');
