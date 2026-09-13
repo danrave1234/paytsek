@@ -51,16 +51,7 @@ export const useHome = () => useQuery({ queryKey: keys.home, queryFn: ({ signal 
 export const useSources = () => useQuery({ queryKey: keys.sources, queryFn: ({ signal }) => api<SourceSummary[]>('/v1/sources', { signal }), staleTime: 5 * 60_000 });
 export const useDevices = () => useQuery({ queryKey: keys.devices, queryFn: ({ signal }) => api<DeviceSummary[]>('/v1/devices', { signal }), refetchInterval: useVisiblePolling(60_000) });
 export const useMembers = () => useQuery({ queryKey: keys.members, queryFn: ({ signal }) => api<MemberSummary[]>('/v1/workspaces/current/members', { signal }) });
-/**
- * Incoming payments are useful before a customer proof exists. Owners see
- * them in the verification queue; cashiers never fetch this restricted data.
- */
-export const useInbox = (enabled = true) => useQuery({
-  queryKey: keys.inbox,
-  queryFn: ({ signal }) => api<OwnerInboxEvent[]>('/v1/inbox?unlinkedOnly=true&limit=100', { signal }),
-  enabled,
-  refetchInterval: useVisiblePolling(15_000),
-});
+export const useInbox = () => useQuery({ queryKey: keys.inbox, queryFn: ({ signal }) => api<OwnerInboxEvent[]>('/v1/inbox?unlinkedOnly=true&limit=100', { signal }) });
 
 export function useRecords(filters: { q?: string; state?: string[]; sourceId?: string; staffUserId?: string; from?: string; to?: string; cursor?: string }) {
   const qs = new URLSearchParams();
