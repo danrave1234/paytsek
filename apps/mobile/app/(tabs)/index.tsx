@@ -1,7 +1,7 @@
 import type { RecordSummary } from '@paytsek/contracts';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { Linking, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Icon, IconButton, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Loading, StateChip } from '@/components/ui';
@@ -9,7 +9,7 @@ import { listDrafts, type Draft } from '@/lib/drafts';
 import { OfflineError } from '@/lib/api';
 import { manilaTime, peso } from '@/lib/format';
 import { useHome } from '@/lib/queries';
-import { useAppUpdate } from '@/lib/release-update';
+import { downloadAndInstallUpdate, useAppUpdate } from '@/lib/release-update';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET } from '@/theme';
 
@@ -31,6 +31,7 @@ export default function Home() {
   const home = useHome();
   const update = useAppUpdate();
   const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [updateProgress, setUpdateProgress] = useState<number | null>(null);
 
   const refreshLocal = useCallback(() => {
     if (!workspace) return;
@@ -67,6 +68,15 @@ export default function Home() {
     refreshLocal();
     void home.refetch();
   };
+  const installUpdate = useCallback(() => {
+    if (!update.data || updateProgress !== null) return;
+    setUpdateProgress(0);
+    void downloadAndInstallUpdate(update.data, setUpdateProgress)
+      .catch((error: unknown) => {
+        Alert.alert('Update could not start', error instanceof Error ? error.message : 'Please try again.');
+      })
+      .finally(() => setUpdateProgress(null));
+  }, [update.data, updateProgress]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
@@ -92,10 +102,15 @@ export default function Home() {
         ) : null}
 
         {update.data ? (
-          <TouchableRipple onPress={() => void Linking.openURL(update.data!.downloadUrl)} borderless style={{ borderRadius: RADIUS.lg }} accessibilityRole="button" accessibilityLabel={`Update to PayTsek ${update.data.version}`}>
+          <TouchableRipple onPress={installUpdate} disabled={updateProgress !== null} borderless style={{ borderRadius: RADIUS.lg }} accessibilityRole="button" accessibilityLabel={`Update to PayTsek ${update.data.version}`}>
             <View style={[styles.update, { backgroundColor: theme.colors.primaryContainer }]}>
               <View style={[styles.updateIcon, { backgroundColor: theme.colors.primary }]}><Icon source="download" size={20} color={theme.colors.onPrimary} /></View>
-              <View style={{ flex: 1, gap: 2 }}><Text variant="titleSmall" style={{ color: theme.colors.onPrimaryContainer }}>PayTsek {update.data.version} is ready</Text><Text variant="bodySmall" style={{ color: theme.colors.onPrimaryContainer }}>Tap to download the latest signed update.</Text></View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text variant="titleSmall" style={{ color: theme.colors.onPrimaryContainer }}>PayTsek {update.data.version} is ready</Text>
+                <Text variant="bodySmall" style={{ color: theme.colors.onPrimaryContainer }}>
+                  {updateProgress === null ? 'Tap to download and install the latest signed update.' : `Downloading update ${Math.round(updateProgress * 100)}%`}
+                </Text>
+              </View>
               <Icon source="chevron-right" size={22} color={theme.colors.primary} />
             </View>
           </TouchableRipple>
