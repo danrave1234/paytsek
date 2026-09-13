@@ -18,13 +18,6 @@ import { RADIUS, SPACING, TOUCH_TARGET } from '@/theme';
 
 type Stage = 'capture' | 'processing' | 'review' | 'saved';
 
-function namespaceFor(fields: ReceiptFields) {
-  if (fields.receiptProvider === 'GOTYME') return 'GOTYME_REF_NO' as const;
-  if (fields.receiptProvider === 'MAYA') return 'MAYA_REF_NO' as const;
-  if (fields.receiptProvider === 'MARIBANK') return 'MARIBANK_REF_NO' as const;
-  return 'GCASH_REF_NO' as const;
-}
-
 export default function Scan() {
   const theme = useTheme();
   const router = useRouter();
@@ -156,15 +149,10 @@ export default function Scan() {
       setFields(receipt.fields);
       setAmountText(receipt.fields.amountCentavos ? (receipt.fields.amountCentavos / 100).toFixed(2) : '');
 
-      const confident = Boolean(
-        receipt.fields.amountCentavos
-        && receipt.fields.referenceValue
-        && receipt.fields.receiptProvider
-        && receipt.fields.receiptStatus !== 'FAILED'
-        && receipt.fields.receiptStatus !== 'PENDING',
-      );
       const sourceAvailable = Boolean(sourceId ?? sources.data?.[0]?.id);
-      if (confident && sourceAvailable && await persist(receipt, clean.uri, from, receipt.fields, ocr.fullText)) return;
+      // A receipt proof is valuable on its own. As soon as OCR finds an amount,
+      // keep it locally and let matching happen later in the background.
+      if (receipt.fields.amountCentavos && sourceAvailable && await persist(receipt, clean.uri, from, receipt.fields, ocr.fullText)) return;
       setStage('review');
     } catch {
       setError('Could not read the proof. Try again or import a screenshot.');
@@ -237,26 +225,15 @@ export default function Scan() {
   if (stage === 'review' && fields && extraction) {
     return (
       <Screen tabbed>
-        <ScreenTitle title="Check details" />
+        <ScreenTitle title="Confirm amount" />
         {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="contain" accessibilityLabel="Captured payment proof" /> : null}
-        {!fields.amountCentavos || !fields.referenceValue ? <Notice kind="warning">One detail needs attention.</Notice> : null}
+        <Notice kind="info">We’ll save the proof now. You can edit details later.</Notice>
         <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} right={<TextInput.Affix text="₱" />} />
-        <TextInput
-          label="Reference number"
-          mode="outlined"
-          value={fields.referenceValue ?? ''}
-          onChangeText={(value) => setFields({
-            ...fields,
-            referenceValue: value || null,
-            referenceNamespace: value ? (fields.referenceNamespace ?? namespaceFor(fields)) : null,
-          })}
-          autoCapitalize="characters"
-        />
         {error ? <Notice kind="error">{error}</Notice> : null}
         {!sourceId && !sources.data?.length ? (
           <Button mode="contained" onPress={() => router.push('/settings/sources')}>Add payment source</Button>
         ) : (
-          <Button mode="contained" onPress={() => void saveReview()} disabled={saveLock.current} style={{ minHeight: TOUCH_TARGET }}>Save</Button>
+          <Button mode="contained" onPress={() => void saveReview()} disabled={saveLock.current} style={{ minHeight: TOUCH_TARGET }}>Save proof</Button>
         )}
         <Button onPress={reset}>Retake</Button>
       </Screen>
