@@ -1,25 +1,36 @@
-import type { EvidenceState, RecordSummary } from '@paytsek/contracts';
+import type { RecordSummary } from '@paytsek/contracts';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
-import { Chip, Icon, Searchbar, Text, TouchableRipple, useTheme } from 'react-native-paper';
+import { Icon, Searchbar, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { EmptyState, ErrorState, Loading, StateChip } from '@/components/ui';
+import { EmptyState, ErrorState, Loading } from '@/components/ui';
 import { listDrafts, type Draft } from '@/lib/drafts';
 import { manilaTime, peso } from '@/lib/format';
 import { useRecords } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TAB_BAR_CLEARANCE } from '@/theme';
 
-const FILTERS: { key: EvidenceState | 'ALL'; label: string; states?: EvidenceState[] }[] = [
-  { key: 'ALL', label: 'All' },
-  { key: 'REVIEW_REQUIRED', label: 'Needs attention', states: ['REVIEW_REQUIRED'] },
-  { key: 'MATCHED_AUTO', label: 'Matched', states: ['MATCHED_AUTO', 'MATCHED_BY_USER'] },
-];
-
 type RowItem =
   | { kind: 'draft'; id: string; draft: Draft; at: string }
   | { kind: 'record'; id: string; record: RecordSummary; at: string };
+
+function recordStatus(item: RowItem) {
+  if (item.kind === 'draft') return { label: 'Receipt saved', icon: 'check', color: '#86E7C6', background: '#0B463D' };
+  switch (item.record.evidenceState) {
+    case 'MATCHED_AUTO':
+    case 'MATCHED_BY_USER':
+      return { label: 'Notification matched', icon: 'check', color: '#86E7C6', background: '#0B463D' };
+    case 'CONFIRMED_MANUALLY':
+      return { label: 'Confirmed manually', icon: 'check', color: '#86E7C6', background: '#0B463D' };
+    case 'REVIEW_REQUIRED':
+      return { label: 'Needs review', icon: 'alert-outline', color: '#F5C56A', background: '#513A0B' };
+    case 'VOIDED':
+      return { label: 'Voided', icon: 'close', color: '#B5BCCB', background: '#2D3442' };
+    default:
+      return { label: 'Receipt saved', icon: 'check', color: '#86E7C6', background: '#0B463D' };
+  }
+}
 
 const manilaDayKey = (iso: string) => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -40,7 +51,6 @@ export default function Records() {
   const { workspace } = useSession();
   const [text, setText] = useState('');
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]> (FILTERS[0]!);
   const [drafts, setDrafts] = useState<Draft[]>([]);
 
   useEffect(() => {
@@ -48,7 +58,7 @@ export default function Records() {
     return () => clearTimeout(timer);
   }, [text]);
 
-  const query = useRecords({ q: search || undefined, state: filter.states });
+  const query = useRecords({ q: search || undefined });
   const refreshLocal = useCallback(() => {
     if (!workspace) return;
     void listDrafts(workspace.id).then(setDrafts).catch(() => setDrafts([]));
@@ -59,7 +69,7 @@ export default function Records() {
   const remoteIds = new Set(remote.map((record) => record.id));
   const rows: RowItem[] = [
     ...drafts
-      .filter((draft) => filter.key === 'ALL' && (!draft.serverRecordId || !remoteIds.has(draft.serverRecordId)))
+      .filter((draft) => !draft.serverRecordId || !remoteIds.has(draft.serverRecordId))
       .map((draft): RowItem => ({ kind: 'draft', id: draft.clientRecordId, draft, at: draft.createdAt })),
     ...remote.map((record): RowItem => ({ kind: 'record', id: record.id, record, at: record.createdAt })),
   ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
@@ -96,28 +106,6 @@ export default function Records() {
               style={[styles.search, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}
               inputStyle={{ minHeight: 0 }}
             />
-            <FlatList
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              data={FILTERS}
-              keyExtractor={(item) => item.key}
-              contentContainerStyle={styles.filters}
-              renderItem={({ item }) => (
-                <Chip
-                  compact
-                  selected={filter.key === item.key}
-                  showSelectedCheck={false}
-                  onPress={() => setFilter(item)}
-                  style={[
-                    styles.filter,
-                    { backgroundColor: filter.key === item.key ? theme.colors.primaryContainer : theme.colors.surface, borderColor: filter.key === item.key ? theme.colors.primary : theme.colors.outlineVariant },
-                  ]}
-                  textStyle={{ color: filter.key === item.key ? theme.colors.onPrimaryContainer : theme.colors.onSurfaceVariant }}
-                >
-                  {item.label}
-                </Chip>
-              )}
-            />
           </View>
         )}
         ListEmptyComponent={query.isLoading
@@ -132,6 +120,7 @@ export default function Records() {
           const reference = item.kind === 'draft' ? item.draft.request.corrected.referenceValue : item.record.referenceValue;
           const source = item.kind === 'draft' ? (item.draft.request.corrected.receiptProvider ?? 'Payment') : item.record.sourceLabel;
           const needsAttention = item.kind === 'record' && item.record.evidenceState === 'REVIEW_REQUIRED';
+          const status = recordStatus(item);
           const showDay = index === 0 || manilaDayKey(rows[index - 1]!.at) !== manilaDayKey(item.at);
           return (
             <View>
@@ -149,13 +138,14 @@ export default function Records() {
                     <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }} numberOfLines={1}>
                       {reference ? `Ref •••• ${reference.slice(-4)}` : 'No reference'} · {manilaTime(item.at).split(',').pop()?.trim()}
                     </Text>
-                    {item.kind === 'record' ? <StateChip state={item.record.evidenceState} compact /> : null}
+                    <View style={[styles.status, { backgroundColor: status.background }]}>
+                      <Icon source={status.icon} size={13} color={status.color} />
+                      <Text variant="labelSmall" style={{ color: status.color, fontWeight: '700' }}>{status.label}</Text>
+                    </View>
                   </View>
                   <View style={styles.amountBlock}>
                     <Text variant="titleMedium" style={{ fontWeight: '700' }}>{peso(amount)}</Text>
-                    {item.kind === 'draft' ? (
-                      <View style={styles.localState}><Icon source="cellphone-check" size={14} color={theme.colors.onSurfaceVariant} /><Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>On phone</Text></View>
-                    ) : <Icon source="chevron-right" size={20} color={theme.colors.onSurfaceVariant} />}
+                    {item.kind === 'record' ? <Icon source="chevron-right" size={20} color={theme.colors.onSurfaceVariant} /> : null}
                   </View>
                 </View>
               </TouchableRipple>
@@ -173,12 +163,10 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { fontWeight: '700', letterSpacing: -0.3 },
   search: { minHeight: 48, borderRadius: RADIUS.md, borderWidth: StyleSheet.hairlineWidth },
-  filters: { gap: SPACING.sm, paddingRight: SPACING.lg },
-  filter: { borderWidth: StyleSheet.hairlineWidth },
   day: { marginTop: SPACING.sm, marginBottom: SPACING.sm, textTransform: 'uppercase', letterSpacing: 0.7 },
   recordCard: { borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, marginBottom: SPACING.sm, overflow: 'hidden' },
   row: { minHeight: 88, flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.md },
   providerMark: { width: 4, alignSelf: 'stretch', minHeight: 54, borderRadius: RADIUS.full },
   amountBlock: { alignItems: 'flex-end', justifyContent: 'space-between', alignSelf: 'stretch', paddingVertical: 2 },
-  localState: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  status: { alignSelf: 'flex-start', minHeight: 24, paddingHorizontal: 8, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 4 },
 });

@@ -1,5 +1,6 @@
 import type {
   CandidatesResponse,
+  CorrectRecordRequest,
   DeviceSummary,
   HomeSummary,
   ListRecordsResponse,
@@ -112,6 +113,15 @@ export function useVoid(recordId: string) {
   const inv = useInvalidateRecord();
   return useMutation({
     mutationFn: (reason: string) => api(`/v1/records/${recordId}/void`, { method: 'POST', body: { reason } }),
+    onSettled: () => inv(recordId),
+  });
+}
+
+/** Corrections preserve the proof and write an audit-history entry. */
+export function useCorrectRecord(recordId: string) {
+  const inv = useInvalidateRecord();
+  return useMutation({
+    mutationFn: (body: CorrectRecordRequest) => api<RecordDetail>(`/v1/records/${recordId}`, { method: 'PATCH', body }),
     onSettled: () => inv(recordId),
   });
 }
