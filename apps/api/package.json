@@ -18,7 +18,7 @@
     "@nestjs/platform-express": "^10.4.15",
     "@paytsek/contracts": "workspace:*",
     "@paytsek/receipt-parsers": "workspace:*",
-    "@supabase/supabase-js": "^2.47.10",
+    "@supabase/supabase-js": "^2.116.0",
     "jose": "^5.9.6",
     "pg": "^8.13.1",
     "reflect-metadata": "^0.2.2",

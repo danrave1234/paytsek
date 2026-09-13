@@ -65,7 +65,7 @@ export default function Privacy() {
         <Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}>
           <Dialog.Title>{dialog === 'workspace' ? 'Delete workspace' : 'Delete account'}</Dialog.Title>
           <Dialog.Content style={{ gap: 8 }}>
-            <Text variant="bodySmall">{dialog === 'workspace' ? 'This removes its records, images, notifications, devices and billing links.' : 'This removes your profile and memberships. Business records stay with their workspace without your name.'}</Text>
+            <Text variant="bodySmall">{dialog === 'workspace' ? 'This removes its records, images, notifications and devices.' : 'This removes your profile and memberships. Business records stay with their workspace without your name.'}</Text>
             <TextInput label="Type DELETE to confirm" mode="outlined" value={confirm} onChangeText={setConfirm} autoCapitalize="characters" />
           </Dialog.Content>
           <Dialog.Actions>

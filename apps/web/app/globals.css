@@ -15,14 +15,14 @@
  * (e.g. `pill text-ok`) still override them.
  */
 @theme {
-  --color-bg: #ffffff;
-  --color-bg-2: #f7f8fb;
-  --color-bg-3: #edf0f5;
-  --color-ink: #111827;
-  --color-ink-2: #4b5565;
-  --color-ink-3: #7b8494;
-  --color-line: #e4e7ec;
-  --color-line-2: #f0f2f5;
+  --color-bg: #fffefa;
+  --color-bg-2: #f7f5ef;
+  --color-bg-3: #ece9e0;
+  --color-ink: #10131a;
+  --color-ink-2: #505661;
+  --color-ink-3: #7b818b;
+  --color-line: #e3dfd5;
+  --color-line-2: #efede7;
 
   --color-brand: #155eef;
   --color-brand-2: #1849a9;
@@ -56,6 +56,29 @@ html {
 
 body {
   @apply bg-bg-2 text-ink antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-bg: #11151d;
+    --color-bg-2: #0c1016;
+    --color-bg-3: #1a202b;
+    --color-ink: #f6f7fa;
+    --color-ink-2: #c1c7d1;
+    --color-ink-3: #8992a2;
+    --color-line: #28303d;
+    --color-line-2: #1d2430;
+    --color-brand: #9fbeff;
+    --color-brand-2: #c0d3ff;
+    --color-brand-soft: #192a4d;
+    --color-ok: #73d7ab;
+    --color-ok-soft: #143727;
+    --color-warn: #efc36d;
+    --color-warn-soft: #392b12;
+    --color-danger: #ffaaa3;
+    --color-danger-soft: #44201f;
+  }
 }
 
 ::selection { background: var(--color-brand); color: #fff; }
@@ -235,4 +258,74 @@ body {
   .prose ol > li::marker { @apply font-mono text-ink-3; }
   .prose a { @apply underline decoration-line decoration-2 underline-offset-4 transition-colors; }
   .prose a:hover { @apply text-brand decoration-brand; }
+}
+
+.hero-mesh {
+  background:
+    radial-gradient(circle at 82% 22%, color-mix(in srgb, var(--color-brand) 15%, transparent) 0, transparent 31rem),
+    linear-gradient(120deg, transparent 0 48%, color-mix(in srgb, var(--color-line) 45%, transparent) 48% 48.15%, transparent 48.15% 100%);
+}
+
+.phone-v2 {
+  position: relative;
+  border: 9px solid var(--color-ink);
+  border-radius: 2.65rem;
+  background: var(--color-ink);
+  box-shadow: 0 42px 80px -34px rgba(16, 24, 40, .5), inset 0 0 0 1px rgba(255, 255, 255, .12);
+  transform: rotate(1.35deg);
+}
+
+.phone-v2::before {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  top: .55rem;
+  left: 50%;
+  width: 5.4rem;
+  height: 1.15rem;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: var(--color-ink);
+}
+
+.phone-v2-screen {
+  position: relative;
+  min-height: 600px;
+  overflow: hidden;
+  border-radius: 2.05rem;
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+.phone-v2-glow {
+  position: absolute;
+  z-index: -1;
+  inset: 16% -12% -8%;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-brand) 26%, transparent);
+  filter: blur(48px);
+}
+
+.evidence-orbit::before,
+.evidence-orbit::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  border: 1px solid var(--color-line);
+}
+.evidence-orbit::before { inset: 12%; }
+.evidence-orbit::after { inset: 28%; border-style: dashed; }
+
+.fade-up { animation: fade-up .65s cubic-bezier(.2,.7,.2,1) both; }
+.fade-up-delay { animation: fade-up .75s .12s cubic-bezier(.2,.7,.2,1) both; }
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up,
+  .fade-up-delay { animation: none; }
+  .phone-v2 { transform: none; }
 }

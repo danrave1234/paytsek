@@ -37,6 +37,12 @@ export async function collectorStatus(): Promise<CollectorStatus> {
   return PaymentCollector.getStatus();
 }
 
+/** Reapply the non-secret provider filter kept in the app binding after upgrades. */
+export async function restoreCollectorFilters(): Promise<void> {
+  const binding = await getCollectorBinding();
+  if (binding) await PaymentCollector.setEnabledProviders([binding.provider]);
+}
+
 /** Content-free heartbeat (credential never leaves the native Keystore store). */
 export async function reportHealth(): Promise<boolean> {
   return PaymentCollector.reportHealth();

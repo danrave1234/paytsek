@@ -49,13 +49,17 @@ jobs:
           echo "apply from: 'signing.gradle'" >> android/app/build.gradle
           cd android && ./gradlew app:assembleRelease
           cp app/build/outputs/apk/release/app-release.apk "../PayTsek-${RELEASE_VERSION}.apk"
+          cd .. && sha256sum "PayTsek-${RELEASE_VERSION}.apk" > "PayTsek-${RELEASE_VERSION}.apk.sha256"
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           APK="apps/mobile/PayTsek-${RELEASE_VERSION}.apk"
+          CHECKSUM="${APK}.sha256"
+          NOTES="apps/mobile/RELEASE_NOTES.md"
           if gh release view "${RELEASE_VERSION}" >/dev/null 2>&1; then
-            gh release upload "${RELEASE_VERSION}" "${APK}" --clobber
+            gh release edit "${RELEASE_VERSION}" --title "PayTsek ${RELEASE_VERSION}" --notes-file "${NOTES}"
+            gh release upload "${RELEASE_VERSION}" "${APK}" "${CHECKSUM}" --clobber
           else
-            gh release create "${RELEASE_VERSION}" "${APK}" --title "PayTsek ${RELEASE_VERSION}" --notes "Android release ${RELEASE_VERSION}"
+            gh release create "${RELEASE_VERSION}" "${APK}" "${CHECKSUM}" --title "PayTsek ${RELEASE_VERSION}" --notes-file "${NOTES}"
           fi

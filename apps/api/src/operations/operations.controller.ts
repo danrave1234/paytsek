@@ -1,11 +1,10 @@
-import { Body, Controller, Delete, Get, Injectable, Module, Param, Post } from '@nestjs/common';
-import { CreateExportRequest, type ExportJobView, type HomeSummary } from '@paytsek/contracts';
+import { Body, Controller, Delete, Get, Injectable, Module, Param, Post, Query } from '@nestjs/common';
+import { AnalyticsRange, CreateExportRequest, type AnalyticsSummary, type ExportJobView, type HomeSummary } from '@paytsek/contracts';
 import { z } from 'zod';
 import { CurrentUser, UserRoute, Workspace, WorkspaceRoute } from '../auth/decorators';
 import { OwnerOnly, type AuthUser, type WorkspaceContext } from '../auth/guards';
 import { ApiException } from '../common/errors';
 import { zod } from '../common/zod.pipe';
-import { loadEnv } from '../config/env';
 import { AuditService } from '../db/audit.service';
 import { DbService } from '../db/db.service';
 import { StorageService } from '../db/storage.service';
@@ -14,8 +13,6 @@ import { RECORD_SELECT, toSummary, type RecordRow } from '../records/records.row
 
 @Injectable()
 export class OperationsService {
-  private readonly env = loadEnv();
-
   constructor(
     private readonly db: DbService,
     private readonly storage: StorageService,
@@ -28,7 +25,18 @@ export class OperationsService {
     const t = await this.db.one<{
       recorded_n: number; recorded_c: string; matched_n: number; matched_c: string; manual_n: number; manual_c: string; unverified_n: number; unverified_c: string; review_n: number;
     }>(
-      `with day as (select (date_trunc('day', now() at time zone o.timezone) at time zone o.timezone) as start from organizations o where o.id = $1)
+      `with day as (
+         select
+           (date_trunc('day', now() at time zone o.timezone) at time zone o.timezone) as start,
+           o.timezone
+         from organizations o where o.id = $1
+       ), scoped as (
+         select r.*
+         from payment_records r, day
+         where r.organization_id = $1
+           and coalesce(r.receipt_transaction_at, r.captured_at, r.created_at) >= day.start
+           and coalesce(r.receipt_transaction_at, r.captured_at, r.created_at) < day.start + interval '1 day'
+       )
        select
          count(*) filter (where evidence_state <> 'VOIDED')::int as recorded_n,
          coalesce(sum(amount_centavos) filter (where evidence_state <> 'VOIDED'),0)::text as recorded_c,
@@ -39,9 +47,33 @@ export class OperationsService {
          count(*) filter (where evidence_state = 'UNVERIFIED')::int as unverified_n,
          coalesce(sum(amount_centavos) filter (where evidence_state = 'UNVERIFIED'),0)::text as unverified_c,
          count(*) filter (where evidence_state = 'REVIEW_REQUIRED')::int as review_n
-       from payment_records r, day where r.organization_id = $1 and r.created_at >= day.start`,
+       from scoped`,
       [orgId],
     );
+    const hourly = await this.db.query<{ hour: number | string; amount_c: string }>(
+      `with day as (
+         select
+           (date_trunc('day', now() at time zone o.timezone) at time zone o.timezone) as start,
+           o.timezone
+         from organizations o where o.id = $1
+       )
+       select
+         extract(hour from coalesce(r.receipt_transaction_at, r.captured_at, r.created_at) at time zone day.timezone)::int as hour,
+         coalesce(sum(r.amount_centavos), 0)::text as amount_c
+       from payment_records r, day
+       where r.organization_id = $1
+         and r.evidence_state <> 'VOIDED'
+         and coalesce(r.receipt_transaction_at, r.captured_at, r.created_at) >= day.start
+         and coalesce(r.receipt_transaction_at, r.captured_at, r.created_at) < day.start + interval '1 day'
+       group by 1
+       order by 1`,
+      [orgId],
+    );
+    const hourlyRecordedCentavos = Array.from({ length: 24 }, () => 0);
+    for (const bucket of hourly.rows) {
+      const hour = Number(bucket.hour);
+      if (Number.isInteger(hour) && hour >= 0 && hour < 24) hourlyRecordedCentavos[hour] = Number(bucket.amount_c);
+    }
     const collectors = await this.db.query<{ id: string; label: string; source_label: string; last: Date | null; pending: number | null; access: boolean | null }>(
       `select d.id, d.label, s.label as source_label, d.last_server_contact_at as last, d.pending_upload_count as pending, d.notification_access_granted as access
          from device_bindings b join devices d on d.id = b.device_id join payment_sources s on s.id = b.source_id
@@ -52,15 +84,6 @@ export class OperationsService {
       `${RECORD_SELECT} where r.organization_id = $1 order by r.created_at desc limit 6`,
       [orgId],
     );
-    // The app contract still includes this legacy field, but beta never reads
-    // a usage ledger or exposes a customer quota.
-    const q = this.env.BETA_MODE
-      ? { allowance: 0, used: 0, credits: 0 }
-      : await this.db.one<{ allowance: number; used: number; credits: number }>(
-        `select p.monthly_record_allowance as allowance, monthly_used(o.id, current_period_start(o.id)) as used, prepaid_credits_remaining(o.id) as credits
-           from organizations o join plans p on p.code = o.plan_code where o.id = $1`,
-        [orgId],
-      );
     return {
       today: {
         recordedCount: t?.recorded_n ?? 0,
@@ -72,13 +95,83 @@ export class OperationsService {
         unverifiedCount: t?.unverified_n ?? 0,
         unverifiedCentavos: Number(t?.unverified_c ?? 0),
         reviewRequiredCount: t?.review_n ?? 0,
+        hourlyRecordedCentavos,
       },
       collectors: collectors.rows.map((c) => ({
         deviceId: c.id, label: c.label, sourceLabel: c.source_label, lastSeenAt: c.last?.toISOString() ?? null,
         stale: !c.last || Date.now() - c.last.getTime() > 10 * 60 * 1000, pendingUploadCount: c.pending, notificationAccessGranted: c.access,
       })),
       recentRecords: recent.rows.map(toSummary),
-      quota: { monthlyAllowance: q?.allowance ?? 0, monthlyUsed: q?.used ?? 0, prepaidCreditsRemaining: q?.credits ?? 0 },
+    };
+  }
+
+  /** Aggregates only facts present in the ledger: date, provider, amount and evidence. */
+  async analytics(orgId: string, range: AnalyticsRange): Promise<AnalyticsSummary> {
+    const days = range === '90D' ? 90 : range === '30D' ? 30 : 7;
+    const bounds = await this.db.one<{ timezone: string; from_date: string; to_date: string }>(
+      `select o.timezone,
+              to_char((now() at time zone o.timezone)::date - ($2::int - 1), 'YYYY-MM-DD') as from_date,
+              to_char((now() at time zone o.timezone)::date, 'YYYY-MM-DD') as to_date
+         from organizations o where o.id = $1`,
+      [orgId, days],
+    );
+    if (!bounds) throw new ApiException('NOT_FOUND', 'Workspace not found');
+
+    const scope = `with context as (
+      select o.timezone,
+             ((date_trunc('day', now() at time zone o.timezone) - ($2::int - 1) * interval '1 day') at time zone o.timezone) as start_at,
+             ((date_trunc('day', now() at time zone o.timezone) + interval '1 day') at time zone o.timezone) as end_at
+        from organizations o where o.id = $1
+    ), scoped as (
+      select r.*, s.provider, context.timezone
+        from payment_records r
+        join payment_sources s on s.id = r.source_id
+        cross join context
+       where r.organization_id = $1
+         and r.evidence_state <> 'VOIDED'
+         and coalesce(r.receipt_transaction_at, r.captured_at, r.created_at) >= context.start_at
+         and coalesce(r.receipt_transaction_at, r.captured_at, r.created_at) < context.end_at
+    )`;
+
+    const [totals, daily, providers, evidence] = await Promise.all([
+      this.db.one<{ recorded_n: number; recorded_c: string }>(
+        `${scope} select count(*)::int as recorded_n, coalesce(sum(amount_centavos), 0)::text as recorded_c from scoped`,
+        [orgId, days],
+      ),
+      this.db.query<{ day: string; recorded_n: number; recorded_c: string }>(
+        `${scope}, dates as (
+           select generate_series(($3::date), ($4::date), interval '1 day')::date as day
+         )
+         select to_char(dates.day, 'YYYY-MM-DD') as day,
+                count(scoped.id)::int as recorded_n,
+                coalesce(sum(scoped.amount_centavos), 0)::text as recorded_c
+           from dates
+           left join scoped on (coalesce(scoped.receipt_transaction_at, scoped.captured_at, scoped.created_at) at time zone scoped.timezone)::date = dates.day
+          group by dates.day order by dates.day`,
+        [orgId, days, bounds.from_date, bounds.to_date],
+      ),
+      this.db.query<{ provider: AnalyticsSummary['byProvider'][number]['provider']; recorded_n: number; recorded_c: string }>(
+        `${scope} select provider, count(*)::int as recorded_n, sum(amount_centavos)::text as recorded_c
+                    from scoped group by provider order by sum(amount_centavos) desc`,
+        [orgId, days],
+      ),
+      this.db.query<{ state: AnalyticsSummary['byEvidence'][number]['state']; recorded_n: number; recorded_c: string }>(
+        `${scope} select evidence_state as state, count(*)::int as recorded_n, sum(amount_centavos)::text as recorded_c
+                    from scoped group by evidence_state order by sum(amount_centavos) desc`,
+        [orgId, days],
+      ),
+    ]);
+
+    return {
+      range,
+      timezone: bounds.timezone,
+      from: bounds.from_date,
+      to: bounds.to_date,
+      recordedCount: totals?.recorded_n ?? 0,
+      recordedCentavos: Number(totals?.recorded_c ?? 0),
+      daily: daily.rows.map((row) => ({ date: row.day, recordedCount: row.recorded_n, recordedCentavos: Number(row.recorded_c) })),
+      byProvider: providers.rows.map((row) => ({ provider: row.provider, recordedCount: row.recorded_n, recordedCentavos: Number(row.recorded_c) })),
+      byEvidence: evidence.rows.map((row) => ({ state: row.state, recordedCount: row.recorded_n, recordedCentavos: Number(row.recorded_c) })),
     };
   }
 
@@ -152,6 +245,7 @@ export class OperationsService {
 }
 
 const DeleteBody = z.object({ confirm: z.literal('DELETE') });
+const AnalyticsQuery = z.object({ range: AnalyticsRange.default('7D') });
 
 @Controller('v1')
 export class OperationsController {
@@ -166,6 +260,12 @@ export class OperationsController {
   @WorkspaceRoute()
   home(@Workspace() ws: WorkspaceContext) {
     return this.svc.home(ws.organizationId);
+  }
+
+  @Get('analytics')
+  @WorkspaceRoute()
+  analytics(@Workspace() ws: WorkspaceContext, @Query(zod(AnalyticsQuery)) query: { range: AnalyticsRange }) {
+    return this.svc.analytics(ws.organizationId, query.range);
   }
 
   @Post('exports')
