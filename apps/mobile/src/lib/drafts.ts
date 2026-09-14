@@ -91,6 +91,38 @@ export async function listDrafts(workspaceId: string, pendingOnly = false): Prom
   return rows.map(rowToDraft);
 }
 
+export async function getDraft(workspaceId: string, clientRecordId: string): Promise<Draft | null> {
+  const d = await open();
+  const row = await d.getFirstAsync<Record<string, unknown>>(
+    `select * from drafts where workspace_id = ? and client_record_id = ?`,
+    [workspaceId, clientRecordId],
+  );
+  return row ? rowToDraft(row) : null;
+}
+
+/** Correct an unsynced amount without losing the retained proof or stable id. */
+export async function correctDraftAmount(workspaceId: string, clientRecordId: string, amountCentavos: number): Promise<Draft> {
+  const current = await getDraft(workspaceId, clientRecordId);
+  if (!current) throw new Error('This local record is no longer available.');
+  if (current.syncStatus === 'SYNCED') throw new Error('This record has already synced. Open the server record instead.');
+  if (current.syncStatus === 'UPLOADING') throw new Error('Wait for the current sync attempt to finish.');
+  const request: CreateRecordRequest = {
+    ...current.request,
+    corrected: { ...current.request.corrected, amountCentavos },
+    editedFields: [...new Set([...current.request.editedFields, 'amountCentavos'])],
+  };
+  const d = await open();
+  const result = await d.runAsync(
+    `update drafts
+        set request_json = ?, sync_status = case when proof_id is null then 'LOCAL_DRAFT' else 'PARTIAL_UPLOAD' end,
+            last_error = null, updated_at = ?
+      where workspace_id = ? and client_record_id = ? and sync_status not in ('SYNCED','UPLOADING')`,
+    [JSON.stringify(request), new Date().toISOString(), workspaceId, clientRecordId],
+  );
+  if (result.changes !== 1) throw new Error('The record changed while it was being edited. Try again.');
+  return (await getDraft(workspaceId, clientRecordId))!;
+}
+
 function rowToDraft(r: Record<string, unknown>): Draft {
   return {
     clientRecordId: String(r.client_record_id),

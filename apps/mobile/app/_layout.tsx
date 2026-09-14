@@ -1,7 +1,6 @@
 import { QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
-import { hasSeenOnboarding } from '@/lib/onboarding';
+import React, { useEffect } from 'react';
 import { AppState, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useTheme } from 'react-native-paper';
@@ -22,7 +21,6 @@ function Gate({ children }: { children: React.ReactNode }) {
   const theme = useTheme();
   const segments = useSegments();
   const router = useRouter();
-  const onboardingChecked = useRef<string | null>(null);
 
   useEffect(() => {
     if (!ready) return;
@@ -46,16 +44,9 @@ function Gate({ children }: { children: React.ReactNode }) {
       if (top !== 'workspaces') router.replace('/workspaces');
       return;
     }
-    const scope = `${session.user.id}.${workspace.id}`;
-    let cancelled = false;
-    if (onboardingChecked.current !== scope) {
-      void hasSeenOnboarding(session.user.id, workspace.id).catch(() => false).then((seen) => {
-        if (cancelled) return;
-        onboardingChecked.current = scope;
-        router.replace(seen ? '/(tabs)' : '/onboarding');
-      });
-    } else if (top === '(auth)' || top === 'workspaces' || top === undefined) router.replace('/(tabs)');
-    return () => { cancelled = true; };
+    // Signed-in sellers land on Today. Scan stays available as the distinct
+    // center tab; a one-time gate only adds friction and breaks back history.
+    if (top === '(auth)' || top === 'workspaces' || top === 'onboarding' || top === undefined) router.replace('/(tabs)');
   }, [ready, configured, session, workspace, segments, router]);
 
   // On resume/reconnect: refetch server state (system of record) and retry local drafts.
@@ -133,6 +124,7 @@ function AppNavigator() {
                   <Stack.Screen name="(tabs)" />
                   <Stack.Screen name="auth/callback" />
                   <Stack.Screen name="record/[id]" />
+                  <Stack.Screen name="record/local/[id]" />
                   <Stack.Screen name="pair/index" options={{ headerShown: true, title: 'Connect another phone' }} />
                   <Stack.Screen name="pair/collector" options={{ headerShown: true, title: 'Join as payment phone' }} />
                   <Stack.Screen name="settings/sources" options={{ headerShown: true, title: 'Wallet notifications' }} />
