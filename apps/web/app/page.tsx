@@ -3,6 +3,42 @@ import Link from 'next/link';
 import { PROVIDER_SUPPORT } from '@/lib/providers';
 import { latest } from '@/lib/releases';
 
+/** Same checked-in provider artwork the mobile app ships (see apps/mobile/assets/providers/SOURCES.md). */
+const PROVIDER_ARTWORK = {
+  GCASH: '/providers/gcash.jpg',
+  MAYA: '/providers/maya.jpg',
+  GOTYME: '/providers/gotyme.jpg',
+  MARIBANK: '/providers/maribank.jpg',
+} as const;
+
+function artworkForProvider(provider: string): string | null {
+  return provider in PROVIDER_ARTWORK ? PROVIDER_ARTWORK[provider as keyof typeof PROVIDER_ARTWORK] : null;
+}
+
+function artworkForWallet(wallet: string): string | null {
+  const normalized = wallet.toLowerCase().replace(/[^a-z]/g, '');
+  if (normalized.includes('gcash')) return PROVIDER_ARTWORK.GCASH;
+  if (normalized.includes('gotyme')) return PROVIDER_ARTWORK.GOTYME;
+  if (normalized.includes('maya') || normalized.includes('paymaya')) return PROVIDER_ARTWORK.MAYA;
+  if (normalized.includes('maribank') || normalized.includes('seabank')) return PROVIDER_ARTWORK.MARIBANK;
+  return null;
+}
+
+function ProviderMark({ wallet, size = 28, className = '' }: { wallet: string; size?: number; className?: string }) {
+  const src = artworkForWallet(wallet);
+  if (!src) return null;
+  return (
+    <Image
+      src={src}
+      alt={`${wallet} logo`}
+      width={size}
+      height={size}
+      className={`shrink-0 rounded-lg ${className}`}
+      style={{ width: size, height: size }}
+    />
+  );
+}
+
 const sampleRows = [
   { time: '8:42 PM', wallet: 'GCash', state: 'Possible match', amount: '₱850.00', tone: 'warn' },
   { time: '7:18 PM', wallet: 'Maya', state: 'Recorded', amount: '₱240.00', tone: 'plain' },
@@ -55,10 +91,13 @@ function TodayPreview() {
             {sampleRows.map((row) => (
               <div key={row.time} className="grid grid-cols-[1fr_auto] gap-3 border-b border-line py-3 last:border-0">
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <span className={`size-2 rounded-full ${row.tone === 'ok' ? 'bg-ok' : row.tone === 'warn' ? 'bg-warn' : 'bg-ink-3'}`} />
+                  <ProviderMark wallet={row.wallet} size={28} />
                   <div className="min-w-0">
                     <p className="text-[11px] font-semibold">{row.wallet}</p>
-                    <p className="mt-0.5 text-[9px] text-ink-3">{row.time} · {row.state}</p>
+                    <p className="mt-0.5 flex items-center gap-1.5 text-[9px] text-ink-3">
+                      <span className={`size-1.5 rounded-full ${row.tone === 'ok' ? 'bg-ok' : row.tone === 'warn' ? 'bg-warn' : 'bg-ink-3'}`} aria-hidden />
+                      {row.time} · {row.state}
+                    </p>
                   </div>
                 </div>
                 <p className="data self-center text-[11px] font-semibold">{row.amount}</p>
@@ -124,9 +163,15 @@ export default function Home() {
       <section className="border-y border-line bg-bg">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-9 gap-y-4 px-4 py-5 sm:px-6">
           <p className="eyebrow mr-auto">Built for Philippine QR payments</p>
-          {PROVIDER_SUPPORT.map((provider) => (
-            <span key={provider.provider} className="text-sm font-semibold text-ink-2">{provider.name}</span>
-          ))}
+          {PROVIDER_SUPPORT.map((provider) => {
+            const artwork = artworkForProvider(provider.provider);
+            return (
+              <span key={provider.provider} className="flex items-center gap-2.5 text-sm font-semibold text-ink-2">
+                {artwork ? <Image src={artwork} alt="" width={24} height={24} className="size-6 shrink-0 rounded-md" /> : null}
+                {provider.name}
+              </span>
+            );
+          })}
         </div>
       </section>
 
@@ -169,7 +214,7 @@ export default function Home() {
               {sampleRows.map((row) => (
                 <div key={row.time} className="grid grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-2 border-b border-white/10 py-4 last:border-0 sm:grid-cols-[82px_minmax(0,1fr)_auto] sm:gap-3">
                   <span className="data text-xs text-white/45">{row.time}</span>
-                  <span className="text-sm font-semibold text-white/80">{row.wallet}<span className="ml-2 hidden text-xs font-normal text-white/35 sm:inline">{row.state}</span></span>
+                  <span className="flex items-center gap-2.5 text-sm font-semibold text-white/80"><ProviderMark wallet={row.wallet} size={24} />{row.wallet}<span className="hidden text-xs font-normal text-white/35 sm:inline">{row.state}</span></span>
                   <span className="data text-sm font-semibold">{row.amount}</span>
                 </div>
               ))}
@@ -182,7 +227,7 @@ export default function Home() {
         <div className="grid items-center gap-14 lg:grid-cols-2 lg:gap-24">
           <div className="evidence-orbit relative mx-auto grid w-full max-w-md gap-3 sm:block sm:aspect-square sm:rounded-full sm:border sm:border-line">
             <div className="relative z-[1] w-full rounded-2xl border border-line bg-bg p-5 shadow-raised sm:absolute sm:left-[8%] sm:top-[26%] sm:w-[58%]">
-              <p className="eyebrow">Payment proof</p><p className="data mt-3 text-2xl font-semibold">₱850.00</p><p className="mt-1 text-sm text-ink-3">GCash · 8:42 PM</p>
+              <div className="flex items-center justify-between"><p className="eyebrow">Payment proof</p><ProviderMark wallet="GCash" size={24} /></div><p className="data mt-3 text-2xl font-semibold">₱850.00</p><p className="mt-1 text-sm text-ink-3">GCash · 8:42 PM</p>
             </div>
             <span className="relative z-[3] mx-auto -my-1 rounded-full border-4 border-bg-2 bg-night px-3 py-1.5 text-[10px] font-semibold text-on-brand sm:absolute sm:left-1/2 sm:top-1/2 sm:m-0 sm:-translate-x-1/2 sm:-translate-y-1/2">Compare</span>
             <div className="relative z-[2] w-full rounded-2xl border border-brand-solid/30 bg-brand-solid p-5 text-on-brand shadow-raised sm:absolute sm:bottom-[24%] sm:right-[6%] sm:w-[58%]">

@@ -15,6 +15,21 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.2.5',
+    date: '2026-09-15',
+    channel: 'beta',
+    highlights: [
+      'Payer names from wallet notifications are always masked on the phone before anything is uploaded, even when a wallet shows the full name.',
+      'Wallet notification recognition covers more real GCash, Maya, GoTyme, and MariBank formats, including peso-sign amounts and InstaPay reference numbers.',
+    ],
+    fixes: [
+      'Faster, more reliable saving and syncing: offline scans upload on the next app start, shared screenshots can no longer be recorded twice, and in-app updates verify the release checksum before installing.',
+      'Notification listening is more resilient: captured payments are never dropped silently, uploads retry properly, and the listener recovers from storage corruption instead of stopping.',
+      'Owners can rename a workspace and change its timezone; Review paginates fully and evidence labels are consistent everywhere.',
+    ],
+    notes: 'PayTsek remains a free public beta. Notification matching is supplementary evidence, not confirmation from a wallet provider.',
+  },
+  {
     version: '0.2.0',
     date: '2026-09-14',
     channel: 'beta',

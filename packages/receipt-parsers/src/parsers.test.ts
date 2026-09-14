@@ -286,7 +286,8 @@ describe('GCash notification adapter (redacted real + legacy fixtures)', () => {
 
   it('accepts the supplied GoTyme, Maya and MariBank incoming templates only', () => {
     const cases = [
-      { packageName: 'com.gotyme.gotymebank', title: 'Transfer received', text: 'You received P1,250.00 from A. Santos. Your available balance is P9,000.00.', expected: { provider: 'GOTYME', amountCentavos: 125000, payerMaskedName: 'A. Santos', paymentRail: 'UNKNOWN' } },
+      // The template surfaces an unmasked payer name; the adapter masks it locally.
+      { packageName: 'com.gotyme.gotymebank', title: 'Transfer received', text: 'You received P1,250.00 from A. Santos. Your available balance is P9,000.00.', expected: { provider: 'GOTYME', amountCentavos: 125000, payerMaskedName: 'A• S•••••', paymentRail: 'UNKNOWN' } },
       { packageName: 'com.paymaya', title: 'Money received ↙️', text: 'You received 500.00 in your wallet via InstaPay', expected: { provider: 'MAYA', amountCentavos: 50000, paymentRail: 'INSTAPAY' } },
       { packageName: 'ph.seabank.seabank', title: 'Successful Incoming Transfer', text: "You've received PHP 780.50 from bank with account ending 1234", expected: { provider: 'MARIBANK', amountCentavos: 78050, paymentRail: 'UNKNOWN' } },
     ];
