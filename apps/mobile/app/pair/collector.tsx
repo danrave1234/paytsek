@@ -104,7 +104,7 @@ export default function PairCollector() {
       workspaceId: '',
       workspaceName: accepted.workspaceName,
       sourceLabel: accepted.sourceLabel,
-      provider: accepted.provider,
+      providers: [accepted.provider],
       deviceId: accepted.deviceId,
       pairedAt: new Date().toISOString(),
     }, credential);

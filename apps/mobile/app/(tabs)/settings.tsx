@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { clearInactiveCache } from '@/lib/queries';
 import { pruneSynced } from '@/lib/drafts';
 import { Linking, Platform, View } from 'react-native';
-import { IconButton, Text, useTheme } from 'react-native-paper';
+import { IconButton, Portal, Snackbar, Text, useTheme } from 'react-native-paper';
 import { AppUpdateDialog } from '@/components/app-update-dialog';
 import { Group, ListRow, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
@@ -18,7 +18,7 @@ export default function Settings() {
   const isOwner = useIsOwner();
   const { workspace, signOut, selectWorkspace, workspaces } = useSession();
   const update = useAppUpdate();
-  const [cacheMessage, setCacheMessage] = useState('');
+  const [cacheMessage, setCacheMessage] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
   const [showUpdate, setShowUpdate] = useState(false);
   const clearCache = async () => {
@@ -46,17 +46,12 @@ export default function Settings() {
       </View>
 
       <Group title="Payments">
-        <ListRow
-          icon="cellphone-link"
-          title="Payment phone setup"
-          subtitle={Platform.OS === 'android' ? 'Connect this phone or another Android phone' : 'Connect an Android phone'}
-          onPress={() => router.push(isOwner ? '/pair' : '/pair/collector')}
-        />
         {isOwner ? (
           <>
           <ListRow
-            icon="bank-outline"
-            title="Wallet apps"
+            icon="bell-badge-outline"
+            title="Wallet notifications"
+            subtitle={Platform.OS === 'android' ? 'Choose which wallet apps this phone listens to' : 'Connect an Android payment phone'}
             onPress={() => router.push('/settings/sources')}
           />
           <ListRow
@@ -109,7 +104,7 @@ export default function Settings() {
 
       <Group title="Advanced">
         {Platform.OS === 'android' && isOwner ? <ListRow icon="text-search" title="Unknown notification formats" onPress={() => router.push('/settings/samples')} /> : null}
-        <ListRow icon="broom" title={clearing ? 'Clearing cache…' : 'Clear unused cache'} subtitle={cacheMessage || undefined} onPress={() => void clearCache()} />
+        <ListRow icon="broom" title={clearing ? 'Clearing cache…' : 'Clear unused cache'} onPress={() => void clearCache()} />
       </Group>
 
       <ListRow icon="logout" title="Sign out" destructive onPress={() => void signOut()} />
@@ -118,6 +113,7 @@ export default function Settings() {
         PayTsek {APP_VERSION}
       </Text>
       <AppUpdateDialog update={update.data} visible={showUpdate} onDismiss={() => setShowUpdate(false)} />
+      <Portal><Snackbar visible={cacheMessage !== null} duration={3200} onDismiss={() => setCacheMessage(null)}>{cacheMessage}</Snackbar></Portal>
     </Screen>
   );
 }

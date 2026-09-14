@@ -1,8 +1,8 @@
 import { PROVIDER_LABELS, type EvidenceState, type Provider, type RecordSummary } from '@paytsek/contracts';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { Icon, Text, TouchableRipple, useTheme } from 'react-native-paper';
+import { Icon, Snackbar, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppUpdateDialog } from '@/components/app-update-dialog';
 import { PaymentRecordRow } from '@/components/payment-record-row';
@@ -86,6 +86,7 @@ export default function Today() {
   const update = useAppUpdate();
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [showUpdate, setShowUpdate] = useState(false);
+  const [savedToast, setSavedToast] = useState<string | null>(null);
 
   const refreshLocal = useCallback(() => {
     if (!workspace) return;
@@ -129,8 +130,14 @@ export default function Today() {
     if (Number.isInteger(hour) && hour >= 0 && hour < 24) hourly[hour] = (hourly[hour] ?? 0) + draft.request.corrected.amountCentavos;
   }
 
-  const savedAmount = Number(params.savedAmount);
-  const justSaved = Number.isFinite(savedAmount) && savedAmount > 0;
+  useEffect(() => {
+    const savedAmount = Number(params.savedAmount);
+    if (!Number.isFinite(savedAmount) || savedAmount <= 0) return;
+    setSavedToast(`${peso(savedAmount)} recorded`);
+    // Route parameters outlive a render. Clear this one immediately so the
+    // confirmation cannot stick around or replay after later navigation.
+    router.setParams({ savedAmount: '' });
+  }, [params.savedAmount, router]);
   const offline = home.error instanceof OfflineError;
   const refresh = () => {
     refreshLocal();
@@ -146,13 +153,6 @@ export default function Today() {
         <View style={styles.header}>
           <Image source={require('../../assets/paytsek-wordmark.png')} resizeMode="contain" accessibilityLabel="PayTsek" style={styles.wordmark} />
         </View>
-
-        {justSaved ? (
-          <View style={[styles.inlineNotice, { backgroundColor: theme.colors.secondaryContainer }]} accessibilityRole="alert">
-            <Icon source="check-circle" size={19} color={theme.colors.primary} />
-            <Text variant="labelLarge" style={{ color: theme.colors.onSecondaryContainer }}>{peso(savedAmount)} recorded</Text>
-          </View>
-        ) : null}
 
         {update.data ? (
           <TouchableRipple onPress={() => setShowUpdate(true)} accessibilityRole="button">
@@ -196,7 +196,7 @@ export default function Today() {
 
         <View style={[styles.sectionHeader, { borderBottomColor: theme.colors.outlineVariant }]}>
           <Text variant="titleMedium" style={styles.sectionTitle}>Latest records</Text>
-          <TouchableRipple onPress={() => router.push('/(tabs)/records')} borderless accessibilityRole="button">
+          <TouchableRipple onPress={() => router.navigate('/(tabs)/records')} borderless accessibilityRole="button">
             <View style={styles.viewAll}>
               <Text variant="labelLarge" style={{ color: theme.colors.primary }}>View all</Text>
               <Icon source="arrow-right" size={17} color={theme.colors.primary} />
@@ -206,7 +206,7 @@ export default function Today() {
 
         {home.isLoading && feed.length === 0 ? <Loading variant="list" label="Loading records" /> : null}
         {!home.isLoading && feed.length === 0 ? (
-          <TouchableRipple onPress={() => router.push('/(tabs)/scan')} borderless accessibilityRole="button">
+          <TouchableRipple onPress={() => router.navigate('/(tabs)/scan')} borderless accessibilityRole="button">
             <View style={styles.empty}>
               <Icon source="qrcode-scan" size={26} color={theme.colors.primary} />
               <View style={{ flex: 1 }}>
@@ -234,6 +234,17 @@ export default function Today() {
           ))}
         </View>
       </ScrollView>
+      <Snackbar
+        visible={savedToast !== null}
+        duration={3200}
+        onDismiss={() => setSavedToast(null)}
+        icon="check-circle-outline"
+        onIconPress={() => setSavedToast(null)}
+        style={{ marginBottom: TAB_BAR_CLEARANCE }}
+        accessibilityLiveRegion="polite"
+      >
+        {savedToast}
+      </Snackbar>
       <AppUpdateDialog update={update.data} visible={showUpdate} onDismiss={() => setShowUpdate(false)} />
     </SafeAreaView>
   );

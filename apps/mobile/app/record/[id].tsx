@@ -1,9 +1,9 @@
 import type { EvidenceState } from '@paytsek/contracts';
 import { parseMoneyExact } from '@paytsek/receipt-parsers';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { Button, Dialog, Icon, IconButton, List, Portal, Text, TextInput, useTheme } from 'react-native-paper';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import { BackHandler, StyleSheet, View } from 'react-native';
+import { Button, Dialog, Icon, IconButton, List, Portal, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
 import { ErrorState, Loading, Notice, Screen, StateChip } from '@/components/ui';
 import { isApiError } from '@/lib/api';
 import { lastSeenWithTime, manilaTime, peso, stateLabel } from '@/lib/format';
@@ -41,6 +41,18 @@ export default function RecordDetail() {
   const [reason, setReason] = useState('');
   const [amountText, setAmountText] = useState('');
   const [msg, setMsg] = useState<{ kind: 'info' | 'error' | 'warning'; text: string } | null>(null);
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)/records');
+  }, [router]);
+
+  useFocusEffect(useCallback(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      goBack();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [goBack]));
 
   if (rec.isLoading) return <Screen scroll={false}><Loading variant="detail" label="Loading payment record" /></Screen>;
   if (rec.error || !rec.data) return <Screen scroll={false}><ErrorState error={rec.error} retry={() => void rec.refetch()} /></Screen>;
@@ -88,7 +100,7 @@ export default function RecordDetail() {
   };
 
   return <Screen>
-    <View style={styles.topBar}><IconButton icon="arrow-left" accessibilityLabel="Back to records" onPress={() => router.back()} /><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment record</Text><View style={{ width: 48 }} /></View>
+    <View style={styles.topBar}><IconButton icon="arrow-left" accessibilityLabel="Back to records" onPress={goBack} /><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment record</Text><View style={{ width: 48 }} /></View>
 
     <View style={[styles.hero, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
       <View style={styles.heroTop}><View style={[styles.walletIcon, { backgroundColor: theme.colors.primaryContainer }]}><Icon source="wallet-outline" size={23} color={theme.colors.primary} /></View><StateChip state={r.evidenceState} /></View>
@@ -99,7 +111,7 @@ export default function RecordDetail() {
 
     {r.evidenceState !== 'UNVERIFIED' ? <View style={[styles.statusCard, { backgroundColor: stateColor.bg }]} accessibilityLiveRegion="polite"><Icon source={status.icon} size={22} color={stateColor.fg} /><View style={{ flex: 1, gap: 3 }}><Text variant="titleSmall" style={{ color: stateColor.fg }}>{status.title}</Text><Text variant="bodySmall" style={{ color: stateColor.fg }}>{status.detail}</Text></View></View> : null}
     {r.flags.length ? <Notice kind="warning">Review note: {r.flags.map((f) => f.replace(/_/g, ' ').toLowerCase()).join(', ')}.</Notice> : null}
-    {msg ? <Notice kind={msg.kind}>{msg.text}</Notice> : null}
+    {msg && msg.kind !== 'info' ? <Notice kind={msg.kind}>{msg.text}</Notice> : null}
 
     {open && cands?.candidates.length ? <View style={[styles.surface, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
       <View style={styles.sectionHeader}><View style={[styles.sectionIcon, { backgroundColor: theme.colors.surfaceVariant }]}><Icon source="bell-sync-outline" size={20} color={theme.colors.primary} /></View><View style={{ flex: 1 }}><Text variant="titleMedium" style={{ fontWeight: '700' }}>Possible notification match</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{cands.candidates.length} option{cands.candidates.length === 1 ? '' : 's'} found</Text></View></View>
@@ -123,7 +135,10 @@ export default function RecordDetail() {
       {isOwner ? <Button icon="delete-outline" textColor={theme.colors.error} onPress={() => setDialog('void')}>Delete record</Button> : null}
     </View> : null}
 
-    <Portal><Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}><Dialog.Title>{dialog === 'edit' ? 'Correct amount' : dialog === 'unlink' ? 'Unlink association' : dialog === 'void' ? 'Delete record' : 'Confirm after wallet check'}</Dialog.Title><Dialog.Content style={{ gap: 8 }}>{dialog === 'edit' ? <><Text variant="bodySmall">The proof and correction stay in Activity.</Text><TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} /></> : <><Text variant="bodySmall">{dialog === 'manual' ? 'Use this only after checking the receiving wallet. It is recorded as an owner confirmation, not a provider verification.' : dialog === 'void' ? 'This removes the record from active totals while preserving the proof and Activity history.' : 'The previous state remains in Activity.'}</Text><TextInput label={dialog === 'manual' ? 'Note (optional)' : 'Reason'} mode="outlined" value={reason} onChangeText={setReason} /></>}</Dialog.Content><Dialog.Actions><Button onPress={() => setDialog(null)}>Cancel</Button><Button onPress={() => void runDialog()} disabled={dialog !== 'edit' && dialog !== 'manual' && reason.trim().length < 3}>{dialog === 'edit' ? 'Save' : 'Confirm'}</Button></Dialog.Actions></Dialog></Portal>
+    <Portal>
+      <Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}><Dialog.Title>{dialog === 'edit' ? 'Correct amount' : dialog === 'unlink' ? 'Unlink association' : dialog === 'void' ? 'Delete record' : 'Confirm after wallet check'}</Dialog.Title><Dialog.Content style={{ gap: 8 }}>{dialog === 'edit' ? <><Text variant="bodySmall">The proof and correction stay in Activity.</Text><TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} /></> : <><Text variant="bodySmall">{dialog === 'manual' ? 'Use this only after checking the receiving wallet. It is recorded as an owner confirmation, not a provider verification.' : dialog === 'void' ? 'This removes the record from active totals while preserving the proof and Activity history.' : 'The previous state remains in Activity.'}</Text><TextInput label={dialog === 'manual' ? 'Note (optional)' : 'Reason'} mode="outlined" value={reason} onChangeText={setReason} /></>}</Dialog.Content><Dialog.Actions><Button onPress={() => setDialog(null)}>Cancel</Button><Button onPress={() => void runDialog()} disabled={dialog !== 'edit' && dialog !== 'manual' && reason.trim().length < 3}>{dialog === 'edit' ? 'Save' : 'Confirm'}</Button></Dialog.Actions></Dialog>
+      <Snackbar visible={msg?.kind === 'info'} duration={3000} onDismiss={() => setMsg(null)}>{msg?.text}</Snackbar>
+    </Portal>
   </Screen>;
 }
 

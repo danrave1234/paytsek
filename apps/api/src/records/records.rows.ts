@@ -3,7 +3,7 @@ import type { RecordDetail, RecordSummary, ReceiptFields } from '@paytsek/contra
 export interface RecordRow {
   id: string;
   organization_id: string;
-  source_id: string;
+  source_id: string | null;
   source_label: string;
   proof_id: string | null;
   capture_origin: RecordDetail['captureOrigin'];
@@ -39,15 +39,26 @@ export interface RecordRow {
 }
 
 export const RECORD_SELECT = `
-  select r.*, s.label as source_label, p.display_name as created_by_name,
+  select r.*,
+         case r.receipt_provider
+           when 'GCASH' then 'GCash'
+           when 'GOTYME' then 'GoTyme'
+           when 'MAYA' then 'Maya'
+           when 'MARIBANK' then 'MariBank'
+           else coalesce(s.label, 'Payment')
+         end as source_label,
+         p.display_name as created_by_name,
          (select pm.event_id from payment_matches pm where pm.record_id = r.id and pm.active) as linked_event_id,
          (case when r.evidence_state in ('UNVERIFIED','REVIEW_REQUIRED') then
-            (select count(*)::int from notification_events e where e.source_id = r.source_id and e.amount_centavos = r.amount_centavos and e.purged_at is null
+            (select count(*)::int from notification_events e
+              where e.organization_id = r.organization_id
+                and (r.source_id is null or e.source_id = r.source_id)
+                and e.amount_centavos = r.amount_centavos and e.purged_at is null
                and not exists (select 1 from payment_matches x where x.event_id = e.id and x.active))
           else 0 end) as candidate_count,
          (r.proof_id is not null) as has_proof
     from payment_records r
-    join payment_sources s on s.id = r.source_id
+    left join payment_sources s on s.id = r.source_id
     left join profiles p on p.user_id = r.created_by`;
 
 export function rowFields(r: RecordRow): ReceiptFields {

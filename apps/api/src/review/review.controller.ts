@@ -24,15 +24,17 @@ export class ReviewService {
 
   /**
    * Authorized user selects a candidate. The candidate must come from the
-   * record's scoped candidate set (same source, exact amount). Two cashiers
+   * record's scoped candidate set (exact amount and, when known, same source). Two cashiers
    * racing for one event: the partial unique index yields exactly one winner;
    * the loser receives MATCH_CONFLICT and refreshed review state.
    */
   async confirmCandidate(ws: WorkspaceContext, userId: string, recordId: string, eventId: string, note: string | null | undefined): Promise<void> {
     await this.db.tx(async (c) => {
-      const rec = await c.query<{ id: string; source_id: string; amount_centavos: string; evidence_state: string; created_by: string; require_owner_approval: boolean }>(
-        `select r.id, r.source_id, r.amount_centavos, r.evidence_state, r.created_by, s.require_owner_approval_for_staff_matches as require_owner_approval
-           from payment_records r join payment_sources s on s.id = r.source_id where r.id = $1 and r.organization_id = $2 for update of r`,
+      const rec = await c.query<{ id: string; source_id: string | null; amount_centavos: string; evidence_state: string; created_by: string; require_owner_approval: boolean }>(
+        `select r.id, r.source_id, r.amount_centavos, r.evidence_state, r.created_by,
+                coalesce(s.require_owner_approval_for_staff_matches, false) as require_owner_approval
+           from payment_records r left join payment_sources s on s.id = r.source_id
+          where r.id = $1 and r.organization_id = $2 for update of r`,
         [recordId, ws.organizationId],
       );
       const r = rec.rows[0];
@@ -44,11 +46,16 @@ export class ReviewService {
         if (r.require_owner_approval) throw new ApiException('CONFIRMATION_REQUIRES_OWNER_APPROVAL', 'This source requires owner approval before matching staff records');
         if (r.created_by !== userId) throw new ApiException('FORBIDDEN', 'Cashiers can only confirm matches for their own records');
       }
-      const ev = await c.query<{ id: string }>(
-        `select id from notification_events where id = $1 and organization_id = $2 and source_id = $3 and amount_centavos = $4 and purged_at is null`,
+      const ev = await c.query<{ id: string; source_id: string }>(
+        `select id, source_id from notification_events
+          where id = $1 and organization_id = $2 and ($3::uuid is null or source_id = $3)
+            and amount_centavos = $4 and purged_at is null`,
         [eventId, ws.organizationId, r.source_id, r.amount_centavos],
       );
       if (!ev.rows[0]) throw new ApiException('CANDIDATE_OUT_OF_SCOPE', 'That notification is not a candidate for this record');
+      if (r.source_id === null) {
+        await c.query(`update payment_records set source_id = $2 where id = $1`, [recordId, ev.rows[0].source_id]);
+      }
       try {
         await c.query(
           `insert into payment_matches (organization_id, record_id, event_id, kind, reason_codes, supporting_fields, matcher_version, created_by)

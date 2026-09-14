@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Share } from 'react-native';
-import { Button, Card, Dialog, List, Portal, Text, TextInput, useTheme } from 'react-native-paper';
+import { Share, View } from 'react-native';
+import { Button, Dialog, List, Portal, Text, TextInput, useTheme } from 'react-native-paper';
 import { Group, ListRow, Notice, Row, Screen } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useIsOwner, useSession } from '@/lib/session';
@@ -36,23 +36,23 @@ export default function Privacy() {
   return (
     <Screen>
       <Notice kind="info">PayTsek reads payment evidence you choose and incoming-payment notifications from a connected Android phone. It never reads OTPs, passwords, contacts, or your wallet balance.</Notice>
-      <Card mode="outlined">
+      <Group title="Privacy">
         <List.Accordion title="Data PayTsek uses" description="Receipts and payment notifications">
-          <Card.Content style={{ gap: 8 }}>
+          <View style={{ gap: 8, paddingHorizontal: 24, paddingBottom: 16 }}>
             <Text variant="bodySmall">Receipt images you capture or import, with location metadata removed.</Text>
             <Text variant="bodySmall">Incoming amount, masked sender, reference and time from supported wallet notifications.</Text>
             <Text variant="bodySmall">Security prompts, outgoing payments, promotions and unknown messages are discarded on the phone.</Text>
-          </Card.Content>
+          </View>
         </List.Accordion>
         <List.Accordion title="How long data is kept" description="Tap to view retention periods">
-          <Card.Content>
+          <View style={{ paddingHorizontal: 24, paddingBottom: 16 }}>
             <Row label="Unmatched notifications" value="7 days" />
             <Row label="Receipt images" value="30–90 days" />
             <Row label="Records and history" value="12 months" />
             <Row label="Export files" value="24 hours" />
-          </Card.Content>
+          </View>
         </List.Accordion>
-      </Card>
+      </Group>
       <Group title="Your data">
         <ListRow icon="file-export-outline" title="Export my personal data" onPress={() => void exportData()} />
       </Group>

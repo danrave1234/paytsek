@@ -15,6 +15,8 @@ import { Loading } from '@/components/ui';
 import { ThemeModeProvider } from '@/lib/theme-mode';
 import { useReducedMotion } from '@/components/motion';
 
+export const unstable_settings = { initialRouteName: '(tabs)' };
+
 function Gate({ children }: { children: React.ReactNode }) {
   const { ready, configured, session, workspace } = useSession();
   const theme = useTheme();
@@ -131,9 +133,9 @@ function AppNavigator() {
                   <Stack.Screen name="(tabs)" />
                   <Stack.Screen name="auth/callback" />
                   <Stack.Screen name="record/[id]" />
-                  <Stack.Screen name="pair/index" options={{ headerShown: true, title: 'Connect payment phone' }} />
+                  <Stack.Screen name="pair/index" options={{ headerShown: true, title: 'Connect another phone' }} />
                   <Stack.Screen name="pair/collector" options={{ headerShown: true, title: 'Join as payment phone' }} />
-                  <Stack.Screen name="settings/sources" options={{ headerShown: true, title: 'Payment sources' }} />
+                  <Stack.Screen name="settings/sources" options={{ headerShown: true, title: 'Wallet notifications' }} />
                   <Stack.Screen name="settings/devices" options={{ headerShown: true, title: 'Devices & health' }} />
                   <Stack.Screen name="settings/team" options={{ headerShown: true, title: 'Team' }} />
                   <Stack.Screen name="settings/privacy" options={{ headerShown: true, title: 'Privacy & data' }} />

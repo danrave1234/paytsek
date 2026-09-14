@@ -1,4 +1,4 @@
-import { PROVIDER_LABELS, type EvidenceState, type Provider, type RecordSummary } from '@paytsek/contracts';
+import { PROVIDERS, PROVIDER_LABELS, type EvidenceState, type Provider, type RecordSummary } from '@paytsek/contracts';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PaymentRecordRow } from '@/components/payment-record-row';
 import { EmptyState, ErrorState, Loading } from '@/components/ui';
 import { listDrafts, type Draft } from '@/lib/drafts';
-import { prefetchRecord, useInfiniteRecords, useSources } from '@/lib/queries';
+import { prefetchRecord, useInfiniteRecords } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TAB_BAR_CLEARANCE } from '@/theme';
 
@@ -60,8 +60,7 @@ export default function Records() {
   const [search, setSearch] = useState('');
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [evidenceFilter, setEvidenceFilter] = useState<EvidenceFilter>('ALL');
-  const [sourceId, setSourceId] = useState<string | undefined>();
-  const sources = useSources();
+  const [provider, setProvider] = useState<Provider | undefined>();
 
   useEffect(() => {
     const timer = setTimeout(() => setSearch(text.trim()), 250);
@@ -69,7 +68,7 @@ export default function Records() {
   }, [text]);
 
   const evidenceStates = EVIDENCE_FILTERS.find((item) => item.value === evidenceFilter)?.states;
-  const query = useInfiniteRecords({ q: search || undefined, state: evidenceStates, sourceId });
+  const query = useInfiniteRecords({ q: search || undefined, state: evidenceStates, provider });
   const refreshLocal = useCallback(() => {
     if (!workspace) return;
     void listDrafts(workspace.id, true).then(setDrafts).catch(() => setDrafts([]));
@@ -80,7 +79,7 @@ export default function Records() {
     const remote = query.data?.pages.flatMap((page) => page.items) ?? [];
     const normalizedSearch = search.toLowerCase().replace(/[₱,\s]/g, '');
     const localRows: RowItem[] = drafts.filter((draft) => {
-      if (sourceId && draft.request.sourceId !== sourceId) return false;
+      if (provider && draft.request.corrected.receiptProvider !== provider) return false;
       if (evidenceStates && !evidenceStates.includes('UNVERIFIED')) return false;
       if (!normalizedSearch) return true;
       const source = providerLabel(draft.request.corrected.receiptProvider).toLowerCase();
@@ -105,13 +104,13 @@ export default function Records() {
       state: record.evidenceState,
     }));
     return [...localRows, ...remoteRows].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  }, [drafts, evidenceStates, query.data?.pages, search, sourceId]);
+  }, [drafts, evidenceStates, provider, query.data?.pages, search]);
 
-  const hasFilters = Boolean(search || sourceId || evidenceFilter !== 'ALL');
+  const hasFilters = Boolean(search || provider || evidenceFilter !== 'ALL');
   const clearFilters = () => {
     setText('');
     setSearch('');
-    setSourceId(undefined);
+    setProvider(undefined);
     setEvidenceFilter('ALL');
   };
 
@@ -164,36 +163,32 @@ export default function Records() {
                 );
               })}
             </ScrollView>
-            {(sources.data?.length ?? 0) > 0 ? (
-              <>
-                <Text variant="labelSmall" style={[styles.filterLabel, { color: theme.colors.onSurfaceVariant }]}>PAYMENT SOURCE</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+            <Text variant="labelSmall" style={[styles.filterLabel, { color: theme.colors.onSurfaceVariant }]}>PAYMENT APP</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+              <Pressable
+                onPress={() => setProvider(undefined)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: !provider }}
+                style={[styles.sourceFilter, { borderColor: !provider ? theme.colors.primary : theme.colors.outlineVariant, backgroundColor: !provider ? theme.colors.primaryContainer : theme.colors.surface }]}
+              >
+                <Text variant="labelMedium" style={{ color: !provider ? theme.colors.primary : theme.colors.onSurface }}>All apps</Text>
+              </Pressable>
+              {PROVIDERS.map((item) => {
+                const selected = provider === item.value;
+                return (
                   <Pressable
-                    onPress={() => setSourceId(undefined)}
+                    key={item.value}
+                    onPress={() => setProvider(item.value)}
                     accessibilityRole="button"
-                    accessibilityState={{ selected: !sourceId }}
-                    style={[styles.sourceFilter, { borderColor: !sourceId ? theme.colors.primary : theme.colors.outlineVariant, backgroundColor: !sourceId ? theme.colors.primaryContainer : theme.colors.surface }]}
+                    accessibilityState={{ selected }}
+                    style={[styles.sourceFilter, { borderColor: selected ? theme.colors.primary : theme.colors.outlineVariant, backgroundColor: selected ? theme.colors.primaryContainer : theme.colors.surface }]}
                   >
-                    <Text variant="labelMedium" style={{ color: !sourceId ? theme.colors.primary : theme.colors.onSurface }}>All sources</Text>
+                    <ProviderLogo provider={item.value} size={22} />
+                    <Text variant="labelMedium" numberOfLines={1} style={{ color: selected ? theme.colors.primary : theme.colors.onSurface }}>{item.label}</Text>
                   </Pressable>
-                  {sources.data?.map((source) => {
-                    const selected = sourceId === source.id;
-                    return (
-                      <Pressable
-                        key={source.id}
-                        onPress={() => setSourceId(source.id)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected }}
-                        style={[styles.sourceFilter, { borderColor: selected ? theme.colors.primary : theme.colors.outlineVariant, backgroundColor: selected ? theme.colors.primaryContainer : theme.colors.surface }]}
-                      >
-                        <ProviderLogo provider={source.provider} size={22} />
-                        <Text variant="labelMedium" numberOfLines={1} style={{ color: selected ? theme.colors.primary : theme.colors.onSurface }}>{source.label}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </>
-            ) : null}
+                );
+              })}
+            </ScrollView>
           </View>
         )}
         ListEmptyComponent={query.isLoading
@@ -204,7 +199,7 @@ export default function Records() {
             ? <ErrorState error={query.error} retry={refresh} />
             : hasFilters
               ? <EmptyState icon="filter-outline" title="No matching records" action={{ label: 'Clear filters', onPress: clearFilters }} />
-              : <EmptyState icon="receipt-text-outline" title="No records yet" body="Your saved payment proofs will appear here." action={{ label: 'Scan payment', onPress: () => router.push('/(tabs)/scan') }} />}
+              : <EmptyState icon="receipt-text-outline" title="No records yet" body="Your saved payment proofs will appear here." action={{ label: 'Scan payment', onPress: () => router.navigate('/(tabs)/scan') }} />}
         ListFooterComponent={query.isFetchingNextPage ? <ActivityIndicator style={styles.footer} /> : <View style={styles.footer} />}
         renderItem={({ item, index }) => {
           const showDay = index === 0 || dayKey(rows[index - 1]!.at, timezone) !== dayKey(item.at, timezone);

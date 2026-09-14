@@ -143,10 +143,12 @@ export class WorkerService {
         reference_namespace: string | null; reference_value: string | null; payer_name: string | null; payee_name: string | null; customer_label: string | null; note: string | null;
         receipt_transaction_at: Date | null; created_by_name: string | null; match_kind: string | null;
       }>(
-        `select r.id, r.created_at, r.captured_at, s.label as source_label, r.amount_centavos, r.evidence_state, r.flags, r.reference_namespace, r.reference_value,
+        `select r.id, r.created_at, r.captured_at,
+                case r.receipt_provider when 'GCASH' then 'GCash' when 'GOTYME' then 'GoTyme' when 'MAYA' then 'Maya' when 'MARIBANK' then 'MariBank' else coalesce(s.label, 'Payment') end as source_label,
+                r.amount_centavos, r.evidence_state, r.flags, r.reference_namespace, r.reference_value,
                 r.payer_name, r.payee_name, r.customer_label, r.note, r.receipt_transaction_at, p.display_name as created_by_name,
                 (select kind from payment_matches pm where pm.record_id = r.id and pm.active) as match_kind
-           from payment_records r join payment_sources s on s.id = r.source_id left join profiles p on p.user_id = r.created_by
+           from payment_records r left join payment_sources s on s.id = r.source_id left join profiles p on p.user_id = r.created_by
           where ${where} order by r.created_at`,
         params,
       );

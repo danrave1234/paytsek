@@ -42,10 +42,12 @@ export function SiteHeader({ version }: { version: string }) {
           <Image
             src="/brand/paytsek-wordmark.png"
             alt="PayTsek"
-            width={152}
-            height={51}
+            width={150}
+            height={50}
             priority
+            loading="eager"
             className="h-auto w-[122px] transition-transform duration-200 group-hover:scale-[1.02] sm:w-[138px]"
+            style={{ height: 'auto' }}
           />
         </Link>
 

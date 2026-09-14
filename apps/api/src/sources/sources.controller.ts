@@ -67,14 +67,23 @@ export class SourcesService {
 
   async create(orgId: string, actorId: string, input: CreateSourceRequest): Promise<SourceSummary> {
     return this.db.tx(async (c) => {
-      const lim = await c.query<{ receiving_sources: number; n: number }>(
-        `select p.receiving_sources, (select count(*) from payment_sources where organization_id = $1 and deleted_at is null)::int as n
-           from organizations o join plans p on p.code = o.plan_code where o.id = $1 for update of o`,
+      // Serialize provider creation per workspace. The public beta has no
+      // receiving-source quota, and one provider is one toggle—not a list item
+      // the owner can accidentally add repeatedly.
+      await c.query(`select id from organizations where id = $1 for update`, [orgId]);
+      const existing = await c.query<{ id: string }>(
+        `select id from payment_sources where organization_id = $1 and provider = $2 and deleted_at is null`,
+        [orgId, input.provider],
+      );
+      if (existing.rows[0]) {
+        const row = await c.query<SourceRow>(`${SELECT} where s.id = $1`, [existing.rows[0].id]);
+        return toSummary(row.rows[0]!);
+      }
+      const count = await c.query<{ n: number }>(
+        `select count(*)::int as n from payment_sources where organization_id = $1 and deleted_at is null`,
         [orgId],
       );
-      const l = lim.rows[0]!;
-      if (l.n >= l.receiving_sources) throw new ApiException('PLAN_LIMIT_SOURCES', `Your plan allows ${l.receiving_sources} receiving source(s)`, { limit: l.receiving_sources });
-      const makeDefault = input.isDefault || l.n === 0;
+      const makeDefault = input.isDefault || (count.rows[0]?.n ?? 0) === 0;
       if (makeDefault) await c.query(`update payment_sources set is_default = false where organization_id = $1`, [orgId]);
       const ins = await c.query<{ id: string }>(
         `insert into payment_sources (organization_id, provider, label, declared_identifier, masked_display, recipient_aliases, is_default)
