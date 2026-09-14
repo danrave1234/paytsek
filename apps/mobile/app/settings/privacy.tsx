@@ -11,14 +11,31 @@ export default function Privacy() {
   const { workspace, signOut, refreshWorkspaces, selectWorkspace } = useSession();
   const [dialog, setDialog] = useState<'account' | 'workspace' | null>(null);
   const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
 
+  const openDialog = (kind: 'account' | 'workspace') => {
+    setConfirm('');
+    setDialog(kind);
+  };
+
+  const closeDialog = () => {
+    setConfirm('');
+    setDialog(null);
+  };
+
   const exportData = async () => {
-    const data = await api<Record<string, unknown>>('/v1/me/privacy-export', { noWorkspace: true });
-    await Share.share({ message: JSON.stringify(data, null, 2), title: 'PayTsek personal data export' });
+    try {
+      const data = await api<Record<string, unknown>>('/v1/me/privacy-export', { noWorkspace: true });
+      await Share.share({ message: JSON.stringify(data, null, 2), title: 'PayTsek personal data export' });
+    } catch (exportError) {
+      setMsg({ kind: 'error', text: (exportError as Error).message });
+    }
   };
 
   const run = async () => {
+    if (busy) return;
+    setBusy(true);
     setMsg(null);
     try {
       if (dialog === 'workspace') {
@@ -29,8 +46,9 @@ export default function Privacy() {
         await api('/v1/me', { method: 'DELETE', noWorkspace: true, body: { confirm: 'DELETE' } });
         await signOut();
       }
-      setDialog(null);
+      closeDialog();
     } catch (e) { setMsg({ kind: 'error', text: (e as Error).message }); }
+    finally { setBusy(false); }
   };
 
   return (
@@ -57,20 +75,20 @@ export default function Privacy() {
         <ListRow icon="file-export-outline" title="Export my personal data" onPress={() => void exportData()} />
       </Group>
       <Group title="Danger zone">
-        {isOwner ? <ListRow icon="delete-outline" title={`Delete ${workspace?.name ?? 'workspace'}`} destructive onPress={() => setDialog('workspace')} /> : null}
-        <ListRow icon="account-remove-outline" title="Delete my account" destructive onPress={() => setDialog('account')} />
+        {isOwner ? <ListRow icon="delete-outline" title={`Delete ${workspace?.name ?? 'workspace'}`} destructive onPress={() => openDialog('workspace')} /> : null}
+        <ListRow icon="account-remove-outline" title="Delete my account" destructive onPress={() => openDialog('account')} />
       </Group>
       {msg ? <Notice kind={msg.kind}>{msg.text}</Notice> : null}
       <Portal>
-        <Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}>
+        <Dialog visible={dialog !== null} onDismiss={closeDialog}>
           <Dialog.Title>{dialog === 'workspace' ? 'Delete workspace' : 'Delete account'}</Dialog.Title>
           <Dialog.Content style={{ gap: 8 }}>
             <Text variant="bodySmall">{dialog === 'workspace' ? 'This removes its records, images, notifications and devices.' : 'This removes your profile and memberships. Business records stay with their workspace without your name.'}</Text>
             <TextInput label="Type DELETE to confirm" mode="outlined" value={confirm} onChangeText={setConfirm} autoCapitalize="characters" />
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setDialog(null)}>Cancel</Button>
-            <Button textColor={theme.colors.error} disabled={confirm !== 'DELETE'} onPress={() => void run()}>Delete</Button>
+            <Button onPress={closeDialog} disabled={busy}>Cancel</Button>
+            <Button textColor={theme.colors.error} loading={busy} disabled={busy || confirm !== 'DELETE'} onPress={() => void run()}>Delete</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

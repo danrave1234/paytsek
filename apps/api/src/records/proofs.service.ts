@@ -51,22 +51,27 @@ export class ProofsService {
     }
     const path = this.storage.proofPath(orgId, proofId, input.contentType);
     await this.db.query(`update payment_proofs set storage_path = $2 where id = $1 and storage_path is null`, [proofId, path]);
-    const signed = await this.storage.createSignedUpload(this.storage.proofsBucket, path);
+    // A retry may carry a different contentType; always sign for the path actually stored.
+    const stored = await this.db.one<{ storage_path: string }>(`select storage_path from payment_proofs where id = $1`, [proofId]);
+    const signed = await this.storage.createSignedUpload(this.storage.proofsBucket, stored!.storage_path);
     return { proofId, uploadUrl: signed.url, uploadHeaders: { 'x-upsert': 'false' }, alreadyStored: false, expiresAt };
   }
 
   /** Verify the object exists and its size matches, then mark finalized. */
   async finalize(orgId: string, proofId: string): Promise<{ proofId: string; finalized: boolean }> {
-    const p = await this.db.one<{ storage_path: string | null; byte_length: number; upload_finalized_at: Date | null }>(
-      `select storage_path, byte_length, upload_finalized_at from payment_proofs where id = $1 and organization_id = $2`,
+    const p = await this.db.one<{ storage_path: string | null; byte_length: number; content_type: string; upload_finalized_at: Date | null }>(
+      `select storage_path, byte_length, content_type, upload_finalized_at from payment_proofs where id = $1 and organization_id = $2`,
       [proofId, orgId],
     );
     if (!p) throw new ApiException('NOT_FOUND', 'Proof not found');
     if (p.upload_finalized_at) return { proofId, finalized: true };
     if (!p.storage_path) throw new ApiException('PROOF_UPLOAD_NOT_FINALIZED', 'Upload was never initialized');
     const stat = await this.storage.stat(this.storage.proofsBucket, p.storage_path);
-    if (!stat || (stat.size > 0 && stat.size !== p.byte_length)) {
+    if (!stat || stat.size !== p.byte_length) {
       throw new ApiException('PROOF_UPLOAD_NOT_FINALIZED', 'Uploaded bytes not found or size mismatch; retry the upload');
+    }
+    if (stat.contentType && stat.contentType !== p.content_type) {
+      throw new ApiException('PROOF_UPLOAD_NOT_FINALIZED', 'Uploaded content type does not match the declared type; retry the upload');
     }
     await this.db.query(`update payment_proofs set upload_finalized_at = now() where id = $1`, [proofId]);
     return { proofId, finalized: true };

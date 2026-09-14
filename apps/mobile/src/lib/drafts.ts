@@ -29,7 +29,6 @@ export interface Draft {
 }
 
 const SCHEMA = `
-  pragma journal_mode = wal;
   create table if not exists drafts (
     client_record_id text primary key,
     workspace_id text not null,
@@ -47,6 +46,9 @@ const SCHEMA = `
   create index if not exists drafts_ws_idx on drafts(workspace_id, sync_status);
 `;
 
+/** Ordered, append-only migrations; `pragma user_version` records the last one applied. */
+const MIGRATIONS = [SCHEMA];
+
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 async function initialize(): Promise<SQLite.SQLiteDatabase> {
@@ -55,7 +57,18 @@ async function initialize(): Promise<SQLite.SQLiteDatabase> {
   // process alive. A distinct connection avoids that cache; the promise below
   // also prevents concurrent callers from creating duplicate wrappers.
   const connection = await SQLite.openDatabaseAsync('paytsek.db', { useNewConnection: true });
-  await connection.execAsync(SCHEMA);
+  await connection.execAsync('pragma journal_mode = wal;');
+  const versionRow = await connection.getFirstAsync<{ user_version: number }>('pragma user_version');
+  let version = versionRow?.user_version ?? 0;
+  // Existing installs stamped 0 re-run the idempotent v1 schema once, then advance.
+  while (version < MIGRATIONS.length) {
+    const next = version + 1;
+    await connection.withTransactionAsync(async () => {
+      await connection.execAsync(MIGRATIONS[next - 1]!);
+      await connection.execAsync(`pragma user_version = ${next}`);
+    });
+    version = next;
+  }
   // execAsync may resolve against the affected dead handle. Force one prepared
   // statement now so a bad connection never reaches the proof-saving path.
   await connection.getFirstAsync<{ ready: number }>('select 1 as ready');
@@ -84,7 +97,7 @@ export async function stageImage(sourceUri: string, clientRecordId: string, ext:
   return dest.uri;
 }
 
-export async function countDrafts(workspaceId: string): Promise<number> {
+async function countDrafts(workspaceId: string): Promise<number> {
   const d = await open();
   const r = await d.getFirstAsync<{ n: number }>(`select count(*) as n from drafts where workspace_id = ? and sync_status <> 'SYNCED'`, [workspaceId]);
   return r?.n ?? 0;
@@ -163,7 +176,7 @@ function rowToDraft(r: Record<string, unknown>): Draft {
   };
 }
 
-async function update(id: string, patch: Partial<Pick<Draft, 'syncStatus' | 'proofId' | 'lastError' | 'quotaBlocked' | 'serverRecordId'>>): Promise<void> {
+async function update(id: string, patch: Partial<Pick<Draft, 'syncStatus' | 'proofId' | 'lastError' | 'quotaBlocked' | 'serverRecordId'>>, onlyWhileUploading = false): Promise<number> {
   const d = await open();
   const sets: string[] = ['updated_at = ?'];
   const vals: unknown[] = [new Date().toISOString()];
@@ -173,14 +186,31 @@ async function update(id: string, patch: Partial<Pick<Draft, 'syncStatus' | 'pro
   if (patch.quotaBlocked !== undefined) { sets.push('quota_blocked = ?'); vals.push(patch.quotaBlocked ? 1 : 0); }
   if (patch.serverRecordId !== undefined) { sets.push('server_record_id = ?'); vals.push(patch.serverRecordId); }
   vals.push(id);
-  await d.runAsync(`update drafts set ${sets.join(', ')} where client_record_id = ?`, vals as SQLite.SQLiteBindValue[]);
+  const result = await d.runAsync(`update drafts set ${sets.join(', ')} where client_record_id = ?${onlyWhileUploading ? " and sync_status = 'UPLOADING'" : ''}`, vals as SQLite.SQLiteBindValue[]);
+  return result.changes;
+}
+
+/** Claim a draft for upload. Returns false when another sync attempt owns it or it already synced. */
+async function claimForUpload(id: string): Promise<boolean> {
+  const d = await open();
+  const result = await d.runAsync(
+    `update drafts set sync_status = 'UPLOADING', last_error = null, updated_at = ?
+      where client_record_id = ? and sync_status not in ('UPLOADING','SYNCED')`,
+    [new Date().toISOString(), id],
+  );
+  return result.changes === 1;
 }
 
 /** Sync one draft. Returns the resulting sync status. Safe to call repeatedly. */
 export async function syncDraft(draft: Draft): Promise<SyncStatus> {
+  let proofId = draft.proofId;
+  // Only one attempt may own the upload pipeline at a time; a concurrent call
+  // returns the current status instead of double-running init/PUT/create.
+  if (!(await claimForUpload(draft.clientRecordId))) {
+    const current = await getDraft(draft.workspaceId, draft.clientRecordId);
+    return current?.syncStatus ?? draft.syncStatus;
+  }
   try {
-    await update(draft.clientRecordId, { syncStatus: 'UPLOADING', lastError: null });
-    let proofId = draft.proofId;
     if (draft.imageUri && !proofId) {
       const file = new File(draft.imageUri);
       const bytes = await file.bytes();
@@ -195,7 +225,8 @@ export async function syncDraft(draft: Draft): Promise<SyncStatus> {
         if (!put.ok) throw new Error(`Image upload failed (${put.status})`);
         await api('/v1/proofs/finalize', { method: 'POST', body: { proofId } });
       }
-      await update(draft.clientRecordId, { proofId, syncStatus: 'PARTIAL_UPLOAD' });
+      // Persist the proofId but keep the UPLOADING claim until this attempt ends.
+      await update(draft.clientRecordId, { proofId }, true);
     }
     const res = await api<CreateRecordResponse>('/v1/records', { method: 'POST', body: { ...draft.request, proofId } });
     await update(draft.clientRecordId, { syncStatus: 'SYNCED', serverRecordId: res.record.id, quotaBlocked: false });
@@ -206,10 +237,12 @@ export async function syncDraft(draft: Draft): Promise<SyncStatus> {
       return 'LOCAL_DRAFT';
     }
     if (e instanceof OfflineError) {
-      await update(draft.clientRecordId, { syncStatus: draft.proofId ? 'PARTIAL_UPLOAD' : 'LOCAL_DRAFT', lastError: e.message });
-      return draft.proofId ? 'PARTIAL_UPLOAD' : 'LOCAL_DRAFT';
+      // Use the freshest proofId: the image may have uploaded successfully in
+      // this very attempt before the record call went offline.
+      await update(draft.clientRecordId, { syncStatus: proofId ? 'PARTIAL_UPLOAD' : 'LOCAL_DRAFT', lastError: e.message }, true);
+      return proofId ? 'PARTIAL_UPLOAD' : 'LOCAL_DRAFT';
     }
-    await update(draft.clientRecordId, { syncStatus: 'FAILED', lastError: (e as Error).message });
+    await update(draft.clientRecordId, { syncStatus: 'FAILED', lastError: (e as Error).message }, true);
     return 'FAILED';
   }
 }
@@ -229,11 +262,11 @@ export async function syncAll(workspaceId: string): Promise<{ synced: number; pe
 /** Remove synced drafts and their staged images (evidence now lives on the server). */
 export async function pruneSynced(workspaceId: string): Promise<void> {
   const d = await open();
-  const rows = await d.getAllAsync<{ client_record_id: string; image_uri: string | null }>(`select client_record_id, image_uri from drafts where workspace_id = ? and sync_status = 'SYNCED'`, [workspaceId]);
+  const rows = await d.getAllAsync<{ image_uri: string | null }>(`select image_uri from drafts where workspace_id = ? and sync_status = 'SYNCED'`, [workspaceId]);
   for (const r of rows) {
     if (r.image_uri) {
       try { new File(r.image_uri).delete(); } catch { /* already gone */ }
     }
-    await d.runAsync(`delete from drafts where client_record_id = ? and workspace_id = ? and sync_status = 'SYNCED'`, [r.client_record_id, workspaceId]);
   }
+  await d.runAsync(`delete from drafts where workspace_id = ? and sync_status = 'SYNCED'`, [workspaceId]);
 }

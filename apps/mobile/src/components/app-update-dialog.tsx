@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Dialog, Icon, Portal, ProgressBar, Text, useTheme } from 'react-native-paper';
 import { downloadAndInstallUpdate, type AppUpdate } from '@/lib/release-update';
 import { SPACING } from '@/theme';
@@ -13,14 +13,16 @@ type Props = {
 export function AppUpdateDialog({ update, visible, onDismiss }: Props) {
   const theme = useTheme();
   const [progress, setProgress] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const install = async () => {
     if (!update || progress !== null) return;
     setProgress(0);
+    setError(null);
     try {
       await downloadAndInstallUpdate(update, setProgress);
-    } catch (error) {
-      Alert.alert('Update could not start', error instanceof Error ? error.message : 'Please try again.');
+    } catch (installError) {
+      setError(installError instanceof Error ? installError.message : 'Please try again.');
     } finally {
       setProgress(null);
     }
@@ -58,6 +60,11 @@ export function AppUpdateDialog({ update, visible, onDismiss }: Props) {
               <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>Downloading {Math.round(progress * 100)}%</Text>
             </View>
           ) : null}
+          {error ? (
+            <Text variant="bodySmall" style={[styles.error, { color: theme.colors.error }]} accessibilityRole="alert">
+              Update could not start: {error}
+            </Text>
+          ) : null}
         </Dialog.Content>
         <Dialog.Actions>
           <Button onPress={() => update && void Linking.openURL(update.releaseUrl)} disabled={progress !== null}>Release page</Button>
@@ -76,4 +83,5 @@ const styles = StyleSheet.create({
   notes: { gap: SPACING.sm, paddingBottom: SPACING.xs },
   note: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm },
   progress: { marginTop: SPACING.lg, gap: SPACING.sm },
+  error: { marginTop: SPACING.md },
 });

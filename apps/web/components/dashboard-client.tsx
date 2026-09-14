@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import type { WorkspaceSummary } from '@paytsek/contracts';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 
-type Workspace = { id: string; name: string; role: 'OWNER' | 'MANAGER' | 'CASHIER'; timezone: string };
+type Workspace = WorkspaceSummary;
 type RecordRow = { id: string; amountCentavos: number; currency: 'PHP'; evidenceState: string; sourceLabel: string; capturedAt: string; receiptTransactionAt: string | null };
 type Home = { today: { recordedCount: number; recordedCentavos: number; notificationMatchedCount: number; notificationMatchedCentavos: number; confirmedManuallyCount: number; confirmedManuallyCentavos: number; unverifiedCount: number; unverifiedCentavos: number; reviewRequiredCount: number; hourlyRecordedCentavos: number[] }; recentRecords: RecordRow[]; collectors: Array<{ deviceId: string; label: string; sourceLabel: string; lastSeenAt: string | null; stale: boolean; notificationAccessGranted: boolean | null }> };
 type Device = { id: string; label: string; platform: string; status: string; lastServerContactAt: string | null; appVersion: string | null };

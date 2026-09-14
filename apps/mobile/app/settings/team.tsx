@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import React, { useState } from 'react';
 import { Share, StyleSheet, View } from 'react-native';
-import { Button, Switch, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, Dialog, Portal, Switch, Text, TextInput, useTheme } from 'react-native-paper';
 import { ErrorState, Group, Loading, Notice, Screen } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useMembers } from '@/lib/queries';
@@ -17,9 +17,14 @@ export default function Team() {
   const [canConfirm, setCanConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [invite, setInvite] = useState<{ inviteToken: string; expiresAt: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const [memberBusyId, setMemberBusyId] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<{ userId: string; displayName: string } | null>(null);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['members'] });
 
   const send = async () => {
+    if (sending) return;
+    setSending(true);
     setError(null);
     try {
       const result = await api<{ inviteToken: string; expiresAt: string }>('/v1/workspaces/current/invites', {
@@ -30,6 +35,43 @@ export default function Team() {
       setEmail('');
     } catch (sendError) {
       setError((sendError as Error).message);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const confirmRemove = async () => {
+    if (!removing) return;
+    const userId = removing.userId;
+    setRemoving(null);
+    await removeMember(userId);
+  };
+
+  const removeMember = async (userId: string) => {
+    if (memberBusyId) return;
+    setMemberBusyId(userId);
+    setError(null);
+    try {
+      await api(`/v1/workspaces/current/members/${userId}`, { method: 'DELETE' });
+      await refresh();
+    } catch (removeError) {
+      setError((removeError as Error).message);
+    } finally {
+      setMemberBusyId(null);
+    }
+  };
+
+  const setCanConfirmMatches = async (userId: string, value: boolean) => {
+    if (memberBusyId) return;
+    setMemberBusyId(userId);
+    setError(null);
+    try {
+      await api(`/v1/workspaces/current/members/${userId}`, { method: 'PATCH', body: { canConfirmMatches: value } });
+      await refresh();
+    } catch (patchError) {
+      setError((patchError as Error).message);
+    } finally {
+      setMemberBusyId(null);
     }
   };
 
@@ -53,13 +95,13 @@ export default function Team() {
                   </Text>
                 </View>
                 {member.role === 'CASHIER' && member.userId !== session?.user.id ? (
-                  <Button compact textColor={theme.colors.error} onPress={() => void api(`/v1/workspaces/current/members/${member.userId}`, { method: 'DELETE' }).then(refresh)}>Remove</Button>
+                  <Button compact textColor={theme.colors.error} disabled={memberBusyId !== null} loading={memberBusyId === member.userId} onPress={() => setRemoving({ userId: member.userId, displayName: member.displayName })}>Remove</Button>
                 ) : null}
               </View>
               {member.role === 'CASHIER' ? (
                 <View style={styles.permission}>
                   <Text variant="bodySmall" style={{ flex: 1, color: theme.colors.onSurfaceVariant }}>Can link suggested notification matches</Text>
-                  <Switch value={member.canConfirmMatches} onValueChange={(value) => void api(`/v1/workspaces/current/members/${member.userId}`, { method: 'PATCH', body: { canConfirmMatches: value } }).then(refresh)} />
+                  <Switch value={member.canConfirmMatches} disabled={memberBusyId !== null} onValueChange={(value) => void setCanConfirmMatches(member.userId, value)} />
                 </View>
               ) : null}
             </View>
@@ -75,7 +117,7 @@ export default function Team() {
           <Switch value={canConfirm} onValueChange={setCanConfirm} />
         </View>
         {error ? <Notice kind="error">{error}</Notice> : null}
-        <Button mode="contained" onPress={() => void send()} disabled={!/\S+@\S+\.\S+/.test(email)} style={{ minHeight: TOUCH_TARGET }}>Create invite</Button>
+        <Button mode="contained" onPress={() => void send()} loading={sending} disabled={sending || !/\S+@\S+\.\S+/.test(email)} style={{ minHeight: TOUCH_TARGET }}>Create invite</Button>
       </View>
 
       {invite ? (
@@ -88,6 +130,19 @@ export default function Team() {
           <Button compact mode="contained-tonal" onPress={() => void Share.share({ message: `Join my PayTsek workspace. Open PayTsek → Join with an invite and enter: ${invite.inviteToken}` })}>Share</Button>
         </View>
       ) : null}
+
+      <Portal>
+        <Dialog visible={removing !== null} onDismiss={() => setRemoving(null)}>
+          <Dialog.Title>Remove {removing?.displayName ?? 'member'}?</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodySmall">They lose access to this workspace immediately. Records they created stay in history.</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setRemoving(null)}>Cancel</Button>
+            <Button textColor={theme.colors.error} onPress={() => void confirmRemove()}>Remove</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </Screen>
   );
 }

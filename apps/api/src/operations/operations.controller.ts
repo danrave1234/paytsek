@@ -4,15 +4,18 @@ import { z } from 'zod';
 import { CurrentUser, UserRoute, Workspace, WorkspaceRoute } from '../auth/decorators';
 import { OwnerOnly, type AuthUser, type WorkspaceContext } from '../auth/guards';
 import { ApiException } from '../common/errors';
+import { loadEnv } from '../config/env';
 import { zod } from '../common/zod.pipe';
 import { AuditService } from '../db/audit.service';
 import { DbService } from '../db/db.service';
 import { StorageService } from '../db/storage.service';
 import { JobsService } from '../jobs/jobs.service';
-import { RECORD_SELECT, toSummary, type RecordRow } from '../records/records.rows';
+import { EFFECTIVE_AT_SQL, RECORD_SELECT, toSummary, type RecordRow } from '../records/records.rows';
 
 @Injectable()
 export class OperationsService {
+  private readonly env = loadEnv();
+
   constructor(
     private readonly db: DbService,
     private readonly storage: StorageService,
@@ -22,10 +25,11 @@ export class OperationsService {
 
   /** Recorded-payment totals for "today" in the workspace timezone. Not wallet balance. */
   async home(orgId: string): Promise<HomeSummary> {
-    const t = await this.db.one<{
-      recorded_n: number; recorded_c: string; matched_n: number; matched_c: string; manual_n: number; manual_c: string; unverified_n: number; unverified_c: string; review_n: number;
-    }>(
-      `with day as (
+    const [t, hourly, collectors, recent] = await Promise.all([
+      this.db.one<{
+        recorded_n: number; recorded_c: string; matched_n: number; matched_c: string; manual_n: number; manual_c: string; unverified_n: number; unverified_c: string; review_n: number;
+      }>(
+        `with day as (
          select
            (date_trunc('day', now() at time zone o.timezone) at time zone o.timezone) as start,
            o.timezone
@@ -34,8 +38,8 @@ export class OperationsService {
          select r.*
          from payment_records r, day
          where r.organization_id = $1
-           and coalesce(r.receipt_transaction_at, r.captured_at, r.created_at) >= day.start
-           and coalesce(r.receipt_transaction_at, r.captured_at, r.created_at) < day.start + interval '1 day'
+           and ${EFFECTIVE_AT_SQL} >= day.start
+           and ${EFFECTIVE_AT_SQL} < day.start + interval '1 day'
        )
        select
          count(*) filter (where evidence_state <> 'VOIDED')::int as recorded_n,
@@ -48,44 +52,45 @@ export class OperationsService {
          coalesce(sum(amount_centavos) filter (where evidence_state = 'UNVERIFIED'),0)::text as unverified_c,
          count(*) filter (where evidence_state = 'REVIEW_REQUIRED')::int as review_n
        from scoped`,
-      [orgId],
-    );
-    const hourly = await this.db.query<{ hour: number | string; amount_c: string }>(
-      `with day as (
+        [orgId],
+      ),
+      this.db.query<{ hour: number | string; amount_c: string }>(
+        `with day as (
          select
            (date_trunc('day', now() at time zone o.timezone) at time zone o.timezone) as start,
            o.timezone
          from organizations o where o.id = $1
        )
        select
-         extract(hour from coalesce(r.receipt_transaction_at, r.captured_at, r.created_at) at time zone day.timezone)::int as hour,
+         extract(hour from ${EFFECTIVE_AT_SQL} at time zone day.timezone)::int as hour,
          coalesce(sum(r.amount_centavos), 0)::text as amount_c
        from payment_records r, day
        where r.organization_id = $1
          and r.evidence_state <> 'VOIDED'
-         and coalesce(r.receipt_transaction_at, r.captured_at, r.created_at) >= day.start
-         and coalesce(r.receipt_transaction_at, r.captured_at, r.created_at) < day.start + interval '1 day'
+         and ${EFFECTIVE_AT_SQL} >= day.start
+         and ${EFFECTIVE_AT_SQL} < day.start + interval '1 day'
        group by 1
        order by 1`,
-      [orgId],
-    );
+        [orgId],
+      ),
+      this.db.query<{ id: string; label: string; source_label: string; last: Date | null; pending: number | null; access: boolean | null }>(
+        `select d.id, d.label, string_agg(distinct s.label, ', ' order by s.label) as source_label,
+              d.last_server_contact_at as last, d.pending_upload_count as pending, d.notification_access_granted as access
+         from device_bindings b join devices d on d.id = b.device_id join payment_sources s on s.id = b.source_id
+        where b.organization_id = $1 and b.status = 'ACTIVE' and d.status <> 'REVOKED' and s.collection_paused = false
+        group by d.id`,
+        [orgId],
+      ),
+      this.db.query<RecordRow>(
+        `${RECORD_SELECT} where r.organization_id = $1 order by r.created_at desc limit 6`,
+        [orgId],
+      ),
+    ]);
     const hourlyRecordedCentavos = Array.from({ length: 24 }, () => 0);
     for (const bucket of hourly.rows) {
       const hour = Number(bucket.hour);
       if (Number.isInteger(hour) && hour >= 0 && hour < 24) hourlyRecordedCentavos[hour] = Number(bucket.amount_c);
     }
-    const collectors = await this.db.query<{ id: string; label: string; source_label: string; last: Date | null; pending: number | null; access: boolean | null }>(
-      `select d.id, d.label, string_agg(distinct s.label, ', ' order by s.label) as source_label,
-              d.last_server_contact_at as last, d.pending_upload_count as pending, d.notification_access_granted as access
-         from device_bindings b join devices d on d.id = b.device_id join payment_sources s on s.id = b.source_id
-        where b.organization_id = $1 and b.status = 'ACTIVE' and d.status <> 'REVOKED' and s.collection_paused = false
-        group by d.id`,
-      [orgId],
-    );
-    const recent = await this.db.query<RecordRow>(
-      `${RECORD_SELECT} where r.organization_id = $1 order by r.created_at desc limit 6`,
-      [orgId],
-    );
     return {
       today: {
         recordedCount: t?.recorded_n ?? 0,
@@ -131,8 +136,8 @@ export class OperationsService {
         cross join context
        where r.organization_id = $1
          and r.evidence_state <> 'VOIDED'
-         and coalesce(r.receipt_transaction_at, r.captured_at, r.created_at) >= context.start_at
-         and coalesce(r.receipt_transaction_at, r.captured_at, r.created_at) < context.end_at
+         and ${EFFECTIVE_AT_SQL} >= context.start_at
+         and ${EFFECTIVE_AT_SQL} < context.end_at
     )`;
 
     const [totals, daily, providers, evidence] = await Promise.all([
@@ -200,7 +205,10 @@ export class OperationsService {
     let url: string | null = null;
     if (e.status === 'READY' && e.storage_path) {
       if (e.expires_at && e.expires_at.getTime() < Date.now()) throw new ApiException('EXPORT_EXPIRED', 'Export expired and was deleted');
-      url = (await this.storage.createSignedDownload(this.storage.exportsBucket, e.storage_path)).url;
+      // Never sign past the export's own expiry; keep a small floor so an imminent link still works once.
+      const configuredTtl = this.env.STORAGE_SIGNED_DOWNLOAD_TTL_SECONDS;
+      const ttl = e.expires_at ? Math.max(60, Math.min(configuredTtl, Math.floor((e.expires_at.getTime() - Date.now()) / 1000))) : configuredTtl;
+      url = (await this.storage.createSignedDownload(this.storage.exportsBucket, e.storage_path, ttl)).url;
     }
     return { id: e.id, status: e.status, format: e.format, createdAt: e.created_at.toISOString(), downloadUrl: url, expiresAt: e.expires_at?.toISOString() ?? null, rowCount: e.row_count, errorCode: e.error_code };
   }
@@ -210,7 +218,14 @@ export class OperationsService {
   async privacyExport(userId: string): Promise<Record<string, unknown>> {
     const profile = await this.db.one(`select user_id, display_name, created_at from profiles where user_id = $1`, [userId]);
     const memberships = await this.db.query(`select organization_id, role, created_at from memberships where user_id = $1`, [userId]);
-    const records = await this.db.query(`select id, organization_id, amount_centavos, evidence_state, created_at from payment_records where created_by = $1 order by created_at desc limit 5000`, [userId]);
+    // Only workspaces the user is still a member of: ex-members must not pull ledger amounts.
+    const records = await this.db.query(
+      `select r.id, r.organization_id, r.amount_centavos, r.evidence_state, r.created_at
+         from payment_records r
+         join memberships m on m.organization_id = r.organization_id and m.user_id = $1
+        where r.created_by = $1 order by r.created_at desc limit 5000`,
+      [userId],
+    );
     return { generatedAt: new Date().toISOString(), profile, memberships: memberships.rows, recordsCreated: records.rows };
   }
 
@@ -272,12 +287,14 @@ export class OperationsController {
 
   @Post('exports')
   @WorkspaceRoute()
+  @OwnerOnly()
   createExport(@Workspace() ws: WorkspaceContext, @CurrentUser() u: AuthUser, @Body(zod(CreateExportRequest)) body: CreateExportRequest) {
     return this.svc.createExport(ws.organizationId, u.id, body);
   }
 
   @Get('exports/:id')
   @WorkspaceRoute()
+  @OwnerOnly()
   exportStatus(@Workspace() ws: WorkspaceContext, @Param('id') id: string) {
     return this.svc.exportStatus(ws.organizationId, id);
   }

@@ -189,6 +189,7 @@ export const AuditAction = z.enum([
   'SOURCE_CREATED',
   'SOURCE_UPDATED',
   'MEMBER_INVITED',
+  'MEMBER_UPDATED',
   'MEMBER_REMOVED',
   'QUOTA_CONSUMED',
   'QUOTA_ADJUSTED',
@@ -196,6 +197,8 @@ export const AuditAction = z.enum([
   'CREDIT_REVOKED',
   'SUBSCRIPTION_CHANGED',
   'EXPORT_CREATED',
+  'WORKSPACE_CREATED',
+  'WORKSPACE_UPDATED',
   'WORKSPACE_DELETED',
 ]);
 export type AuditAction = z.infer<typeof AuditAction>;

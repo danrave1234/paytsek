@@ -22,17 +22,27 @@ import java.util.UUID
  */
 class PayTsekNotificationListener : NotificationListenerService() {
 
-  private lateinit var prefs: CollectorPrefs
-  private lateinit var outbox: OutboxDb
+  // Lazily constructed in the handling path: EncryptedSharedPreferences creation
+  // can throw (AEADBadTagException after backup restore, keystore corruption,
+  // direct-boot) and a construction failure in onCreate would crash-loop the
+  // listener until Android revokes notification access.
+  private var prefsInstance: CollectorPrefs? = null
+  private var outboxInstance: OutboxDb? = null
 
-  override fun onCreate() {
-    super.onCreate()
-    prefs = CollectorPrefs(this)
-    outbox = OutboxDb(this)
-  }
+  private fun prefsOrNull(): CollectorPrefs? =
+    prefsInstance ?: try { CollectorPrefs(this).also { prefsInstance = it } } catch (t: Throwable) {
+      Log.w("PayTsekCollector", "Collector prefs unavailable: ${t.javaClass.simpleName}")
+      null
+    }
+
+  private fun outboxOrNull(): OutboxDb? =
+    outboxInstance ?: try { OutboxDb.getInstance(this).also { outboxInstance = it } } catch (t: Throwable) {
+      Log.w("PayTsekCollector", "Outbox unavailable: ${t.javaClass.simpleName}")
+      null
+    }
 
   override fun onListenerConnected() {
-    prefs.listenerConnected = true
+    prefsOrNull()?.listenerConnected = true
     // Recovery attempt only: enumerate active notifications (deduplicated). Not history.
     try { activeNotifications?.forEach { handle(it, recovery = true) } } catch (_: Throwable) {}
     UploadWorker.enqueue(this, expedited = false)
@@ -43,17 +53,23 @@ class PayTsekNotificationListener : NotificationListenerService() {
   }
 
   override fun onListenerDisconnected() {
-    prefs.listenerConnected = false
+    prefsOrNull()?.listenerConnected = false
   }
 
   override fun onNotificationPosted(sbn: StatusBarNotification) {
-    handle(sbn, recovery = false)
+    // Never let an exception escape: an uncaught throw here crash-loops the
+    // listener service until Android revokes notification access.
+    try { handle(sbn, recovery = false) } catch (t: Throwable) {
+      Log.w("PayTsekCollector", "Failed to handle notification: ${t.javaClass.simpleName}")
+    }
   }
 
   override fun onNotificationRemoved(sbn: StatusBarNotification) { /* removal is not evidence of anything */ }
 
   private fun handle(sbn: StatusBarNotification, recovery: Boolean) {
     val provider = ProviderApps.providerFor(sbn.packageName) ?: return
+    val prefs = prefsOrNull() ?: return
+    val outbox = outboxOrNull() ?: return
     if (!prefs.isConfigured) {
       Log.d("PayTsekCollector", "Ignored $provider notification: collector is not configured")
       return

@@ -35,14 +35,16 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
 
   override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
     val prefs = CollectorPrefs(applicationContext)
-    val outbox = OutboxDb(applicationContext)
+    val outbox = OutboxDb.getInstance(applicationContext)
     if (!prefs.isConfigured) return@withContext Result.success()
-    val base = prefs.apiBaseUrl!!.trimEnd('/')
-    val credential = prefs.credential!!
+    val base = prefs.apiBaseUrl?.trimEnd('/') ?: return@withContext Result.success()
+    val credential = prefs.credential ?: return@withContext Result.success()
 
+    // Rows rejected as DEVICE_PAUSED in this run: never re-POST them within the same run.
+    val skippedIds = mutableSetOf<String>()
     var loops = 0
     while (loops++ < 10) {
-      val pending = outbox.pending(limit = 50)
+      val pending = outbox.pending(limit = 50).filter { it.clientEventId !in skippedIds }
       if (pending.isEmpty()) break
       val batchId = UUID.randomUUID().toString()
       val body = JSONObject().apply {
@@ -75,21 +77,34 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             }
           }
           val acks = JSONObject(res.body?.string() ?: "{}").optJSONArray("acks") ?: JSONArray()
+          var progressed = false
           for (i in 0 until acks.length()) {
             val a = acks.getJSONObject(i)
             val outcome = a.optString("outcome")
             val id = a.optString("clientEventId")
             when (outcome) {
-              "ACCEPTED", "DUPLICATE" -> outbox.markAcknowledged(id, outcome)
+              "ACCEPTED", "DUPLICATE" -> { outbox.markAcknowledged(id, outcome); progressed = true }
               "REJECTED" -> {
                 val reason = a.optString("reason")
                 // Permanent rejections are acknowledged (kept for diagnostics); transient device states retry.
-                if (reason == "DEVICE_PAUSED") { outbox.bumpAttempts(listOf(id)) } else outbox.markAcknowledged(id, "REJECTED:$reason")
+                if (reason == "DEVICE_PAUSED") {
+                  outbox.markRejectedPending(id, "REJECTED:DEVICE_PAUSED")
+                  skippedIds += id
+                } else {
+                  outbox.markAcknowledged(id, "REJECTED:$reason")
+                  progressed = true
+                }
               }
             }
           }
           prefs.lastUploadAt = Iso.now()
           prefs.lastUploadError = null
+          if (!progressed) {
+            // No row was acknowledged: bump the remaining rows and let WorkManager
+            // backoff reschedule instead of re-POSTing them in a tight loop.
+            outbox.bumpAttempts(pending.filter { it.clientEventId !in skippedIds }.map { it.clientEventId })
+            return@withContext Result.retry()
+          }
         }
       } catch (e: Exception) {
         prefs.lastUploadError = e.javaClass.simpleName
@@ -109,10 +124,10 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
         .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
         .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
       if (expedited) builder.setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
-      // A fresh payment should not wait behind a delayed retry. The durable
-      // outbox is the source of truth, so replacing scheduled work cannot lose
-      // an event that has not received a server acknowledgement.
-      WorkManager.getInstance(context).enqueueUniqueWork(UNIQUE, ExistingWorkPolicy.REPLACE, builder.build())
+      // A fresh payment should not wait behind a delayed retry, but replacing an
+      // in-flight worker mid-request can lose acknowledgements. APPEND_OR_REPLACE
+      // lets a running upload finish and chains the new request after it.
+      WorkManager.getInstance(context).enqueueUniqueWork(UNIQUE, ExistingWorkPolicy.APPEND_OR_REPLACE, builder.build())
     }
   }
 }
@@ -127,6 +142,8 @@ class HealthWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
   override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
     val prefs = CollectorPrefs(applicationContext)
     if (!prefs.isConfigured) return@withContext Result.success()
+    val base = prefs.apiBaseUrl?.trimEnd('/') ?: return@withContext Result.success()
+    val credential = prefs.credential ?: return@withContext Result.success()
     val appVersion = try { applicationContext.packageManager.getPackageInfo(applicationContext.packageName, 0).versionName ?: "" } catch (_: Throwable) { "" }
     val apps = JSONArray().apply {
       ProviderApps.detectAll(applicationContext).filter { it.installed }.forEach {
@@ -140,15 +157,15 @@ class HealthWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
       put("appVersion", appVersion)
       put("listenerConnected", prefs.listenerConnected)
       put("notificationAccessGranted", androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(applicationContext).contains(applicationContext.packageName))
-      put("pendingUploadCount", OutboxDb(applicationContext).pendingCount())
+      put("pendingUploadCount", OutboxDb.getInstance(applicationContext).pendingCount())
       put("lastObservedEventAt", prefs.lastObservedEventAt ?: JSONObject.NULL)
       put("unknownTemplateCount", prefs.unknownTemplateCount.toInt())
       put("diagnosticReason", prefs.lastUploadError ?: JSONObject.NULL)
       put("providerApps", apps)
     }
     val req = Request.Builder()
-      .url(prefs.apiBaseUrl!!.trimEnd('/') + "/v1/collector/health")
-      .header("Authorization", "Collector " + prefs.credential!!)
+      .url("$base/v1/collector/health")
+      .header("Authorization", "Collector $credential")
       .header("x-paytsek-api-version", "v1")
       .post(body.toString().toRequestBody("application/json".toMediaType()))
       .build()
@@ -177,7 +194,7 @@ class HealthWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
 class BootReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
-      try { if (OutboxDb(context).pendingCount() > 0) UploadWorker.enqueue(context, expedited = false) } catch (_: Throwable) {}
+      try { if (OutboxDb.getInstance(context).pendingCount() > 0) UploadWorker.enqueue(context, expedited = false) } catch (_: Throwable) {}
     }
   }
 }

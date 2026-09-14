@@ -1,5 +1,5 @@
 import type { CreateRecordResponse, OwnerInboxEvent } from '@paytsek/contracts';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Button, Portal, Snackbar, Text, useTheme } from 'react-native-paper';
 import { ProviderLogo } from '@/components/provider-logo';
@@ -9,15 +9,28 @@ import { newId } from '@/lib/device';
 import { APP_VERSION } from '@/lib/env';
 import { manilaTime, peso } from '@/lib/format';
 import { useInbox, useInvalidateRecord } from '@/lib/queries';
+import { useSession } from '@/lib/session';
 import { SPACING } from '@/theme';
 
 export default function Inbox() {
   const theme = useTheme();
   const query = useInbox();
   const invalidate = useInvalidateRecord();
+  const { workspace } = useSession();
+  const timezone = workspace?.timezone || 'Asia/Manila';
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  // A retried save must reuse the same clientRecordId so a timed-out-but-created
+  // record deduplicates on the server instead of duplicating.
+  const clientRecordIds = useRef(new Map<string, string>());
+  const clientRecordIdFor = (eventId: string) => {
+    const existing = clientRecordIds.current.get(eventId);
+    if (existing) return existing;
+    const id = newId();
+    clientRecordIds.current.set(eventId, id);
+    return id;
+  };
 
   const saveAsRecord = async (event: OwnerInboxEvent) => {
     if (savingId) return;
@@ -44,7 +57,7 @@ export default function Inbox() {
       const response = await api<CreateRecordResponse>('/v1/records', {
         method: 'POST',
         body: {
-          clientRecordId: newId(),
+          clientRecordId: clientRecordIdFor(event.eventId),
           sourceId: event.sourceId,
           proofId: null,
           captureOrigin: 'FROM_EVENT',
@@ -87,7 +100,7 @@ export default function Inbox() {
               <View style={styles.copy}>
                 <Text variant="titleMedium" style={styles.amount}>{peso(event.amountCentavos)}</Text>
                 <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                  {event.sourceLabel} · {manilaTime(event.eventAt, 'SECOND')}
+                  {event.sourceLabel} · {manilaTime(event.eventAt, 'SECOND', timezone)}
                 </Text>
                 <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
                   {event.referenceValue ? 'Reference included' : 'No reference in notification'}

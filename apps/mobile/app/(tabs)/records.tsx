@@ -1,4 +1,4 @@
-import { PROVIDERS, PROVIDER_LABELS, type EvidenceState, type Provider, type RecordSummary } from '@paytsek/contracts';
+import { PROVIDERS, type EvidenceState, type Provider, type RecordSummary } from '@paytsek/contracts';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -8,29 +8,27 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PaymentRecordRow } from '@/components/payment-record-row';
 import { EmptyState, ErrorState, Loading } from '@/components/ui';
 import { listDrafts, type Draft } from '@/lib/drafts';
-import { prefetchRecord, useInfiniteRecords } from '@/lib/queries';
+import { draftOccurredAt, providerLabel, recordOccurredAt } from '@/lib/feed';
+import { getFormatter } from '@/lib/format';
+import { prefetchRecord, useDraftsSignal, useInfiniteRecords } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TAB_BAR_CLEARANCE } from '@/theme';
 
 type RowItem =
-  | { kind: 'draft'; id: string; draft: Draft; at: string; source: string; amount: number; state: EvidenceState }
-  | { kind: 'record'; id: string; record: RecordSummary; at: string; source: string; amount: number; state: EvidenceState };
-
-const providerLabel = (provider: Provider | null | undefined) => provider ? PROVIDER_LABELS[provider] : 'Payment';
-const draftTime = (draft: Draft) => draft.request.corrected.receiptTransactionAt ?? draft.request.capturedAt ?? draft.createdAt;
-const recordTime = (record: RecordSummary) => record.receiptTransactionAt ?? record.capturedAt ?? record.createdAt;
+  | { kind: 'draft'; id: string; draft: Draft; at: string; source: string; amount: number; state: EvidenceState; onPress: () => void; onPressIn?: () => void }
+  | { kind: 'record'; id: string; record: RecordSummary; at: string; source: string; amount: number; state: EvidenceState; onPress: () => void; onPressIn?: () => void };
 
 type EvidenceFilter = 'ALL' | 'STRONG' | 'POSSIBLE' | 'RECORDED' | 'CONFIRMED' | 'VOIDED';
 const EVIDENCE_FILTERS: Array<{ value: EvidenceFilter; label: string; states?: EvidenceState[] }> = [
   { value: 'ALL', label: 'All' },
-  { value: 'STRONG', label: 'Strong', states: ['MATCHED_AUTO', 'MATCHED_BY_USER'] },
-  { value: 'POSSIBLE', label: 'Possible', states: ['REVIEW_REQUIRED'] },
+  { value: 'STRONG', label: 'Strong match', states: ['MATCHED_AUTO', 'MATCHED_BY_USER'] },
+  { value: 'POSSIBLE', label: 'Possible match', states: ['REVIEW_REQUIRED'] },
   { value: 'RECORDED', label: 'Recorded', states: ['UNVERIFIED'] },
-  { value: 'CONFIRMED', label: 'Confirmed', states: ['CONFIRMED_MANUALLY'] },
+  { value: 'CONFIRMED', label: 'Owner confirmed', states: ['CONFIRMED_MANUALLY'] },
   { value: 'VOIDED', label: 'Voided', states: ['VOIDED'] },
 ];
 
-const dayKey = (iso: string, timezone: string) => new Intl.DateTimeFormat('en-CA', {
+const dayKey = (iso: string, timezone: string) => getFormatter('en-CA', {
   timeZone: timezone,
   year: 'numeric',
   month: '2-digit',
@@ -43,12 +41,31 @@ function dayLabel(iso: string, timezone: string) {
   const yesterday = dayKey(new Date(Date.now() - 86_400_000).toISOString(), timezone);
   if (key === today) return 'Today';
   if (key === yesterday) return 'Yesterday';
-  return new Intl.DateTimeFormat('en-PH', {
+  return getFormatter('en-PH', {
     timeZone: timezone,
     month: 'long',
     day: 'numeric',
     year: 'numeric',
   }).format(new Date(iso));
+}
+
+function FilterChip({ selected, onPress, style, children }: {
+  selected: boolean;
+  onPress: () => void;
+  style: object;
+  children: React.ReactNode;
+}) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      style={[style, { borderColor: selected ? theme.colors.primary : theme.colors.outlineVariant, backgroundColor: selected ? theme.colors.primaryContainer : theme.colors.surface }]}
+    >
+      {children}
+    </Pressable>
+  );
 }
 
 export default function Records() {
@@ -69,11 +86,12 @@ export default function Records() {
 
   const evidenceStates = EVIDENCE_FILTERS.find((item) => item.value === evidenceFilter)?.states;
   const query = useInfiniteRecords({ q: search || undefined, state: evidenceStates, provider });
+  const draftsSignal = useDraftsSignal();
   const refreshLocal = useCallback(() => {
     if (!workspace) return;
     void listDrafts(workspace.id, true).then(setDrafts).catch(() => setDrafts([]));
   }, [workspace]);
-  useFocusEffect(useCallback(() => { refreshLocal(); }, [refreshLocal, query.dataUpdatedAt]));
+  useFocusEffect(useCallback(() => { refreshLocal(); }, [refreshLocal, draftsSignal]));
 
   const rows = useMemo<RowItem[]>(() => {
     const remote = query.data?.pages.flatMap((page) => page.items) ?? [];
@@ -89,22 +107,25 @@ export default function Records() {
       kind: 'draft',
       id: draft.clientRecordId,
       draft,
-      at: draftTime(draft),
+      at: draftOccurredAt(draft),
       source: providerLabel(draft.request.corrected.receiptProvider),
       amount: draft.request.corrected.amountCentavos,
       state: 'UNVERIFIED',
+      onPress: () => router.push(`/record/local/${draft.clientRecordId}`),
     }));
     const remoteRows: RowItem[] = remote.map((record) => ({
       kind: 'record',
       id: record.id,
       record,
-      at: recordTime(record),
+      at: recordOccurredAt(record),
       source: record.sourceLabel,
       amount: record.amountCentavos,
       state: record.evidenceState,
+      onPress: () => router.push(`/record/${record.id}`),
+      onPressIn: () => { void prefetchRecord(record.id); },
     }));
     return [...localRows, ...remoteRows].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  }, [drafts, evidenceStates, provider, query.data?.pages, search]);
+  }, [drafts, evidenceStates, provider, query.data?.pages, router, search]);
 
   const hasFilters = Boolean(search || provider || evidenceFilter !== 'ALL');
   const clearFilters = () => {
@@ -151,41 +172,24 @@ export default function Records() {
               {EVIDENCE_FILTERS.map((filter) => {
                 const selected = evidenceFilter === filter.value;
                 return (
-                  <Pressable
-                    key={filter.value}
-                    onPress={() => setEvidenceFilter(filter.value)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    style={[styles.filter, { borderColor: selected ? theme.colors.primary : theme.colors.outlineVariant, backgroundColor: selected ? theme.colors.primaryContainer : theme.colors.surface }]}
-                  >
+                  <FilterChip key={filter.value} selected={selected} onPress={() => setEvidenceFilter(filter.value)} style={styles.filter}>
                     <Text variant="labelMedium" style={{ color: selected ? theme.colors.primary : theme.colors.onSurface }}>{filter.label}</Text>
-                  </Pressable>
+                  </FilterChip>
                 );
               })}
             </ScrollView>
             <Text variant="labelSmall" style={[styles.filterLabel, { color: theme.colors.onSurfaceVariant }]}>PAYMENT APP</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-              <Pressable
-                onPress={() => setProvider(undefined)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: !provider }}
-                style={[styles.sourceFilter, { borderColor: !provider ? theme.colors.primary : theme.colors.outlineVariant, backgroundColor: !provider ? theme.colors.primaryContainer : theme.colors.surface }]}
-              >
+              <FilterChip selected={!provider} onPress={() => setProvider(undefined)} style={styles.sourceFilter}>
                 <Text variant="labelMedium" style={{ color: !provider ? theme.colors.primary : theme.colors.onSurface }}>All apps</Text>
-              </Pressable>
+              </FilterChip>
               {PROVIDERS.map((item) => {
                 const selected = provider === item.value;
                 return (
-                  <Pressable
-                    key={item.value}
-                    onPress={() => setProvider(item.value)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    style={[styles.sourceFilter, { borderColor: selected ? theme.colors.primary : theme.colors.outlineVariant, backgroundColor: selected ? theme.colors.primaryContainer : theme.colors.surface }]}
-                  >
+                  <FilterChip key={item.value} selected={selected} onPress={() => setProvider(item.value)} style={styles.sourceFilter}>
                     <ProviderLogo provider={item.value} size={22} />
                     <Text variant="labelMedium" numberOfLines={1} style={{ color: selected ? theme.colors.primary : theme.colors.onSurface }}>{item.label}</Text>
-                  </Pressable>
+                  </FilterChip>
                 );
               })}
             </ScrollView>
@@ -218,10 +222,8 @@ export default function Records() {
                 state={item.state}
                 timezone={timezone}
                 divider={previousSameDay}
-                onPress={item.kind === 'record'
-                  ? () => router.push(`/record/${item.record.id}`)
-                  : () => router.push(`/record/local/${item.draft.clientRecordId}`)}
-                onPressIn={item.kind === 'record' ? () => { void prefetchRecord(item.record.id); } : undefined}
+                onPress={item.onPress}
+                onPressIn={item.onPressIn}
               />
             </View>
           );

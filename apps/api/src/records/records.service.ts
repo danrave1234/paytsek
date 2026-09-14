@@ -44,6 +44,18 @@ export class RecordsService {
     const c = input.corrected;
     const edited = computeEdited(input.extracted as unknown as Record<string, unknown>, c as unknown as Record<string, unknown>);
 
+    try {
+      return await this.insertRecord(orgId, userId, input, c, edited);
+    } catch (e) {
+      if (!(e instanceof ApiException) || e.code !== 'IDEMPOTENCY_CONFLICT') throw e;
+      // Two clients raced the same clientRecordId: the loser returns the winner's record idempotently.
+      const winner = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.organization_id = $1 and r.client_record_id = $2`, [orgId, input.clientRecordId]);
+      if (winner) return { record: toSummary(winner), deduplicated: true, quotaConsumed: false };
+      throw e;
+    }
+  }
+
+  private insertRecord(orgId: string, userId: string, input: CreateRecordRequest, c: CreateRecordRequest['corrected'], edited: string[]): Promise<CreateRecordResponse> {
     return this.db.tx(async (tx) => {
       let id: string;
       try {
@@ -120,11 +132,24 @@ export class RecordsService {
     if (q.staffUserId) { params.push(q.staffUserId); where.push(`r.created_by = $${params.length}`); }
     if (q.from) { params.push(q.from); where.push(`r.created_at >= $${params.length}`); }
     if (q.to) { params.push(q.to); where.push(`r.created_at <= $${params.length}`); }
-    if (q.cursor) { params.push(q.cursor); where.push(`r.created_at < $${params.length}::timestamptz`); }
+    if (q.cursor) {
+      // Keyset cursor `${iso}_${id}`; legacy cursors carry the timestamp only.
+      const sep = q.cursor.lastIndexOf('_');
+      const cursorId = sep > 0 ? q.cursor.slice(sep + 1) : null;
+      const cursorAt = sep > 0 ? q.cursor.slice(0, sep) : q.cursor;
+      if (cursorId) {
+        params.push(cursorAt, cursorId);
+        where.push(`(r.created_at, r.id) < ($${params.length - 1}::timestamptz, $${params.length}::uuid)`);
+      } else {
+        params.push(cursorAt);
+        where.push(`r.created_at < $${params.length}::timestamptz`);
+      }
+    }
     params.push(q.limit + 1);
-    const r = await this.db.query<RecordRow>(`${RECORD_SELECT} where ${where.join(' and ')} order by r.created_at desc limit $${params.length}`, params);
+    const r = await this.db.query<RecordRow>(`${RECORD_SELECT} where ${where.join(' and ')} order by r.created_at desc, r.id desc limit $${params.length}`, params);
     const items = r.rows.slice(0, q.limit).map(toSummary);
-    const nextCursor = r.rows.length > q.limit ? items[items.length - 1]!.createdAt : null;
+    const last = items[items.length - 1];
+    const nextCursor = r.rows.length > q.limit && last ? `${last.createdAt}_${last.id}` : null;
     return { items, nextCursor };
   }
 

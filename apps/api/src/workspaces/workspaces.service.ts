@@ -1,12 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import type { CreateWorkspaceRequest, InviteMemberRequest, MemberSummary, UpdateMemberRequest, WorkspaceSummary } from '@paytsek/contracts';
+import type { CreateWorkspaceRequest, InviteMemberRequest, MemberSummary, UpdateMemberRequest, UpdateWorkspaceRequest, WorkspaceSummary } from '@paytsek/contracts';
 import { ApiException } from '../common/errors';
 import { generateInviteToken, hashSecret } from '../auth/credentials';
+import { loadEnv } from '../config/env';
 import { AuditService } from '../db/audit.service';
 import { DbService } from '../db/db.service';
 
 @Injectable()
 export class WorkspacesService {
+  private readonly env = loadEnv();
+
   constructor(
     private readonly db: DbService,
     private readonly audit: AuditService,
@@ -35,7 +38,7 @@ export class WorkspacesService {
       );
       const orgId = org.rows[0]!.id;
       await c.query(`insert into memberships (organization_id, user_id, role, can_confirm_matches) values ($1,$2,'OWNER',true)`, [orgId, userId]);
-      await this.audit.record({ organizationId: orgId, actorUserId: userId, action: 'MEMBER_INVITED', subjectType: 'organization', subjectId: orgId, after: { role: 'OWNER', email } }, c);
+      await this.audit.record({ organizationId: orgId, actorUserId: userId, action: 'WORKSPACE_CREATED', subjectType: 'organization', subjectId: orgId, after: { role: 'OWNER', email } }, c);
       return { id: orgId, name: input.name, timezone: input.timezone, role: 'OWNER', isDemo: false, createdAt: org.rows[0]!.created_at.toISOString() };
     });
   }
@@ -61,7 +64,8 @@ export class WorkspacesService {
       );
       const lim = limits.rows[0]!;
       const pending = await c.query<{ n: number }>(`select count(*)::int as n from invitations where organization_id = $1 and accepted_at is null and expires_at > now()`, [orgId]);
-      if (lim.count + (pending.rows[0]?.n ?? 0) >= lim.members) {
+      // Beta never enforces plan member limits, mirroring the device-slot checks in pairing.
+      if (!this.env.BETA_MODE && lim.count + (pending.rows[0]?.n ?? 0) >= lim.members) {
         throw new ApiException('PLAN_LIMIT_MEMBERS', `Your plan allows ${lim.members} members`, { limit: lim.members });
       }
       const token = generateInviteToken();
@@ -87,18 +91,20 @@ export class WorkspacesService {
       if (!row) throw new ApiException('NOT_FOUND', 'Invitation is invalid or expired');
       if (email && row.email !== email.toLowerCase()) throw new ApiException('FORBIDDEN', 'This invitation was sent to a different email address');
       await c.query(`insert into profiles (user_id, display_name) values ($1,$2) on conflict (user_id) do nothing`, [userId, displayName ?? email ?? 'Member']);
+      // Never lower an existing member's role via a stale invite: existing memberships win.
       await c.query(
         `insert into memberships (organization_id, user_id, role, can_confirm_matches) values ($1,$2,$3,$4)
-         on conflict (organization_id, user_id) do update set role = excluded.role, can_confirm_matches = excluded.can_confirm_matches`,
+         on conflict (organization_id, user_id) do nothing`,
         [row.organization_id, userId, row.role, row.can_confirm_matches],
       );
       await c.query(`update invitations set accepted_at = now(), accepted_by = $2 where id = $1`, [row.id, userId]);
+      const membership = await c.query<{ role: MemberSummary['role'] }>(`select role from memberships where organization_id = $1 and user_id = $2`, [row.organization_id, userId]);
       const org = await c.query<{ id: string; name: string; timezone: string; is_demo: boolean; created_at: Date }>(
         `select id, name, timezone, is_demo, created_at from organizations where id = $1`,
         [row.organization_id],
       );
       const o = org.rows[0]!;
-      return { id: o.id, name: o.name, timezone: o.timezone, role: row.role, isDemo: o.is_demo, createdAt: o.created_at.toISOString() };
+      return { id: o.id, name: o.name, timezone: o.timezone, role: membership.rows[0]?.role ?? row.role, isDemo: o.is_demo, createdAt: o.created_at.toISOString() };
     });
   }
 
@@ -111,13 +117,33 @@ export class WorkspacesService {
       `update memberships set role = coalesce($3, role), can_confirm_matches = coalesce($4, can_confirm_matches) where organization_id = $1 and user_id = $2`,
       [orgId, userId, input.role ?? null, input.canConfirmMatches ?? null],
     );
-    await this.audit.record({ organizationId: orgId, actorUserId: actorId, action: 'MEMBER_INVITED', subjectType: 'membership', subjectId: userId, after: input as Record<string, unknown> });
+    await this.audit.record({ organizationId: orgId, actorUserId: actorId, action: 'MEMBER_UPDATED', subjectType: 'membership', subjectId: userId, after: input as Record<string, unknown> });
+  }
+
+  async updateWorkspace(orgId: string, actorId: string, input: UpdateWorkspaceRequest): Promise<WorkspaceSummary> {
+    return this.db.tx(async (c) => {
+      const before = await c.query<{ name: string; timezone: string }>(`select name, timezone from organizations where id = $1 for update`, [orgId]);
+      if (!before.rows[0]) throw new ApiException('NOT_FOUND', 'Workspace not found');
+      const r = await c.query<{ id: string; name: string; timezone: string; is_demo: boolean; created_at: Date }>(
+        `update organizations set name = coalesce($2, name), timezone = coalesce($3, timezone) where id = $1
+         returning id, name, timezone, is_demo, created_at`,
+        [orgId, input.name ?? null, input.timezone ?? null],
+      );
+      const o = r.rows[0]!;
+      await this.audit.record({ organizationId: orgId, actorUserId: actorId, action: 'WORKSPACE_UPDATED', subjectType: 'organization', subjectId: orgId, before: before.rows[0], after: { name: o.name, timezone: o.timezone } }, c);
+      return { id: o.id, name: o.name, timezone: o.timezone, role: 'OWNER', isDemo: o.is_demo, createdAt: o.created_at.toISOString() };
+    });
   }
 
   async removeMember(orgId: string, actorId: string, userId: string): Promise<void> {
     if (actorId === userId) throw new ApiException('CONFLICT', 'Use workspace deletion or owner transfer instead of removing yourself');
     // Business-owned records stay; created_by references the removed user's id for audit continuity.
-    await this.db.query(`delete from memberships where organization_id = $1 and user_id = $2 and role <> 'OWNER'`, [orgId, userId]);
+    const deleted = await this.db.query(`delete from memberships where organization_id = $1 and user_id = $2 and role <> 'OWNER'`, [orgId, userId]);
+    if (!deleted.rowCount) {
+      const target = await this.db.one<{ role: MemberSummary['role'] }>(`select role from memberships where organization_id = $1 and user_id = $2`, [orgId, userId]);
+      if (target?.role === 'OWNER') throw new ApiException('CONFLICT', 'Owners cannot be removed. Transfer ownership first.');
+      throw new ApiException('NOT_FOUND', 'Member not found');
+    }
     await this.audit.record({ organizationId: orgId, actorUserId: actorId, action: 'MEMBER_REMOVED', subjectType: 'membership', subjectId: userId });
   }
 }

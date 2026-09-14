@@ -14,7 +14,8 @@ import { useThemeMode } from '@/lib/theme-mode';
 export default function Settings() {
   const router = useRouter();
   const theme = useTheme();
-  const { setMode } = useThemeMode();
+  const { mode, setMode } = useThemeMode();
+  const nextMode = mode === 'system' ? 'light' : mode === 'light' ? 'dark' : 'system';
   const isOwner = useIsOwner();
   const { workspace, signOut, selectWorkspace, workspaces } = useSession();
   const update = useAppUpdate();
@@ -37,11 +38,11 @@ export default function Settings() {
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <ScreenTitle title="Settings" />
         <IconButton
-          icon={theme.dark ? 'weather-sunny' : 'weather-night'}
+          icon={mode === 'system' ? 'theme-light-dark' : mode === 'light' ? 'weather-sunny' : 'weather-night'}
           mode="contained-tonal"
           size={20}
-          onPress={() => void setMode(theme.dark ? 'light' : 'dark')}
-          accessibilityLabel={theme.dark ? 'Switch to light mode' : 'Switch to dark mode'}
+          onPress={() => void setMode(nextMode)}
+          accessibilityLabel={`Theme: ${mode}. Switch to ${nextMode} mode`}
         />
       </View>
 

@@ -1,7 +1,7 @@
 import type { WorkspaceSummary } from '@paytsek/contracts';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Button, Icon, Text, TextInput, TouchableRipple, useTheme } from 'react-native-paper';
+import { Button, Icon, Text, TextInput, TouchableRipple, useTheme } from 'react-native-paper';
 import { Notice, Screen, ScreenTitle } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
@@ -16,7 +16,6 @@ export default function Workspaces() {
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const autoCreateStarted = useRef(false);
   const emailName = session?.user.email?.split('@')[0]?.replace(/[._-]+/g, ' ').trim();
   const metadataName = session?.user.user_metadata?.full_name;
   const displayName = typeof metadataName === 'string' && metadataName.trim() ? metadataName.trim() : (emailName || 'Owner');
@@ -41,12 +40,6 @@ export default function Workspaces() {
     }
   };
 
-  useEffect(() => {
-    if (!session || workspaces.length || joining || autoCreateStarted.current) return;
-    autoCreateStarted.current = true;
-    void create();
-  }, [error, joining, session, workspaces.length]);
-
   const accept = async () => {
     if (busy) return;
     setBusy(true);
@@ -66,10 +59,6 @@ export default function Workspaces() {
     }
   };
 
-  if (!workspaces.length && !joining && !error) {
-    return <Screen scroll={false} style={styles.center}><ActivityIndicator size="large" /></Screen>;
-  }
-
   return (
     <Screen>
       <ScreenTitle
@@ -87,14 +76,9 @@ export default function Workspaces() {
         </TouchableRipple>
       ))}
 
-      {error ? <Notice kind="error">Couldn’t finish setup.</Notice> : null}
+      {error ? <Notice kind="error">{error}</Notice> : null}
 
-      {!joining && !creating && workspaces.length ? (
-        <View style={styles.secondaryActions}>
-          <Button mode="outlined" icon="plus" onPress={() => setCreating(true)}>New workspace</Button>
-          <Button mode="text" onPress={() => setJoining(true)}>Join with a code</Button>
-        </View>
-      ) : creating ? (
+      {creating ? (
         <View style={styles.form}>
           <TextInput label="Workspace name" mode="outlined" value={businessName} onChangeText={setBusinessName} maxLength={80} />
           <Button mode="contained" loading={busy} disabled={busy} onPress={() => void create()} contentStyle={{ minHeight: TOUCH_TARGET }}>
@@ -110,19 +94,15 @@ export default function Workspaces() {
           </Button>
           <Button mode="text" onPress={() => setJoining(false)}>Back</Button>
         </View>
+      ) : workspaces.length ? (
+        <View style={styles.secondaryActions}>
+          <Button mode="outlined" icon="plus" onPress={() => setCreating(true)}>New workspace</Button>
+          <Button mode="text" onPress={() => setJoining(true)}>Join with a code</Button>
+        </View>
       ) : (
         <View style={styles.form}>
-          <Button
-            mode="contained"
-            loading={busy}
-            disabled={busy}
-            onPress={() => {
-              autoCreateStarted.current = false;
-              setError(null);
-            }}
-            contentStyle={{ minHeight: TOUCH_TARGET }}
-          >
-            Try again
+          <Button mode="contained" icon="plus" onPress={() => setCreating(true)} contentStyle={{ minHeight: TOUCH_TARGET }}>
+            Create workspace
           </Button>
           <Button mode="text" onPress={() => setJoining(true)}>Join with a code</Button>
         </View>
@@ -137,5 +117,4 @@ const styles = StyleSheet.create({
   workspace: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: SPACING.md, padding: SPACING.md, borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth },
   form: { gap: SPACING.md, marginTop: SPACING.sm },
   secondaryActions: { gap: SPACING.xs, marginTop: SPACING.xs },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

@@ -155,7 +155,8 @@ export class PairingService {
   }
 
   // ---- Device: poll status; credential is minted exactly once ---------------
-  async poll(sessionId: string, deviceInstallId: string, code: string): Promise<AcceptPairingResponse> {
+  async poll(sessionId: string, deviceInstallId: string, code: string, ipBucket: string): Promise<AcceptPairingResponse> {
+    await this.rateLimit([`ip:${ipBucket}`, `install:${deviceInstallId}`]);
     const codeHash = hashSecret(normalizePairingCode(code));
     return this.db.tx(async (c) => {
       const s = await c.query<SessionRow & { org_name: string; source_label: string; provider: Provider; install_id: string }>(
@@ -193,7 +194,8 @@ export class PairingService {
   // ---- Collector: rotate own credential -----------------------------------------
   async rotate(deviceId: string): Promise<{ collectorCredential: string }> {
     const credential = generateCollectorCredential();
-    await this.db.query(`update devices set credential_hash = $2, credential_rotated_at = now() where id = $1 and status <> 'REVOKED'`, [deviceId, hashSecret(credential)]);
+    const r = await this.db.query(`update devices set credential_hash = $2, credential_rotated_at = now() where id = $1 and status <> 'REVOKED'`, [deviceId, hashSecret(credential)]);
+    if (!r.rowCount) throw new ApiException('COLLECTOR_CREDENTIAL_REVOKED', 'This device was revoked and cannot rotate its credential');
     return { collectorCredential: credential };
   }
 

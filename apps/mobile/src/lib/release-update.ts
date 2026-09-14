@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
+import * as Crypto from 'expo-crypto';
+import { File } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { Linking, Platform } from 'react-native';
@@ -23,6 +25,7 @@ export type AppUpdate = {
   releaseUrl: string;
   publishedAt: string | null;
   sizeBytes: number;
+  checksumUrl: string | null;
 };
 
 const APK_MIME_TYPE = 'application/vnd.android.package-archive';
@@ -64,6 +67,8 @@ async function latestRelease(): Promise<AppUpdate | null> {
   const release = await response.json() as GitHubRelease;
   const apk = release.assets.find((asset) => asset.name.toLowerCase().endsWith('.apk'));
   if (!apk || !isNewerVersion(release.tag_name, APP_VERSION)) return null;
+  // The release workflow publishes a sha256sum file named "<apk>.sha256" next to every APK.
+  const checksum = release.assets.find((asset) => asset.name === `${apk.name}.sha256`);
   const version = release.tag_name.replace(/^v/i, '');
   return {
     version,
@@ -73,6 +78,7 @@ async function latestRelease(): Promise<AppUpdate | null> {
     releaseUrl: release.html_url,
     publishedAt: release.published_at,
     sizeBytes: apk.size,
+    checksumUrl: checksum?.browser_download_url ?? null,
   };
 }
 
@@ -87,6 +93,20 @@ export function useAppUpdate() {
     refetchOnReconnect: true,
     refetchOnWindowFocus: true,
   });
+}
+
+/** Reads the expected APK digest from the release's sha256sum asset. */
+async function expectedSha256(checksumUrl: string): Promise<string | null> {
+  const response = await fetch(checksumUrl);
+  if (!response.ok) return null;
+  const hash = (await response.text()).trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+  return /^[0-9a-f]{64}$/.test(hash) ? hash : null;
+}
+
+async function fileSha256(uri: string): Promise<string> {
+  const bytes = await new File(uri).bytes();
+  const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, bytes);
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 /**
@@ -114,7 +134,14 @@ export async function downloadAndInstallUpdate(
   // The app becomes active again afterwards, so reuse the completed, versioned
   // APK rather than deleting it and downloading it a second time.
   const existing = await FileSystem.getInfoAsync(destination);
+  const expected = update.checksumUrl ? await expectedSha256(update.checksumUrl) : null;
   let apkUri = existing.exists && existing.size === update.sizeBytes ? destination : null;
+
+  // A reused cached APK must pass the same SHA-256 verification as a fresh download.
+  if (apkUri && expected && (await fileSha256(apkUri)) !== expected) {
+    await FileSystem.deleteAsync(apkUri, { idempotent: true });
+    apkUri = null;
+  }
 
   // A cancelled download used to be treated as a complete APK merely because
   // it contained some bytes. Remove every incomplete cache entry before retrying.
@@ -143,6 +170,11 @@ export async function downloadAndInstallUpdate(
     if (!signature.startsWith('UEsDB')) {
       await FileSystem.deleteAsync(partialDestination, { idempotent: true });
       throw new Error('GitHub did not return a valid Android package. Please try again.');
+    }
+    // Verify the download against the release's published SHA-256 checksum.
+    if (expected && (await fileSha256(result.uri)) !== expected) {
+      await FileSystem.deleteAsync(partialDestination, { idempotent: true });
+      throw new Error('The downloaded APK failed checksum verification. Please try again.');
     }
     await FileSystem.moveAsync({ from: result.uri, to: destination });
     apkUri = destination;

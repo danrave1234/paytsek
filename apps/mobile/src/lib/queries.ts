@@ -1,7 +1,6 @@
 import type {
   AnalyticsRange,
   AnalyticsSummary,
-  CandidatesResponse,
   CorrectRecordRequest,
   DeviceSummary,
   HomeSummary,
@@ -12,15 +11,23 @@ import type {
   SourceSummary,
   WorkspaceSummary,
 } from '@paytsek/contracts';
-import { QueryClient, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from './api';
+import { QueryClient, keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ApiError, api } from './api';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 
 /** One query client; server state is the system of record (no duplicate stores). */
 export const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 60_000, gcTime: 10 * 60_000, retry: 1, refetchOnReconnect: true, refetchOnWindowFocus: true, refetchIntervalInBackground: false },
+    queries: {
+      staleTime: 60_000,
+      gcTime: 10 * 60_000,
+      // Never retry deterministic client errors (401/403/404/...); retry once otherwise.
+      retry: (count, err) => count < 1 && !(err instanceof ApiError && err.status < 500),
+      refetchOnReconnect: true,
+      refetchOnWindowFocus: true,
+      refetchIntervalInBackground: false,
+    },
     mutations: { retry: 0 },
   },
 });
@@ -44,7 +51,7 @@ export const keys = {
   devices: ['devices'] as const,
   members: ['members'] as const,
   inbox: ['inbox'] as const,
-  records: (filters: Record<string, unknown>) => ['records', filters] as const,
+  drafts: ['drafts'] as const,
   recordsInfinite: (filters: Record<string, unknown>) => ['records', 'infinite', filters] as const,
   record: (id: string) => ['record', id] as const,
   candidates: (id: string) => ['candidates', id] as const,
@@ -58,9 +65,23 @@ export const useHome = () => useQuery({
   staleTime: 30_000,
   refetchInterval: useVisiblePolling(30_000),
 });
+/** Read Today's cached /v1/home without driving another polling interval. */
+export const useHomeSnapshot = () => useQuery({
+  queryKey: keys.home,
+  queryFn: ({ signal }) => api<HomeSummary>('/v1/home', { signal }),
+  staleTime: 30_000,
+});
+/**
+ * Cheap local-drafts change signal. Screens re-read SQLite drafts when this
+ * query's dataUpdatedAt changes; draft sync completion invalidates it after pruning.
+ */
+export const useDraftsSignal = () => useQuery({ queryKey: keys.drafts, queryFn: () => Date.now(), staleTime: Infinity, gcTime: Infinity }).dataUpdatedAt;
+export const invalidateDrafts = () => queryClient.invalidateQueries({ queryKey: keys.drafts });
 export const useAnalytics = (range: AnalyticsRange) => useQuery({
   queryKey: keys.analytics(range),
   queryFn: ({ signal }) => api<AnalyticsSummary>(`/v1/analytics?range=${range}`, { signal }),
+  // Switching the range keeps the previous dashboard visible instead of flashing a skeleton.
+  placeholderData: keepPreviousData,
   staleTime: 2 * 60_000,
   refetchInterval: useVisiblePolling(2 * 60_000),
 });
@@ -68,20 +89,6 @@ export const useSources = () => useQuery({ queryKey: keys.sources, queryFn: ({ s
 export const useDevices = () => useQuery({ queryKey: keys.devices, queryFn: ({ signal }) => api<DeviceSummary[]>('/v1/devices', { signal }), refetchInterval: useVisiblePolling(60_000) });
 export const useMembers = () => useQuery({ queryKey: keys.members, queryFn: ({ signal }) => api<MemberSummary[]>('/v1/workspaces/current/members', { signal }) });
 export const useInbox = () => useQuery({ queryKey: keys.inbox, queryFn: ({ signal }) => api<OwnerInboxEvent[]>('/v1/inbox?unlinkedOnly=true&limit=100', { signal }) });
-
-export function useRecords(filters: { q?: string; state?: string[]; sourceId?: string; provider?: string; staffUserId?: string; from?: string; to?: string; cursor?: string }) {
-  const qs = new URLSearchParams();
-  if (filters.q) qs.set('q', filters.q);
-  if (filters.state?.length) qs.set('state', filters.state.join(','));
-  if (filters.sourceId) qs.set('sourceId', filters.sourceId);
-  if (filters.provider) qs.set('provider', filters.provider);
-  if (filters.staffUserId) qs.set('staffUserId', filters.staffUserId);
-  if (filters.from) qs.set('from', filters.from);
-  if (filters.to) qs.set('to', filters.to);
-  if (filters.cursor) qs.set('cursor', filters.cursor);
-  qs.set('limit', '30');
-  return useQuery({ queryKey: keys.records(filters), queryFn: ({ signal }) => api<ListRecordsResponse>(`/v1/records?${qs.toString()}`, { signal }), refetchInterval: useVisiblePolling(30_000) });
-}
 
 /** Full ledger pagination. It is mounted only by Records and fetches the next page near scroll end. */
 export function useInfiniteRecords(filters: { q?: string; state?: string[]; sourceId?: string; provider?: string; staffUserId?: string; from?: string; to?: string }) {
@@ -102,13 +109,14 @@ export function useInfiniteRecords(filters: { q?: string; state?: string[]; sour
       return api<ListRecordsResponse>(`/v1/records?${qs.toString()}`, { signal });
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor,
+    // Search/filter changes keep the previous list on screen while the new page loads.
+    placeholderData: keepPreviousData,
     staleTime: 60_000,
   });
 }
 
 /** Keep an open record current while a notification from the payment phone is arriving. */
 export const useRecord = (id: string) => useQuery({ queryKey: keys.record(id), queryFn: ({ signal }) => api<RecordDetail>(`/v1/records/${id}`, { signal }), enabled: !!id, refetchInterval: useVisiblePolling(15_000) });
-export const useCandidates = (id: string) => useQuery({ queryKey: keys.candidates(id), queryFn: ({ signal }) => api<CandidatesResponse>(`/v1/records/${id}/candidates`, { signal }), enabled: !!id, refetchInterval: useVisiblePolling(30_000) });
 
 /** Warm a record while the user is pressing its row; navigation still owns rendering. */
 export const prefetchRecord = (id: string) => queryClient.prefetchQuery({

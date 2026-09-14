@@ -20,7 +20,7 @@ import javax.crypto.spec.GCMParameterSpec
  * stored. Bounded: oldest acknowledged rows are pruned; unacknowledged rows are
  * capped with a visible warning rather than silently dropped.
  */
-class OutboxDb(context: Context) : SQLiteOpenHelper(context, "paytsek_outbox.db", null, 1) {
+class OutboxDb private constructor(context: Context) : SQLiteOpenHelper(context, "paytsek_outbox.db", null, 1) {
 
   data class Item(
     val clientEventId: String,
@@ -52,6 +52,10 @@ class OutboxDb(context: Context) : SQLiteOpenHelper(context, "paytsek_outbox.db"
   }
 
   override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+
+  override fun onConfigure(db: SQLiteDatabase) {
+    db.enableWriteAheadLogging()
+  }
 
   /** Insert; returns false when the lifecycle key was already seen (repost/update of same notification). */
   fun insertIfNew(item: Item): Boolean {
@@ -105,6 +109,14 @@ class OutboxDb(context: Context) : SQLiteOpenHelper(context, "paytsek_outbox.db"
     writableDatabase.execSQL("update outbox set attempts = attempts + 1 where client_event_id in ($marks)", ids.toTypedArray())
   }
 
+  /** Record a transient rejection (e.g. REJECTED:DEVICE_PAUSED) without acknowledging the row. */
+  fun markRejectedPending(clientEventId: String, outcome: String) {
+    writableDatabase.execSQL(
+      "update outbox set attempts = attempts + 1, outcome = ? where client_event_id = ?",
+      arrayOf(outcome, clientEventId),
+    )
+  }
+
   /** Retention: acknowledged rows older than 7 days are removed; unacknowledged rows are capped at 2000 (oldest evicted, counted). */
   fun enforceBounds(): Int {
     val db = writableDatabase
@@ -112,18 +124,51 @@ class OutboxDb(context: Context) : SQLiteOpenHelper(context, "paytsek_outbox.db"
     val pending = pendingCount()
     val overflow = pending - MAX_PENDING
     if (overflow > 0) {
+      // Evict transiently-rejected rows before never-attempted ones, oldest first.
       db.execSQL(
-        "delete from outbox where client_event_id in (select client_event_id from outbox where acknowledged = 0 order by posted_at limit ?)",
+        "delete from outbox where client_event_id in (select client_event_id from outbox where acknowledged = 0 order by (case when outcome like 'REJECTED:%' then 0 else 1 end), posted_at limit ?)",
         arrayOf(overflow.toString()),
       )
+      addDroppedEvents(overflow.toLong())
       return overflow
     }
     return 0
   }
 
+  /** Running counter of unacknowledged rows evicted by enforceBounds, so JS can surface a warning. */
+  fun droppedEventCount(): Long {
+    ensureMeta(readableDatabase)
+    return readableDatabase.rawQuery("select value from outbox_meta where key = 'droppedEventCount'", null).use {
+      if (it.moveToFirst()) it.getString(0).toLongOrNull() ?: 0L else 0L
+    }
+  }
+
+  private fun addDroppedEvents(count: Long) {
+    if (count <= 0) return
+    val db = writableDatabase
+    ensureMeta(db)
+    db.execSQL("insert or ignore into outbox_meta(key, value) values('droppedEventCount', '0')")
+    db.execSQL(
+      "update outbox_meta set value = cast(cast(value as integer) + ? as text) where key = 'droppedEventCount'",
+      arrayOf(count.toString()),
+    )
+  }
+
+  private fun ensureMeta(db: SQLiteDatabase) {
+    db.execSQL("create table if not exists outbox_meta (key text primary key, value text not null)")
+  }
+
   companion object {
     const val MAX_PENDING = 2000
     const val WARN_PENDING = 200
+
+    @Volatile private var instance: OutboxDb? = null
+
+    /** Single helper per process so the listener, workers and module share one SQLite connection pool. */
+    fun getInstance(context: Context): OutboxDb =
+      instance ?: synchronized(this) {
+        instance ?: OutboxDb(context.applicationContext).also { instance = it }
+      }
   }
 }
 

@@ -7,8 +7,10 @@ import {
   EvidenceState,
   IncomingPaymentEventInput,
   PLAN_LIMITS,
+  AuditAction,
   ReceiptFields,
   ReceiptProviderDetection,
+  UpdateWorkspaceRequest,
 } from './index';
 
 describe('contracts', () => {
@@ -81,6 +83,19 @@ describe('contracts', () => {
     };
     expect(ConfigureCurrentCollectorRequest.safeParse({ ...base, platform: 'ANDROID' }).success).toBe(true);
     expect(ConfigureCurrentCollectorRequest.safeParse({ ...base, platform: 'IOS' }).success).toBe(false);
+  });
+
+  it('distinguishes workspace and member audit actions', () => {
+    for (const action of ['WORKSPACE_CREATED', 'WORKSPACE_UPDATED', 'MEMBER_UPDATED', 'MEMBER_INVITED']) {
+      expect(AuditAction.options).toContain(action);
+    }
+  });
+
+  it('requires at least one field and non-empty timezone when updating a workspace', () => {
+    expect(UpdateWorkspaceRequest.safeParse({}).success).toBe(false);
+    expect(UpdateWorkspaceRequest.safeParse({ timezone: '' }).success).toBe(false);
+    expect(UpdateWorkspaceRequest.safeParse({ name: 'Luna’s Store' }).success).toBe(true);
+    expect(UpdateWorkspaceRequest.safeParse({ timezone: 'Asia/Manila' }).success).toBe(true);
   });
 
   it('rejects non-integer or non-positive event amounts', () => {

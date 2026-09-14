@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { CollectorStatus } from 'payment-collector';
 import React, { useEffect, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
-import { Button, Icon, Text, useTheme } from 'react-native-paper';
+import { Button, Dialog, Icon, Portal, Text, useTheme } from 'react-native-paper';
 import { ErrorState, Group, ListRow, Loading, Notice, Row, Screen } from '@/components/ui';
 import { api } from '@/lib/api';
 import { collectorStatus, getCollectorBinding, reportHealth } from '@/lib/collector';
@@ -20,6 +20,7 @@ export default function Devices() {
   const [local, setLocal] = useState<CollectorStatus | null>(null);
   const [localDeviceId, setLocalDeviceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState<{ id: string; label: string } | null>(null);
   const localCollecting = Boolean(local?.configured && local.enabledProviders.length > 0);
   const localReady = Boolean(localCollecting && local?.notificationAccessGranted && local.listenerConnected && !local.paused);
 
@@ -49,6 +50,13 @@ export default function Devices() {
     } catch (statusError) {
       setError((statusError as Error).message);
     }
+  };
+
+  const confirmRevoke = async () => {
+    if (!revoking) return;
+    const id = revoking.id;
+    setRevoking(null);
+    await setStatus(id, 'REVOKED');
   };
 
   const remoteDevices = (query.data ?? []).filter((device) => device.id !== localDeviceId);
@@ -99,7 +107,7 @@ export default function Devices() {
               <Button compact onPress={() => void setStatus(device.id, device.status === 'PAUSED' ? 'ACTIVE' : 'PAUSED')}>
                 {device.status === 'PAUSED' ? 'Resume' : 'Pause'}
               </Button>
-              <Button compact textColor={theme.colors.error} onPress={() => void setStatus(device.id, 'REVOKED')}>Disconnect</Button>
+              <Button compact textColor={theme.colors.error} onPress={() => setRevoking({ id: device.id, label: device.label })}>Disconnect</Button>
             </View>
           ) : null}
         </Group>
@@ -108,6 +116,19 @@ export default function Devices() {
       {!query.isLoading && !local?.supported && remoteDevices.length === 0 ? (
         <View style={styles.empty}><Icon source="cellphone-off" size={30} color={theme.colors.onSurfaceVariant} /><Text variant="bodyMedium">No connected devices</Text></View>
       ) : null}
+
+      <Portal>
+        <Dialog visible={revoking !== null} onDismiss={() => setRevoking(null)}>
+          <Dialog.Title>Disconnect {revoking?.label ?? 'device'}?</Dialog.Title>
+          <Dialog.Content>
+            <Text variant="bodySmall">This permanently stops the phone from sending wallet notifications. Pair it again with a new code to reconnect.</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setRevoking(null)}>Cancel</Button>
+            <Button textColor={theme.colors.error} onPress={() => void confirmRevoke()}>Disconnect</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </Screen>
   );
 }
