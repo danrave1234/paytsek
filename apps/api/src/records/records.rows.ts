@@ -5,6 +5,8 @@ export interface RecordRow {
   organization_id: string;
   source_id: string | null;
   source_label: string;
+  receiving_provider: ReceiptFields['receiptProvider'];
+  receiving_source_label: string | null;
   proof_id: string | null;
   capture_origin: RecordDetail['captureOrigin'];
   created_by: string;
@@ -40,6 +42,8 @@ export interface RecordRow {
 
 export const RECORD_SELECT = `
   select r.*,
+         s.provider as receiving_provider,
+         s.label as receiving_source_label,
          case r.receipt_provider
            when 'GCASH' then 'GCash'
            when 'GOTYME' then 'GoTyme'
@@ -87,6 +91,9 @@ export function toSummary(r: RecordRow): RecordSummary {
     organizationId: r.organization_id,
     sourceId: r.source_id,
     sourceLabel: r.source_label,
+    receiptProvider: r.receipt_provider,
+    receivingProvider: r.receiving_provider,
+    receivingSourceLabel: r.receiving_source_label,
     evidenceState: r.evidence_state,
     flags: r.flags ?? [],
     syncStatus: 'SYNCED',

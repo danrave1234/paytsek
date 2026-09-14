@@ -35,6 +35,9 @@ export function AppUpdateDialog({ update, visible, onDismiss }: Props) {
           <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
             Version {update?.version}{update?.sizeBytes ? ` · ${(update.sizeBytes / 1_048_576).toFixed(1)} MB` : ''}
           </Text>
+          <Text variant="bodySmall" style={[styles.updateSafety, { color: theme.colors.onSurfaceVariant }]}>
+            Install over your current app. Don’t uninstall first—offline scans that have not synced yet live only on this phone.
+          </Text>
           <ScrollView
             style={styles.notesScroll}
             contentContainerStyle={styles.notes}
@@ -68,6 +71,7 @@ export function AppUpdateDialog({ update, visible, onDismiss }: Props) {
 }
 
 const styles = StyleSheet.create({
+  updateSafety: { marginTop: SPACING.sm },
   notesScroll: { maxHeight: 260, marginTop: SPACING.lg },
   notes: { gap: SPACING.sm, paddingBottom: SPACING.xs },
   note: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm },

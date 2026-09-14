@@ -2,6 +2,14 @@
 
 Source of truth: `packages/receipt-parsers/src/registry.ts` (`FLOW_REGISTRY`). The app reads `autoMatchFlows` per receiving source from the API, so this table and the UI can never disagree with the code.
 
+## Receipt wallet classification
+
+`OCR_LAYOUT_V1` identifies the wallet that issued the customer's proof. It combines exact brand wording, issuer phrases, OCR confidence, line position relative to amount/reference fields, and provider-specific receipt wording. Wallet names used only in destination context (for example, `To ... / GCash 09...`) are ignored. An imported screenshot filename can support another signal but is never sufficient by itself. If the best candidate does not clear both the minimum score and the runner-up margin, the receipt wallet stays unknown and the record is still saved.
+
+This is separate from the receiving wallet. The receiving wallet comes from the allowlisted Android notification package and is attached through `source_id` only after notification evidence is selected. Classification describes the screenshot; it does not authenticate the screenshot or prove that money moved.
+
+Provider detection evidence is stored as bounded method/confidence/candidate scores and privacy-safe signal codes alongside the OCR result. Add visual-model classification only after a versioned, consented, redacted evaluation set proves it improves held-out accuracy across provider versions, light/dark modes, direct screenshots, and photographed screens.
+
 A flow is **(receipt provider, receiving provider, rail)**, and `autoMatchFlow()` resolves it using the rail from the *customer's confirmation* — a "money received" notification never says which rail was used. That is what stops an untested rail borrowing an enabled rail's rule.
 
 **Collecting samples.** Unrecognised notifications are discarded by default. On the Android payment phone, Settings → Unknown formats turns on opt-in capture of *redacted shapes* (digits → `#`, letters → `a`/`A`) for `UNKNOWN_TEMPLATE` rejections only; OTP and security messages are never eligible. Export from that screen and paste into `tests/fixtures/`.

@@ -8,6 +8,7 @@ import {
   IncomingPaymentEventInput,
   PLAN_LIMITS,
   ReceiptFields,
+  ReceiptProviderDetection,
 } from './index';
 
 describe('contracts', () => {
@@ -53,6 +54,21 @@ describe('contracts', () => {
   it('does not require notification setup before recording a proof', () => {
     expect(CreateRecordRequest.shape.sourceId.parse(undefined)).toBeNull();
     expect(CreateRecordRequest.shape.sourceId.parse(null)).toBeNull();
+  });
+
+  it('keeps provider-classification evidence structured and free of OCR text', () => {
+    const valid = {
+      provider: 'GCASH',
+      confidence: 0.86,
+      method: 'OCR_LAYOUT_V1',
+      signalCodes: ['GCASH_ISSUER_PHRASE', 'GCASH_BEFORE_FIELDS'],
+      candidates: [
+        { provider: 'GCASH', score: 0.86 },
+        { provider: 'MAYA', score: 0 },
+      ],
+    };
+    expect(ReceiptProviderDetection.safeParse(valid).success).toBe(true);
+    expect(ReceiptProviderDetection.safeParse({ ...valid, signalCodes: ['Sent via GCash'] }).success).toBe(false);
   });
 
   it('limits direct notification-listener setup to the signed-in Android flow', () => {

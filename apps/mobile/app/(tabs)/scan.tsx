@@ -1,4 +1,4 @@
-import type { CaptureOrigin, ReceiptFields } from '@paytsek/contracts';
+import type { CaptureOrigin, OcrResult, ReceiptFields } from '@paytsek/contracts';
 import { extractReceiptFields, parseMoneyExact, type ReceiptExtraction } from '@paytsek/receipt-parsers';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -32,6 +32,7 @@ export default function Scan() {
   const [origin, setOrigin] = useState<CaptureOrigin>('CAMERA');
   const [extraction, setExtraction] = useState<ReceiptExtraction | null>(null);
   const [ocrText, setOcrText] = useState('');
+  const [ocrBlocks, setOcrBlocks] = useState<OcrResult['blocks']>([]);
   const [fields, setFields] = useState<ReceiptFields | null>(null);
   const [amountText, setAmountText] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +44,7 @@ export default function Scan() {
   const [busy, setBusy] = useState(false);
   const saveLock = useRef(false);
   const operation = useRef(false);
+  const resetOnNextFocus = useRef(false);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -52,15 +54,12 @@ export default function Scan() {
     return () => subscription.remove();
   }, []);
 
-  useFocusEffect(useCallback(() => {
-    setFocused(true);
-    return () => { setFocused(false); setTorch(false); setCameraReady(false); };
-  }, []));
-
   const reset = useCallback(() => {
     setStage('capture');
     setImageUri(null);
     setExtraction(null);
+    setOcrText('');
+    setOcrBlocks([]);
     setFields(null);
     setAmountText('');
     setSaved(null);
@@ -68,12 +67,22 @@ export default function Scan() {
     saveLock.current = false;
   }, []);
 
+  useFocusEffect(useCallback(() => {
+    if (resetOnNextFocus.current) {
+      resetOnNextFocus.current = false;
+      reset();
+    }
+    setFocused(true);
+    return () => { setFocused(false); setTorch(false); setCameraReady(false); };
+  }, [reset]));
+
   const persist = useCallback(async (
     receipt: ReceiptExtraction,
     uri: string,
     from: CaptureOrigin,
     corrected: ReceiptFields = receipt.fields,
     rawOcrText: string = ocrText,
+    rawOcrBlocks: OcrResult['blocks'] = ocrBlocks,
   ) => {
     if (!workspace || !corrected.amountCentavos || saveLock.current) return false;
 
@@ -103,8 +112,9 @@ export default function Scan() {
             engine: 'MLKIT_TEXT_V2',
             engineVersion: 'mlkit',
             fullText: rawOcrText.slice(0, 20000),
-            blocks: [],
+            blocks: rawOcrBlocks.slice(0, 500),
             readabilityScore: receipt.readabilityScore,
+            providerDetection: receipt.providerDetection,
           },
           extracted: receipt.fields,
           corrected: finalFields,
@@ -118,17 +128,26 @@ export default function Scan() {
       // record creation, matching, or any other backend acknowledgement.
       setSaved(draft);
       setStage('saved');
-      router.replace({ pathname: '/(tabs)', params: { savedAmount: String(finalFields.amountCentavos) } });
+      resetOnNextFocus.current = true;
+      router.replace({
+        pathname: '/(tabs)',
+        params: {
+          savedAmount: String(finalFields.amountCentavos),
+          savedProvider: finalFields.receiptProvider ?? '',
+        },
+      });
       void syncDraft(draft).then(() => invalidate()).catch(() => undefined);
       return true;
-    } catch (saveError) {
+    } catch {
       saveLock.current = false;
-      setError((saveError as Error).message);
+      // Native/database details are not actionable and should never occupy the
+      // payment flow. Keep the captured proof on screen so retry is one tap.
+      setError('Could not save the proof on this phone. Keep this screen open and try again.');
       return false;
     }
-  }, [invalidate, ocrText, router, workspace]);
+  }, [invalidate, ocrBlocks, ocrText, router, workspace]);
 
-  const processImage = useCallback(async (uri: string, from: CaptureOrigin) => {
+  const processImage = useCallback(async (uri: string, from: CaptureOrigin, fileName?: string | null) => {
     setStage('processing');
     setImageUri(uri);
     setError(null);
@@ -138,14 +157,15 @@ export default function Scan() {
       setImageUri(clean.uri);
       const ocr = await ReceiptOcr.recognize(clean.uri);
       setOcrText(ocr.fullText);
-      const receipt = extractReceiptFields(ocr.fullText);
+      setOcrBlocks(ocr.blocks);
+      const receipt = extractReceiptFields(ocr.fullText, ocr.blocks, { fileName });
       setExtraction(receipt);
       setFields(receipt.fields);
       setAmountText(receipt.fields.amountCentavos ? (receipt.fields.amountCentavos / 100).toFixed(2) : '');
 
       // A receipt proof is valuable on its own. As soon as OCR finds an amount,
       // keep it locally and let matching happen later in the background.
-      if (receipt.fields.amountCentavos && await persist(receipt, clean.uri, from, receipt.fields, ocr.fullText)) return;
+      if (receipt.fields.amountCentavos && await persist(receipt, clean.uri, from, receipt.fields, ocr.fullText, ocr.blocks)) return;
       setStage('review');
     } catch {
       setError('Could not read the proof. Try again or import a screenshot.');
@@ -183,7 +203,7 @@ export default function Scan() {
     setBusy(true);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 1 });
-      if (!result.canceled && result.assets[0]) await processImage(result.assets[0].uri, 'IMAGE_IMPORT');
+      if (!result.canceled && result.assets[0]) await processImage(result.assets[0].uri, 'IMAGE_IMPORT', result.assets[0].fileName);
     } catch {
       setError('Could not import the image.');
     } finally {

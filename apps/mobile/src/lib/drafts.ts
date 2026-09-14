@@ -28,30 +28,49 @@ export interface Draft {
   serverRecordId: string | null;
 }
 
-let db: SQLite.SQLiteDatabase | null = null;
+const SCHEMA = `
+  pragma journal_mode = wal;
+  create table if not exists drafts (
+    client_record_id text primary key,
+    workspace_id text not null,
+    image_uri text,
+    content_type text not null,
+    request_json text not null,
+    sync_status text not null,
+    proof_id text,
+    last_error text,
+    quota_blocked integer not null default 0,
+    created_at text not null,
+    updated_at text not null,
+    server_record_id text
+  );
+  create index if not exists drafts_ws_idx on drafts(workspace_id, sync_status);
+`;
+
+let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+
+async function initialize(): Promise<SQLite.SQLiteDatabase> {
+  // Expo SQLite 57 on Android can retain a poisoned cached native handle when
+  // the JS runtime is recreated while PayTsek's notification service keeps the
+  // process alive. A distinct connection avoids that cache; the promise below
+  // also prevents concurrent callers from creating duplicate wrappers.
+  const connection = await SQLite.openDatabaseAsync('paytsek.db', { useNewConnection: true });
+  await connection.execAsync(SCHEMA);
+  // execAsync may resolve against the affected dead handle. Force one prepared
+  // statement now so a bad connection never reaches the proof-saving path.
+  await connection.getFirstAsync<{ ready: number }>('select 1 as ready');
+  return connection;
+}
 
 async function open(): Promise<SQLite.SQLiteDatabase> {
-  if (db) return db;
-  db = await SQLite.openDatabaseAsync('paytsek.db');
-  await db.execAsync(`
-    pragma journal_mode = wal;
-    create table if not exists drafts (
-      client_record_id text primary key,
-      workspace_id text not null,
-      image_uri text,
-      content_type text not null,
-      request_json text not null,
-      sync_status text not null,
-      proof_id text,
-      last_error text,
-      quota_blocked integer not null default 0,
-      created_at text not null,
-      updated_at text not null,
-      server_record_id text
-    );
-    create index if not exists drafts_ws_idx on drafts(workspace_id, sync_status);
-  `);
-  return db;
+  if (!dbPromise) {
+    dbPromise = initialize().catch((error) => {
+      // Do not pin a failed initialization for the rest of the app session.
+      dbPromise = null;
+      throw error;
+    });
+  }
+  return dbPromise;
 }
 
 const proofsDir = () => new Directory(Paths.document, 'proofs');
@@ -100,16 +119,20 @@ export async function getDraft(workspaceId: string, clientRecordId: string): Pro
   return row ? rowToDraft(row) : null;
 }
 
-/** Correct an unsynced amount without losing the retained proof or stable id. */
-export async function correctDraftAmount(workspaceId: string, clientRecordId: string, amountCentavos: number): Promise<Draft> {
+/** Correct unsynced proof fields without losing the retained image or stable id. */
+export async function correctDraft(
+  workspaceId: string,
+  clientRecordId: string,
+  correction: Pick<CreateRecordRequest['corrected'], 'amountCentavos' | 'receiptProvider'>,
+): Promise<Draft> {
   const current = await getDraft(workspaceId, clientRecordId);
   if (!current) throw new Error('This local record is no longer available.');
   if (current.syncStatus === 'SYNCED') throw new Error('This record has already synced. Open the server record instead.');
   if (current.syncStatus === 'UPLOADING') throw new Error('Wait for the current sync attempt to finish.');
   const request: CreateRecordRequest = {
     ...current.request,
-    corrected: { ...current.request.corrected, amountCentavos },
-    editedFields: [...new Set([...current.request.editedFields, 'amountCentavos'])],
+    corrected: { ...current.request.corrected, ...correction },
+    editedFields: [...new Set([...current.request.editedFields, ...Object.keys(correction)])],
   };
   const d = await open();
   const result = await d.runAsync(
