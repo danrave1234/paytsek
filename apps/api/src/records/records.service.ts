@@ -106,7 +106,7 @@ export class RecordsService {
       const raw = q.q.trim();
       params.push(`%${raw}%`);
       const textParam = params.length;
-      const visibleFields = [`s.label ilike $${textParam}`, `s.provider::text ilike $${textParam}`];
+      const visibleFields = [`s.label ilike $${textParam}`, `r.receipt_provider::text ilike $${textParam}`];
       const pesos = Number(raw.replace(/[PHP\s,₱]/gi, ''));
       if (Number.isFinite(pesos) && pesos > 0) {
         params.push(Math.round(pesos * 100));
@@ -116,6 +116,7 @@ export class RecordsService {
     }
     if (q.state?.length) { params.push(q.state); where.push(`r.evidence_state = any($${params.length}::evidence_state[])`); }
     if (q.sourceId) { params.push(q.sourceId); where.push(`r.source_id = $${params.length}`); }
+    if (q.provider) { params.push(q.provider); where.push(`r.receipt_provider = $${params.length}::provider`); }
     if (q.staffUserId) { params.push(q.staffUserId); where.push(`r.created_by = $${params.length}`); }
     if (q.from) { params.push(q.from); where.push(`r.created_at >= $${params.length}`); }
     if (q.to) { params.push(q.to); where.push(`r.created_at <= $${params.length}`); }

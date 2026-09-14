@@ -78,7 +78,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <footer className="mt-24 border-t border-line bg-bg-2">
           <div className="mx-auto grid max-w-6xl gap-12 px-4 py-14 sm:px-6 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
             <div>
-              <Image src="/brand/paytsek-wordmark.png" alt="PayTsek" width={152} height={51} className="h-auto w-[152px]" />
+              <Image src="/brand/paytsek-wordmark.png" alt="PayTsek" width={150} height={50} className="h-auto w-[150px]" style={{ height: 'auto' }} />
               <p className="mt-4 max-w-sm text-sm leading-6 text-ink-2">
                 Recordkeeping for sellers who get paid by QR through GCash, GoTyme, Maya and MariBank. We never touch the money.
               </p>

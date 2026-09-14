@@ -8,6 +8,8 @@
 - Never log raw wallet notification text or unmasked sender information outside the restricted ingestion flow.
 - Record lists may display only facts PayTsek actually has from the proof or matching system: transaction time, evidence status, amount, and payment source. Never invent or infer customer names, products, categories, or notes for presentation.
 - User-facing evidence labels are **Recorded**, **Possible match**, **Strong match**, **Owner confirmed**, and **Voided**. A Strong match is notification evidence, not confirmation from a bank or wallet provider.
+- A proof record does not require a receiving-wallet source. `payment_records.source_id` stays nullable until notification evidence identifies a receiving source; never block or delay local proof persistence on notification setup.
+- On the signed-in owner’s Android phone, wallet listening is configured directly from Settings with per-provider toggles. Pairing codes are only for a separate payment phone. One active source row per workspace/provider is enforced by the database.
 
 ## V2 technical direction
 
@@ -29,14 +31,14 @@
 ## Mobile UI and interaction rules
 
 - Primary navigation is **Today**, **Records**, center **Scan**, **Analytics**, and **Settings**. Keep Scan in the center and visually distinct; do not hide Settings behind another entry point.
-- Analytics may group only recorded amount/count by time, configured payment source, and evidence state. Do not infer customer, product, or category analytics.
-- Record filters are evidence and configured payment source. Search is limited to visible wallet/source labels and exact amounts; do not surface or search hidden payer data.
+- Analytics may group only recorded amount/count by time, the provider read from the proof, and evidence state. Do not infer customer, product, or category analytics.
+- Record filters are evidence and the provider read from the proof. Search is limited to visible provider labels and exact amounts; do not surface or search hidden payer data.
 - Use the checked-in provider artwork for GCash, Maya, GoTyme, and MariBank. Unknown/custom sources fall back to the neutral wallet mark. Keep `assets/providers/SOURCES.md` current when artwork changes.
 - The Today header uses the checked-in text-only PayTsek wordmark. Workspace switching remains in Settings/workspace flows; do not put a workspace subtitle under the wordmark.
 - Scan is the center action and must remain visually distinct, accessible, and at least 48 dp. It uses the PayTsek receipt/QR aperture treatment, not a generic oversized floating circle.
 - Support System, Light, and Dark modes from the same semantic tokens. Resolve the saved/system theme before hiding the native splash to prevent a color flash.
 - Prefer typography, spacing, alignment, dividers, and compact sheets over card grids. Avoid nested cards, pill-shaped everything, glass, decorative gradients, mascot loading screens, oversized greetings, and marketing copy inside operational screens.
-- Ask only for missing or uncertain required fields. If OCR confidently provides the amount and a configured source exists, local persistence may complete without a form.
+- Ask only for missing or uncertain required fields. If OCR confidently provides the amount, persist locally without a form whether or not notification listening is configured.
 - Use restrained motion for press feedback, capture settling, save confirmation, and evidence insertion. Honor the system reduced-motion setting and do not add a second animation framework for decoration.
 - Status must never rely on color alone. Support large text, screen readers, keyboard/focus behavior where relevant, and 48 dp Android / 44 pt iOS targets.
 

@@ -22,7 +22,7 @@ export class OfflineError extends Error {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   /** Skip the workspace header (e.g. list my workspaces, accept invite). */
   noWorkspace?: boolean;

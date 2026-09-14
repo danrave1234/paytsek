@@ -135,8 +135,8 @@ export class PairingService {
       );
       const l = lim.rows[0]!;
       const cap = row.requested_capability;
-      if ((cap === 'SCANNER' || cap === 'BOTH') && l.scanners >= l.scanner_devices) throw new ApiException('PLAN_LIMIT_DEVICES', `Your plan allows ${l.scanner_devices} scanner device(s)`);
-      if ((cap === 'COLLECTOR' || cap === 'BOTH') && l.collectors >= l.collector_devices) throw new ApiException('PLAN_LIMIT_DEVICES', `Your plan allows ${l.collector_devices} collector device(s)`);
+      if (!this.env.BETA_MODE && (cap === 'SCANNER' || cap === 'BOTH') && l.scanners >= l.scanner_devices) throw new ApiException('PLAN_LIMIT_DEVICES', `Your plan allows ${l.scanner_devices} scanner device(s)`);
+      if (!this.env.BETA_MODE && (cap === 'COLLECTOR' || cap === 'BOTH') && l.collectors >= l.collector_devices) throw new ApiException('PLAN_LIMIT_DEVICES', `Your plan allows ${l.collector_devices} collector device(s)`);
 
       if (cap !== 'SCANNER') {
         try {
@@ -145,6 +145,7 @@ export class PairingService {
           if (isUniqueViolation(e, 'device_bindings_one_active_per_source_idx')) throw new ApiException('SOURCE_ALREADY_HAS_COLLECTOR', 'This source already has an active collector');
           throw e;
         }
+        await c.query(`update payment_sources set collection_paused = false where id = $1`, [row.source_id]);
       }
       await c.query(`update devices set status = 'ACTIVE' where id = $1`, [row.accepted_device_id]);
       await c.query(`update pairing_sessions set state = 'APPROVED', approved_at = now(), approved_by = $2 where id = $1`, [row.id, ownerId]);
@@ -254,7 +255,7 @@ export class PairingService {
         [orgId],
       );
       const l = lim.rows[0]!;
-      if (l.n >= l.scanner_devices) throw new ApiException('PLAN_LIMIT_DEVICES', `Your plan allows ${l.scanner_devices} scanner device(s)`);
+      if (!this.env.BETA_MODE && l.n >= l.scanner_devices) throw new ApiException('PLAN_LIMIT_DEVICES', `Your plan allows ${l.scanner_devices} scanner device(s)`);
       const ins = await c.query<{ id: string }>(
         `insert into devices (organization_id, install_id, label, platform, capability, status, app_version, os_version, last_server_contact_at)
          values ($1,$2,$3,$4,'SCANNER','ACTIVE',$5,$6,now()) returning id`,

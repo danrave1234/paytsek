@@ -58,6 +58,28 @@ export const AcceptPairingResponse = z.object({
 });
 export type AcceptPairingResponse = z.infer<typeof AcceptPairingResponse>;
 
+/**
+ * Owner configures notification listening on the Android phone already signed
+ * into PayTsek. This avoids a pairing code for the ordinary one-phone setup.
+ */
+export const ConfigureCurrentCollectorRequest = z.object({
+  deviceInstallId: uuid,
+  platform: z.literal('ANDROID'),
+  appVersion: z.string().max(40),
+  osVersion: z.string().max(40),
+  deviceModel: z.string().max(80).optional(),
+  providers: z.array(Provider).max(Provider.options.length),
+  detectedProviderApps: AcceptPairingRequest.shape.detectedProviderApps,
+});
+export type ConfigureCurrentCollectorRequest = z.infer<typeof ConfigureCurrentCollectorRequest>;
+
+export const ConfigureCurrentCollectorResponse = z.object({
+  deviceId: uuid,
+  collectorCredential: z.string(),
+  providers: z.array(Provider),
+});
+export type ConfigureCurrentCollectorResponse = z.infer<typeof ConfigureCurrentCollectorResponse>;
+
 export const ApprovePairingRequest = z.object({
   pairingSessionId: uuid,
   approve: z.boolean(),

@@ -77,6 +77,7 @@ export default function TabsLayout() {
   return (
     <Tabs
       initialRouteName="scan"
+      backBehavior="history"
       screenOptions={{
         animation: reducedMotion ? 'none' : 'fade',
         headerShown: false,

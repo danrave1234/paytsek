@@ -102,7 +102,11 @@ export const FinalizeProofUploadRequest = z.object({
 export const CreateRecordRequest = z.object({
   /** Stable client-generated record ID; retries/reboots never create a second record. */
   clientRecordId: uuid,
-  sourceId: uuid,
+  /**
+   * Receiving-wallet listener associated with this proof, when one is known.
+   * Proof capture never depends on notification collection being configured.
+   */
+  sourceId: uuid.nullable().default(null),
   proofId: uuid.nullable(),
   captureOrigin: CaptureOrigin,
   capturedAt: z.string().datetime(),
@@ -159,7 +163,7 @@ export type MatchExplanation = z.infer<typeof MatchExplanation>;
 export const RecordSummary = z.object({
   id: uuid,
   organizationId: uuid,
-  sourceId: uuid,
+  sourceId: uuid.nullable(),
   sourceLabel: z.string(),
   evidenceState: EvidenceState,
   flags: z.array(RecordFlag),
@@ -212,6 +216,8 @@ export const ListRecordsQuery = z.object({
   q: z.string().max(120).optional(),
   state: z.array(EvidenceState).optional(),
   sourceId: uuid.optional(),
+  /** Provider actually printed on the customer's proof. */
+  provider: Provider.optional(),
   staffUserId: uuid.optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),

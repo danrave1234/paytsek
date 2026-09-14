@@ -1,11 +1,11 @@
 import type { ExportJobView } from '@paytsek/contracts';
 import React, { useEffect, useState } from 'react';
-import { Linking } from 'react-native';
-import { Button, Card, Text } from 'react-native-paper';
-import { Notice, Screen } from '@/components/ui';
+import { Linking, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Button, Icon, Text, useTheme } from 'react-native-paper';
+import { Group, ListRow, Notice, Row, Screen } from '@/components/ui';
 import { api, isApiError } from '@/lib/api';
 import { manilaTime } from '@/lib/format';
-import { TOUCH_TARGET } from '@/theme';
+import { RADIUS, SPACING, TOUCH_TARGET } from '@/theme';
 
 const RANGES = [
   { key: 'today', label: 'Today', days: 0 },
@@ -15,42 +15,71 @@ const RANGES = [
 ];
 
 export default function Exports() {
+  const theme = useTheme();
   const [job, setJob] = useState<ExportJobView | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!job || job.status === 'READY' || job.status === 'FAILED' || job.status === 'EXPIRED') return;
-    const t = setInterval(async () => {
-      try { setJob(await api<ExportJobView>(`/v1/exports/${job.id}`)); } catch (e) { if (isApiError(e, 'EXPORT_EXPIRED')) setJob({ ...job, status: 'EXPIRED' }); }
+    if (!job || ['READY', 'FAILED', 'EXPIRED'].includes(job.status)) return;
+    const timer = setInterval(async () => {
+      try {
+        setJob(await api<ExportJobView>(`/v1/exports/${job.id}`));
+      } catch (pollError) {
+        if (isApiError(pollError, 'EXPORT_EXPIRED')) setJob({ ...job, status: 'EXPIRED' });
+      }
     }, 2500);
-    return () => clearInterval(t);
+    return () => clearInterval(timer);
   }, [job]);
 
   const create = async (days: number) => {
     setError(null);
     const to = new Date();
     const from = new Date(to);
-    if (days === 0) from.setHours(0, 0, 0, 0); else from.setDate(from.getDate() - days);
-    try { setJob(await api<ExportJobView>('/v1/exports', { method: 'POST', body: { format: 'CSV', from: from.toISOString(), to: to.toISOString(), includeVoided: false } })); } catch (e) { setError((e as Error).message); }
+    if (days === 0) from.setHours(0, 0, 0, 0);
+    else from.setDate(from.getDate() - days);
+    try {
+      setJob(await api<ExportJobView>('/v1/exports', {
+        method: 'POST',
+        body: { format: 'CSV', from: from.toISOString(), to: to.toISOString(), includeVoided: false },
+      }));
+    } catch (createError) {
+      setError((createError as Error).message);
+    }
   };
 
+  const preparing = job?.status === 'PENDING' || job?.status === 'RUNNING';
   return (
     <Screen>
-      <Notice kind="info">CSV exports include payment records and status. Download links expire after 24 hours.</Notice>
-      {RANGES.map((r) => <Button key={r.key} mode="outlined" onPress={() => void create(r.days)} style={{ minHeight: TOUCH_TARGET }}>{r.label} (CSV)</Button>)}
+      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+        Exports contain payment records and evidence status. Download links expire after 24 hours.
+      </Text>
+      <Group title="Date range">
+        {RANGES.map((range) => (
+          <ListRow key={range.key} icon="calendar-range" title={range.label} subtitle="CSV" onPress={() => void create(range.days)} />
+        ))}
+      </Group>
       {error ? <Notice kind="error">{error}</Notice> : null}
+
       {job ? (
-        <Card mode="outlined">
-          <Card.Title title={`Export ${job.status.toLowerCase()}`} subtitle={`Requested ${manilaTime(job.createdAt)}${job.rowCount !== null ? ` · ${job.rowCount} rows` : ''}`} />
-          <Card.Content>
-            {job.status === 'PENDING' || job.status === 'RUNNING' ? <Text variant="bodySmall">Preparing your file…</Text> : null}
-            {job.status === 'FAILED' ? <Text variant="bodySmall">Failed ({job.errorCode}). Try again.</Text> : null}
-            {job.status === 'EXPIRED' ? <Text variant="bodySmall">This export expired and was deleted.</Text> : null}
-            {job.expiresAt && job.status === 'READY' ? <Text variant="bodySmall" style={{ opacity: 0.6 }}>Link valid until {manilaTime(job.expiresAt)}</Text> : null}
-          </Card.Content>
-          {job.downloadUrl ? <Card.Actions><Button mode="contained" onPress={() => void Linking.openURL(job.downloadUrl!)}>Download</Button></Card.Actions> : null}
-        </Card>
+        <View style={[styles.status, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} accessibilityLiveRegion="polite">
+          <View style={styles.statusHeader}>
+            {preparing ? <ActivityIndicator size={22} /> : <Icon source={job.status === 'READY' ? 'file-check-outline' : 'file-alert-outline'} size={24} color={job.status === 'READY' ? theme.colors.primary : theme.colors.error} />}
+            <View style={{ flex: 1 }}>
+              <Text variant="titleSmall">{preparing ? 'Preparing export' : job.status === 'READY' ? 'Export ready' : job.status === 'EXPIRED' ? 'Export expired' : 'Export failed'}</Text>
+              <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Requested {manilaTime(job.createdAt)}</Text>
+            </View>
+          </View>
+          {job.rowCount !== null ? <Row label="Records" value={String(job.rowCount)} /> : null}
+          {job.expiresAt && job.status === 'READY' ? <Row label="Link expires" value={manilaTime(job.expiresAt)} /> : null}
+          {job.status === 'FAILED' ? <Text variant="bodySmall" style={{ color: theme.colors.error }}>Try creating the export again.</Text> : null}
+          {job.downloadUrl ? <Button mode="contained" icon="download" onPress={() => void Linking.openURL(job.downloadUrl!)} style={{ minHeight: TOUCH_TARGET }}>Download CSV</Button> : null}
+        </View>
       ) : null}
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  status: { gap: SPACING.md, borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.lg, padding: SPACING.lg },
+  statusHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+});

@@ -1,7 +1,7 @@
 import { PROVIDER_LABELS, type Provider } from '@paytsek/contracts';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Platform, Share, View } from 'react-native';
-import { Button, Card, Switch, Text, useTheme } from 'react-native-paper';
+import { Button, Switch, Text, useTheme } from 'react-native-paper';
 import { PaymentCollector, type TemplateSample } from 'payment-collector';
 import { EmptyState, Group, ListRow, Notice, Screen } from '@/components/ui';
 import { SPACING, TOUCH_TARGET } from '@/theme';
@@ -91,9 +91,8 @@ export default function Samples() {
           </Text>
 
           {(Object.keys(byProvider) as Provider[]).map((provider) => (
-            <Card key={provider} mode="contained" style={{ backgroundColor: theme.colors.elevation.level1 }}>
-              <Card.Title title={PROVIDER_LABELS[provider]} subtitle={`${byProvider[provider]!.length} unrecognised`} />
-              <Card.Content style={{ gap: SPACING.sm }}>
+            <Group key={provider} title={`${PROVIDER_LABELS[provider]} · ${byProvider[provider]!.length} unrecognised`}>
+              <View style={{ gap: SPACING.sm, padding: SPACING.md }}>
                 {byProvider[provider]!.map((s) => (
                   <View
                     key={s.id}
@@ -118,8 +117,8 @@ export default function Samples() {
                     </Text>
                   </View>
                 ))}
-              </Card.Content>
-            </Card>
+              </View>
+            </Group>
           ))}
 
           <Button mode="contained" icon="share-variant" onPress={() => void share()} style={{ minHeight: TOUCH_TARGET }}>

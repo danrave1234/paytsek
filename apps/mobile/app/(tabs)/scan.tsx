@@ -12,7 +12,7 @@ import { Notice, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
 import { newId } from '@/lib/device';
 import { saveDraft, stageImage, syncDraft, type Draft } from '@/lib/drafts';
-import { useHome, useInvalidateRecord, useSources } from '@/lib/queries';
+import { useHome, useInvalidateRecord } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TOUCH_TARGET } from '@/theme';
 
@@ -23,7 +23,6 @@ export default function Scan() {
   const router = useRouter();
   const params = useLocalSearchParams<{ source?: string; uri?: string }>();
   const { workspace } = useSession();
-  const sources = useSources();
   const home = useHome();
   const invalidate = useInvalidateRecord();
   const [permission, requestPermission] = useCameraPermissions();
@@ -35,7 +34,6 @@ export default function Scan() {
   const [ocrText, setOcrText] = useState('');
   const [fields, setFields] = useState<ReceiptFields | null>(null);
   const [amountText, setAmountText] = useState('');
-  const [sourceId, setSourceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<Draft | null>(null);
   const [focused, setFocused] = useState(false);
@@ -59,12 +57,6 @@ export default function Scan() {
     return () => { setFocused(false); setTorch(false); setCameraReady(false); };
   }, []));
 
-  useEffect(() => {
-    if (!sourceId && sources.data?.length) {
-      setSourceId(sources.data.find((source) => source.isDefault)?.id ?? sources.data[0]!.id);
-    }
-  }, [sourceId, sources.data]);
-
   const reset = useCallback(() => {
     setStage('capture');
     setImageUri(null);
@@ -83,8 +75,7 @@ export default function Scan() {
     corrected: ReceiptFields = receipt.fields,
     rawOcrText: string = ocrText,
   ) => {
-    const activeSourceId = sourceId ?? sources.data?.find((source) => source.isDefault)?.id ?? sources.data?.[0]?.id;
-    if (!workspace || !activeSourceId || !corrected.amountCentavos || saveLock.current) return false;
+    if (!workspace || !corrected.amountCentavos || saveLock.current) return false;
 
     saveLock.current = true;
     setError(null);
@@ -99,7 +90,9 @@ export default function Scan() {
         contentType: 'image/jpeg',
         request: {
           clientRecordId,
-          sourceId: activeSourceId,
+          // Notification listening is optional evidence. The server attaches a
+          // receiving source later only when a notification is actually chosen.
+          sourceId: null,
           proofId: null,
           captureOrigin: from,
           capturedAt: new Date().toISOString(),
@@ -133,7 +126,7 @@ export default function Scan() {
       setError((saveError as Error).message);
       return false;
     }
-  }, [invalidate, ocrText, router, sourceId, sources.data, workspace]);
+  }, [invalidate, ocrText, router, workspace]);
 
   const processImage = useCallback(async (uri: string, from: CaptureOrigin) => {
     setStage('processing');
@@ -150,16 +143,15 @@ export default function Scan() {
       setFields(receipt.fields);
       setAmountText(receipt.fields.amountCentavos ? (receipt.fields.amountCentavos / 100).toFixed(2) : '');
 
-      const sourceAvailable = Boolean(sourceId ?? sources.data?.[0]?.id);
       // A receipt proof is valuable on its own. As soon as OCR finds an amount,
       // keep it locally and let matching happen later in the background.
-      if (receipt.fields.amountCentavos && sourceAvailable && await persist(receipt, clean.uri, from, receipt.fields, ocr.fullText)) return;
+      if (receipt.fields.amountCentavos && await persist(receipt, clean.uri, from, receipt.fields, ocr.fullText)) return;
       setStage('review');
     } catch {
       setError('Could not read the proof. Try again or import a screenshot.');
       setStage('capture');
     }
-  }, [persist, sourceId, sources.data]);
+  }, [persist]);
 
   useEffect(() => {
     if (params.source !== 'share') return;
@@ -232,11 +224,7 @@ export default function Scan() {
         <Notice kind="info">We’ll save the proof now. You can edit details later.</Notice>
         <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} right={<TextInput.Affix text="₱" />} />
         {error ? <Notice kind="error">{error}</Notice> : null}
-        {!sourceId && !sources.data?.length ? (
-          <Button mode="contained" onPress={() => router.push('/settings/sources')}>Add payment source</Button>
-        ) : (
-          <Button mode="contained" onPress={() => void saveReview()} disabled={saveLock.current} style={{ minHeight: TOUCH_TARGET }}>Save proof</Button>
-        )}
+        <Button mode="contained" onPress={() => void saveReview()} disabled={saveLock.current} style={{ minHeight: TOUCH_TARGET }}>Save proof</Button>
         <Button onPress={reset}>Retake</Button>
       </Screen>
     );
@@ -261,7 +249,7 @@ export default function Scan() {
             </Text>
           </View>
         </View>
-        <IconButton icon="account-circle-outline" accessibilityLabel="Open settings" onPress={() => router.push('/(tabs)/settings')} />
+        <IconButton icon="account-circle-outline" accessibilityLabel="Open settings" onPress={() => router.navigate('/(tabs)/settings')} />
       </View>
       {error ? <Notice kind="error">{error}</Notice> : null}
       <CaptureSurface

@@ -75,9 +75,11 @@ export class OperationsService {
       if (Number.isInteger(hour) && hour >= 0 && hour < 24) hourlyRecordedCentavos[hour] = Number(bucket.amount_c);
     }
     const collectors = await this.db.query<{ id: string; label: string; source_label: string; last: Date | null; pending: number | null; access: boolean | null }>(
-      `select d.id, d.label, s.label as source_label, d.last_server_contact_at as last, d.pending_upload_count as pending, d.notification_access_granted as access
+      `select d.id, d.label, string_agg(distinct s.label, ', ' order by s.label) as source_label,
+              d.last_server_contact_at as last, d.pending_upload_count as pending, d.notification_access_granted as access
          from device_bindings b join devices d on d.id = b.device_id join payment_sources s on s.id = b.source_id
-        where b.organization_id = $1 and b.status = 'ACTIVE' and d.status <> 'REVOKED'`,
+        where b.organization_id = $1 and b.status = 'ACTIVE' and d.status <> 'REVOKED' and s.collection_paused = false
+        group by d.id`,
       [orgId],
     );
     const recent = await this.db.query<RecordRow>(
@@ -123,9 +125,9 @@ export class OperationsService {
              ((date_trunc('day', now() at time zone o.timezone) + interval '1 day') at time zone o.timezone) as end_at
         from organizations o where o.id = $1
     ), scoped as (
-      select r.*, s.provider, context.timezone
+      select r.*, coalesce(r.receipt_provider, s.provider) as provider, context.timezone
         from payment_records r
-        join payment_sources s on s.id = r.source_id
+        left join payment_sources s on s.id = r.source_id
         cross join context
        where r.organization_id = $1
          and r.evidence_state <> 'VOIDED'
@@ -152,7 +154,7 @@ export class OperationsService {
       ),
       this.db.query<{ provider: AnalyticsSummary['byProvider'][number]['provider']; recorded_n: number; recorded_c: string }>(
         `${scope} select provider, count(*)::int as recorded_n, sum(amount_centavos)::text as recorded_c
-                    from scoped group by provider order by sum(amount_centavos) desc`,
+                    from scoped where provider is not null group by provider order by sum(amount_centavos) desc`,
         [orgId, days],
       ),
       this.db.query<{ state: AnalyticsSummary['byEvidence'][number]['state']; recorded_n: number; recorded_c: string }>(
