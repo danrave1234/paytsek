@@ -30,7 +30,6 @@ export class IngestionService {
     const replay = await this.db.one<{ acks: IngestItemAck[] }>(`select acks from ingest_batches where id = $1 and device_id = $2`, [batch.batchId, col.deviceId]);
     if (replay) return { batchId: batch.batchId, acks: replay.acks, serverReceivedAt: new Date().toISOString() };
 
-    const device = await this.db.one<{ status: string }>(`select status from devices where id = $1`, [col.deviceId]);
     const sources = await this.db.query<{ id: string; provider: Provider; collection_paused: boolean }>(
       `select id, provider, collection_paused from payment_sources where id = any($1::uuid[]) and deleted_at is null`,
       [col.boundSourceIds],
@@ -38,7 +37,7 @@ export class IngestionService {
 
     const acks: IngestItemAck[] = [];
     for (const ev of batch.events) {
-      acks.push(await this.ingestOne(col, device?.status ?? 'REVOKED', sources.rows, ev));
+      acks.push(await this.ingestOne(col, col.status, sources.rows, ev));
     }
 
     // Store acks for replay (best effort; a concurrent duplicate batch simply recomputes the same idempotent result).

@@ -38,6 +38,14 @@ export const InviteMemberRequest = z.object({
 });
 export type InviteMemberRequest = z.infer<typeof InviteMemberRequest>;
 
+export const UpdateWorkspaceRequest = z
+  .object({
+    name: z.string().min(1).max(80).optional(),
+    timezone: z.string().min(1).max(60).optional(),
+  })
+  .refine((v) => v.name !== undefined || v.timezone !== undefined, { message: 'Provide a name or timezone to update' });
+export type UpdateWorkspaceRequest = z.infer<typeof UpdateWorkspaceRequest>;
+
 export const UpdateMemberRequest = z.object({
   role: MembershipRole.optional(),
   canConfirmMatches: z.boolean().optional(),

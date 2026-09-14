@@ -21,7 +21,7 @@ type Props = {
  * The V2 ledger intentionally displays only facts available from a proof:
  * time, evidence state, amount and source. Never add invented customer or item data.
  */
-export function PaymentRecordRow({
+export const PaymentRecordRow = React.memo(function PaymentRecordRow({
   amountCentavos,
   occurredAt,
   sourceLabel,
@@ -80,7 +80,7 @@ export function PaymentRecordRow({
       {content}
     </TouchableRipple>
   );
-}
+});
 
 const styles = StyleSheet.create({
   row: {

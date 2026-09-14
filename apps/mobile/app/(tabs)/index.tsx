@@ -9,30 +9,19 @@ import { PaymentRecordRow } from '@/components/payment-record-row';
 import { Loading } from '@/components/ui';
 import { OfflineError } from '@/lib/api';
 import { listDrafts, type Draft } from '@/lib/drafts';
-import { peso, workspaceDate } from '@/lib/format';
-import { prefetchRecord, useHome } from '@/lib/queries';
+import { draftOccurredAt, providerLabel, recordOccurredAt } from '@/lib/feed';
+import { getFormatter, peso, workspaceDate } from '@/lib/format';
+import { prefetchRecord, useDraftsSignal, useHome } from '@/lib/queries';
 import { useAppUpdate } from '@/lib/release-update';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET } from '@/theme';
 
 type FeedItem =
-  | { kind: 'local'; id: string; draft: Draft; at: string; source: string; state: EvidenceState; amount: number }
-  | { kind: 'remote'; id: string; record: RecordSummary; at: string; source: string; state: EvidenceState; amount: number };
-
-function localProvider(provider: Provider | null | undefined): string {
-  return provider ? PROVIDER_LABELS[provider] : 'Payment';
-}
-
-function localOccurredAt(draft: Draft): string {
-  return draft.request.corrected.receiptTransactionAt ?? draft.request.capturedAt ?? draft.createdAt;
-}
-
-function remoteOccurredAt(record: RecordSummary): string {
-  return record.receiptTransactionAt ?? record.capturedAt ?? record.createdAt;
-}
+  | { kind: 'local'; id: string; draft: Draft; at: string; source: string; state: EvidenceState; amount: number; onPress: () => void; onPressIn?: () => void }
+  | { kind: 'remote'; id: string; record: RecordSummary; at: string; source: string; state: EvidenceState; amount: number; onPress: () => void; onPressIn?: () => void };
 
 function hourInZone(iso: string, timezone: string): number {
-  const formatted = new Intl.DateTimeFormat('en-US', {
+  const formatted = getFormatter('en-US', {
     timeZone: timezone,
     hour: '2-digit',
     hour12: false,
@@ -83,6 +72,7 @@ export default function Today() {
   const { workspace } = useSession();
   const timezone = workspace?.timezone || 'Asia/Manila';
   const home = useHome();
+  const draftsSignal = useDraftsSignal();
   const update = useAppUpdate();
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [showUpdate, setShowUpdate] = useState(false);
@@ -95,40 +85,48 @@ export default function Today() {
 
   useFocusEffect(useCallback(() => {
     refreshLocal();
-  }, [refreshLocal, home.dataUpdatedAt]));
+  }, [refreshLocal, draftsSignal]));
 
   const feed = useMemo<FeedItem[]>(() => {
     const local: FeedItem[] = drafts.map((draft) => ({
       kind: 'local',
       id: draft.clientRecordId,
       draft,
-      at: localOccurredAt(draft),
-      source: localProvider(draft.request.corrected.receiptProvider),
+      at: draftOccurredAt(draft),
+      source: providerLabel(draft.request.corrected.receiptProvider),
       state: 'UNVERIFIED',
       amount: draft.request.corrected.amountCentavos,
+      onPress: () => router.push(`/record/local/${draft.clientRecordId}`),
     }));
     const remote: FeedItem[] = (home.data?.recentRecords ?? []).map((record) => ({
       kind: 'remote',
       id: record.id,
       record,
-      at: remoteOccurredAt(record),
+      at: recordOccurredAt(record),
       source: record.sourceLabel,
       state: record.evidenceState,
       amount: record.amountCentavos,
+      onPress: () => router.push(`/record/${record.id}`),
+      onPressIn: () => { void prefetchRecord(record.id); },
     }));
     return [...local, ...remote]
       .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
       .slice(0, 8);
-  }, [drafts, home.data?.recentRecords]);
+  }, [drafts, home.data?.recentRecords, router]);
 
-  const pendingCentavos = drafts.reduce((sum, draft) => sum + draft.request.corrected.amountCentavos, 0);
-  const totalCentavos = (home.data?.today.recordedCentavos ?? 0) + pendingCentavos;
-  const recordCount = (home.data?.today.recordedCount ?? 0) + drafts.length;
-  const hourly = [...(home.data?.today.hourlyRecordedCentavos ?? Array.from({ length: 24 }, () => 0))];
-  for (const draft of drafts) {
-    const hour = hourInZone(localOccurredAt(draft), timezone);
-    if (Number.isInteger(hour) && hour >= 0 && hour < 24) hourly[hour] = (hourly[hour] ?? 0) + draft.request.corrected.amountCentavos;
-  }
+  const { totalCentavos, recordCount, hourly } = useMemo(() => {
+    const pendingCentavos = drafts.reduce((sum, draft) => sum + draft.request.corrected.amountCentavos, 0);
+    const buckets = [...(home.data?.today.hourlyRecordedCentavos ?? Array.from({ length: 24 }, () => 0))];
+    for (const draft of drafts) {
+      const hour = hourInZone(draftOccurredAt(draft), timezone);
+      if (Number.isInteger(hour) && hour >= 0 && hour < 24) buckets[hour] = (buckets[hour] ?? 0) + draft.request.corrected.amountCentavos;
+    }
+    return {
+      totalCentavos: (home.data?.today.recordedCentavos ?? 0) + pendingCentavos,
+      recordCount: (home.data?.today.recordedCount ?? 0) + drafts.length,
+      hourly: buckets,
+    };
+  }, [drafts, home.data, timezone]);
 
   useEffect(() => {
     const savedAmount = Number(params.savedAmount);
@@ -223,10 +221,8 @@ export default function Today() {
               state={item.state}
               timezone={timezone}
               divider={index > 0}
-              onPress={item.kind === 'remote'
-                ? () => router.push(`/record/${item.record.id}`)
-                : () => router.push(`/record/local/${item.draft.clientRecordId}`)}
-              onPressIn={item.kind === 'remote' ? () => { void prefetchRecord(item.record.id); } : undefined}
+              onPress={item.onPress}
+              onPressIn={item.onPressIn}
             />
           ))}
         </View>

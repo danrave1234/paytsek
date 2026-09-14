@@ -11,10 +11,10 @@ import { CaptureSurface } from '@/components/capture-surface';
 import { Notice, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
 import { newId } from '@/lib/device';
-import { saveDraft, stageImage, syncDraft, type Draft } from '@/lib/drafts';
-import { useHome, useInvalidateRecord } from '@/lib/queries';
+import { pruneSynced, saveDraft, stageImage, syncDraft, type Draft } from '@/lib/drafts';
+import { invalidateDrafts, useHomeSnapshot, useInvalidateRecord } from '@/lib/queries';
 import { useSession } from '@/lib/session';
-import { RADIUS, SPACING, TOUCH_TARGET } from '@/theme';
+import { RADIUS, SPACING, TOUCH_TARGET, successColorFor } from '@/theme';
 
 type Stage = 'capture' | 'processing' | 'review' | 'saved';
 
@@ -23,7 +23,7 @@ export default function Scan() {
   const router = useRouter();
   const params = useLocalSearchParams<{ source?: string; uri?: string }>();
   const { workspace } = useSession();
-  const home = useHome();
+  const home = useHomeSnapshot();
   const invalidate = useInvalidateRecord();
   const [permission, requestPermission] = useCameraPermissions();
   const [camera, setCamera] = useState<CameraView | null>(null);
@@ -44,7 +44,9 @@ export default function Scan() {
   const [busy, setBusy] = useState(false);
   const saveLock = useRef(false);
   const operation = useRef(false);
+  const generation = useRef(0);
   const resetOnNextFocus = useRef(false);
+  const handledShare = useRef<string | null>(null);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -55,6 +57,7 @@ export default function Scan() {
   }, []);
 
   const reset = useCallback(() => {
+    generation.current += 1;
     setStage('capture');
     setImageUri(null);
     setExtraction(null);
@@ -65,6 +68,9 @@ export default function Scan() {
     setSaved(null);
     setError(null);
     saveLock.current = false;
+    // Allow the next share-sheet intent (including another inbox drain) to be
+    // handled after the previous scan flow has fully completed.
+    handledShare.current = null;
   }, []);
 
   useFocusEffect(useCallback(() => {
@@ -84,7 +90,15 @@ export default function Scan() {
     rawOcrText: string = ocrText,
     rawOcrBlocks: OcrResult['blocks'] = ocrBlocks,
   ) => {
-    if (!workspace || !corrected.amountCentavos || saveLock.current) return false;
+    if (saveLock.current) return false;
+    if (!workspace) {
+      setError('Choose a workspace in Settings before saving proofs.');
+      return false;
+    }
+    if (!corrected.amountCentavos) {
+      setError('Check the amount.');
+      return false;
+    }
 
     saveLock.current = true;
     setError(null);
@@ -136,7 +150,13 @@ export default function Scan() {
           savedProvider: finalFields.receiptProvider ?? '',
         },
       });
-      void syncDraft(draft).then(() => invalidate()).catch(() => undefined);
+      void syncDraft(draft).then(async (status) => {
+        invalidate();
+        // The server has acknowledged the durable record; the staged copy is
+        // now redundant and can be pruned without waiting for the next resume.
+        if (status === 'SYNCED') await pruneSynced(workspace.id);
+        void invalidateDrafts();
+      }).catch(() => undefined);
       return true;
     } catch {
       saveLock.current = false;
@@ -148,14 +168,19 @@ export default function Scan() {
   }, [invalidate, ocrBlocks, ocrText, router, workspace]);
 
   const processImage = useCallback(async (uri: string, from: CaptureOrigin, fileName?: string | null) => {
+    // A late OCR completion from an abandoned flow must never clobber a newer
+    // flow's state; each await below re-checks this generation token.
+    const token = ++generation.current;
     setStage('processing');
     setImageUri(uri);
     setError(null);
     setOrigin(from);
     try {
       const clean = await ReceiptOcr.stripMetadata(uri, 0.92);
+      if (token !== generation.current) return;
       setImageUri(clean.uri);
       const ocr = await ReceiptOcr.recognize(clean.uri);
+      if (token !== generation.current) return;
       setOcrText(ocr.fullText);
       setOcrBlocks(ocr.blocks);
       const receipt = extractReceiptFields(ocr.fullText, ocr.blocks, { fileName });
@@ -175,6 +200,12 @@ export default function Scan() {
 
   useEffect(() => {
     if (params.source !== 'share') return;
+    // processImage changes identity while OCR state settles; without this
+    // guard the effect re-fires mid-processing and saves the shared proof
+    // twice under a second client record id.
+    const token = params.uri ?? 'inbox';
+    if (handledShare.current === token) return;
+    handledShare.current = token;
     void (async () => {
       if (params.uri) return processImage(params.uri, 'SHARE_SHEET');
       const shared = await ReceiptOcr.drainSharedInbox();
@@ -213,11 +244,16 @@ export default function Scan() {
   }, [processImage]);
 
   const saveReview = async () => {
-    if (!fields || !extraction || !imageUri) return;
+    if (!fields || !extraction || !imageUri || busy) return;
     const amount = parseMoneyExact(amountText.trim());
     if (!amount) return setError('Check the amount.');
     const corrected: ReceiptFields = { ...fields, amountCentavos: amount.centavos, currency: 'PHP' };
-    await persist(extraction, imageUri, origin, corrected);
+    setBusy(true);
+    try {
+      await persist(extraction, imageUri, origin, corrected);
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (stage === 'processing') {
@@ -244,7 +280,7 @@ export default function Scan() {
         <Notice kind="info">We’ll save the proof now. You can edit details later.</Notice>
         <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} right={<TextInput.Affix text="₱" />} />
         {error ? <Notice kind="error">{error}</Notice> : null}
-        <Button mode="contained" onPress={() => void saveReview()} disabled={saveLock.current} style={{ minHeight: TOUCH_TARGET }}>Save proof</Button>
+        <Button mode="contained" onPress={() => void saveReview()} disabled={busy} loading={busy} style={{ minHeight: TOUCH_TARGET }}>Save proof</Button>
         <Button onPress={reset}>Retake</Button>
       </Screen>
     );
@@ -259,7 +295,7 @@ export default function Scan() {
             <View
               style={[
                 styles.healthDot,
-                { backgroundColor: home.data?.collectors.some((collector) => !collector.stale) ? '#12B76A' : theme.colors.outline },
+                { backgroundColor: home.data?.collectors.some((collector) => !collector.stale) ? successColorFor(theme.dark) : theme.colors.outline },
               ]}
             />
             <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>

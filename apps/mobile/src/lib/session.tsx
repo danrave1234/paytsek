@@ -59,9 +59,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (data.session) void refreshWorkspaces();
       })
       .catch(() => setReady(true));
-    const { data: sub } = client.auth.onAuthStateChange(async (_e, s) => {
+    const { data: sub } = client.auth.onAuthStateChange((_e, s) => {
       setSession(s);
-      if (s) await refreshWorkspaces();
+      // Defer API work out of the auth callback: supabase-js holds its auth lock
+      // while this callback runs, and refreshWorkspaces -> getSession deadlocks.
+      if (s) setTimeout(() => { void refreshWorkspaces(); }, 0);
       else {
         queryClient.clear();
         setWorkspaces([]);
@@ -81,7 +83,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     await queryClient.cancelQueries();
     queryClient.clear();
-    await supabase().auth.signOut();
+    try {
+      // Local scope: never leave tokens in SecureStore because the network
+      // call to revoke every session failed.
+      await supabase().auth.signOut({ scope: 'local' });
+    } catch {
+      // Local cleanup below still runs.
+    }
     await setActiveWorkspaceId(null);
   }, []);
 

@@ -23,6 +23,8 @@ export interface WorkspaceContext {
 export interface CollectorContext {
   deviceId: string;
   organizationId: string;
+  /** Device status as validated by the guard (never 'REVOKED'). */
+  status: string;
   /** Sources this collector is actively bound to. Derived server-side, never from the payload. */
   boundSourceIds: string[];
 }
@@ -139,21 +141,24 @@ export class CollectorAuthGuard implements CanActivate {
       throw new ApiException('UNAUTHENTICATED', 'Missing collector credential');
     }
     const hash = hashSecret(token);
-    const device = await this.db.one<{ id: string; organization_id: string; status: string }>(
-      `select id, organization_id, status from devices where credential_hash = $1`,
+    // Single round trip: device row plus its active bindings.
+    const device = await this.db.one<{ id: string; organization_id: string; status: string; source_ids: string[] }>(
+      `select d.id, d.organization_id, d.status,
+              coalesce((select json_agg(b.source_id) from device_bindings b
+                          join payment_sources s on s.id = b.source_id
+                         where b.device_id = d.id and b.status = 'ACTIVE' and s.deleted_at is null), '[]'::json) as source_ids
+         from devices d where d.credential_hash = $1`,
       [hash],
     );
     if (!device) throw new ApiException('UNAUTHENTICATED', 'Unknown collector credential');
     if (device.status === 'REVOKED') throw new ApiException('COLLECTOR_CREDENTIAL_REVOKED', 'This device was revoked. Pair again from the owner app.');
-    const bindings = await this.db.query<{ source_id: string }>(
-      `select b.source_id from device_bindings b
-         join payment_sources s on s.id = b.source_id
-        where b.device_id = $1 and b.status = 'ACTIVE' and s.deleted_at is null`,
+    req.collector = { deviceId: device.id, organizationId: device.organization_id, status: device.status, boundSourceIds: device.source_ids };
+    // Health: last server contact, throttled so hot collectors don't write a row per request.
+    await this.db.query(
+      `update devices set last_server_contact_at = now()
+        where id = $1 and (last_server_contact_at is null or last_server_contact_at < now() - interval '60 seconds')`,
       [device.id],
     );
-    req.collector = { deviceId: device.id, organizationId: device.organization_id, boundSourceIds: bindings.rows.map((r) => r.source_id) };
-    // Health: last server contact is updated on every authenticated collector call.
-    await this.db.query(`update devices set last_server_contact_at = now() where id = $1`, [device.id]);
     return true;
   }
 }

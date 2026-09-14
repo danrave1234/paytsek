@@ -60,9 +60,9 @@ export default function WalletNotifications() {
       ]);
       setStatus(nextStatus);
       setApps(detected);
-      const currentWorkspace = binding?.workspaceId === workspace?.id;
+      const currentWorkspace = !!binding && !!workspace && binding.workspaceId === workspace.id;
       setEnabled(currentWorkspace ? nextStatus.enabledProviders : []);
-      setLocalDeviceId(currentWorkspace ? binding!.deviceId : null);
+      setLocalDeviceId(currentWorkspace && binding ? binding.deviceId : null);
     } catch (loadError) {
       setError(loadError);
     }

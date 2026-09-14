@@ -40,17 +40,23 @@ export interface RecordRow {
   has_proof: boolean;
 }
 
-export const RECORD_SELECT = `
-  select r.*,
-         s.provider as receiving_provider,
-         s.label as receiving_source_label,
-         case r.receipt_provider
+/** Effective timestamp used for Home/Analytics/Exports bucketing. Table alias is `r` at every call site. */
+export const EFFECTIVE_AT_SQL = `coalesce(r.receipt_transaction_at, r.captured_at, r.created_at)`;
+
+/** Provider display label. Requires `payment_records r` joined to `payment_sources s`. */
+export const PROVIDER_LABEL_SQL = `case r.receipt_provider
            when 'GCASH' then 'GCash'
            when 'GOTYME' then 'GoTyme'
            when 'MAYA' then 'Maya'
            when 'MARIBANK' then 'MariBank'
            else coalesce(s.label, 'Payment')
-         end as source_label,
+         end`;
+
+export const RECORD_SELECT = `
+  select r.*,
+         s.provider as receiving_provider,
+         s.label as receiving_source_label,
+         ${PROVIDER_LABEL_SQL} as source_label,
          p.display_name as created_by_name,
          (select pm.event_id from payment_matches pm where pm.record_id = r.id and pm.active) as linked_event_id,
          (case when r.evidence_state in ('UNVERIFIED','REVIEW_REQUIRED') then

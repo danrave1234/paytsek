@@ -22,7 +22,7 @@ class CollectorConfigRecord : Record {
 class PaymentCollectorModule : Module() {
   private val context get() = requireNotNull(appContext.reactContext) { "React context missing" }
   private val prefs by lazy { CollectorPrefs(context) }
-  private val outbox by lazy { OutboxDb(context) }
+  private val outbox by lazy { OutboxDb.getInstance(context) }
 
   override fun definition() = ModuleDefinition {
     Name("PaymentCollector")
@@ -51,6 +51,7 @@ class PaymentCollectorModule : Module() {
         "lastUploadAt" to prefs.lastUploadAt,
         "lastUploadError" to prefs.lastUploadError,
         "unknownTemplateCount" to prefs.unknownTemplateCount.toInt(),
+        "droppedEventCount" to outbox.droppedEventCount().toInt(),
         "paused" to prefs.paused,
         "appVersion" to appVersion,
         "bootSessionId" to prefs.bootSessionId,
@@ -139,7 +140,9 @@ class PaymentCollectorModule : Module() {
 
     /** Content-free heartbeat to /v1/collector/health using the natively stored credential. */
     AsyncFunction("reportHealth") {
-      if (!prefs.isConfigured) return@AsyncFunction false
+      val baseUrl = prefs.apiBaseUrl
+      val credential = prefs.credential
+      if (baseUrl.isNullOrEmpty() || credential.isNullOrEmpty()) return@AsyncFunction false
       val apps = org.json.JSONArray().apply {
         ProviderApps.detectAll(context).filter { it.installed }.forEach {
           put(org.json.JSONObject().apply {
@@ -160,8 +163,8 @@ class PaymentCollectorModule : Module() {
         put("providerApps", apps)
       }
       val req = okhttp3.Request.Builder()
-        .url(prefs.apiBaseUrl!!.trimEnd('/') + "/v1/collector/health")
-        .header("Authorization", "Collector " + prefs.credential!!)
+        .url(baseUrl.trimEnd('/') + "/v1/collector/health")
+        .header("Authorization", "Collector " + credential)
         .header("x-paytsek-api-version", "v1")
         .post(body.toString().toRequestBody("application/json".toMediaType()))
         .build()

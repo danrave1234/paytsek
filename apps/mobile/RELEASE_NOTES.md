@@ -1,10 +1,13 @@
-## PayTsek V2 beta — 0.2.3
+## PayTsek V2 beta — 0.2.4
 
-- Scanned proofs now identify GCash, GoTyme, Maya, or MariBank using receipt text, layout, and OCR confidence.
-- Wallet names mentioned only as the recipient are ignored, reducing incorrect source detection.
-- Unclear proofs are recorded immediately as Unknown wallet and can be corrected later from record details.
-- Record details now distinguish the wallet shown on the proof from the wallet that produced matching notification evidence.
-- Fixed a local database connection failure that could prevent a scanned proof from being saved after an app update.
-- Save confirmations now appear briefly and include the detected wallet instead of interrupting the workflow.
+- Faster and more reliable saving: a scanned proof is stored on your phone first, and a save that fails now tells you exactly what to fix instead of doing nothing.
+- Sharing a screenshot into PayTsek no longer risks recording the same proof twice, and scans made offline now upload on the next app start.
+- App updates downloaded in-app are now verified against the release checksum before installing.
+- New sign-ins can now choose between creating a workspace or joining with an invite code.
+- Theme setting now cycles System, Light, and Dark.
+- Records, Review, and Analytics fixes: full pagination in Review, consistent evidence labels (Recorded, Possible match, Strong match, Owner confirmed, Voided), and workspace-timezone times everywhere.
+- Owners can now rename a workspace and change its timezone; several team, invite, device, and export actions show clear progress and errors instead of failing silently.
+- Notification listening is more resilient: captured payments are never dropped silently, uploads retry properly, and the listener recovers from storage corruption instead of stopping.
+- Many smaller performance improvements across Today, Records, and scanning.
 
 Wallet detection and notification matching are supporting evidence, not confirmation from a bank or wallet provider.

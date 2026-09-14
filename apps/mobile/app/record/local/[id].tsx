@@ -3,13 +3,13 @@ import { parseMoneyExact } from '@paytsek/receipt-parsers';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { BackHandler, Image, StyleSheet, View } from 'react-native';
-import { Button, Chip, IconButton, Portal, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, Chip, Dialog, IconButton, Portal, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
 import { Loading, Notice, Screen } from '@/components/ui';
-import { correctDraft, getDraft, syncDraft, type Draft } from '@/lib/drafts';
+import { correctDraft, getDraft, pruneSynced, syncDraft, type Draft } from '@/lib/drafts';
 import { manilaTime, peso } from '@/lib/format';
 import { useInvalidateRecord } from '@/lib/queries';
 import { useSession } from '@/lib/session';
-import { RADIUS, SPACING, TOUCH_TARGET } from '@/theme';
+import { RADIUS, SPACING } from '@/theme';
 
 export default function LocalRecordDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -21,6 +21,7 @@ export default function LocalRecordDetail() {
   const [amountText, setAmountText] = useState('');
   const [providerValue, setProviderValue] = useState<Provider | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -32,12 +33,18 @@ export default function LocalRecordDetail() {
   const load = useCallback(async () => {
     if (!workspace || !id) return setDraft(null);
     const next = await getDraft(workspace.id, id);
+    if (next?.syncStatus === 'SYNCED' && next.serverRecordId) {
+      // The server owns this record; background pruning may delete the staged
+      // copy at any moment, so hand over to the canonical detail screen.
+      router.replace(`/record/${next.serverRecordId}`);
+      return;
+    }
     setDraft(next);
     if (next) {
       setAmountText((next.request.corrected.amountCentavos / 100).toFixed(2));
       setProviderValue(next.request.corrected.receiptProvider);
     }
-  }, [id, workspace]);
+  }, [id, router, workspace]);
 
   useFocusEffect(useCallback(() => {
     void load();
@@ -61,6 +68,7 @@ export default function LocalRecordDetail() {
       });
       setDraft(next);
       invalidate();
+      setEditing(false);
       setToast('Record updated');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Could not update this record.');
@@ -78,6 +86,8 @@ export default function LocalRecordDetail() {
       const next = await getDraft(workspace.id, draft.clientRecordId);
       invalidate(next?.serverRecordId ?? undefined);
       if (status === 'SYNCED' && next?.serverRecordId) {
+        // The server owns the record now; remove the redundant staged copy.
+        await pruneSynced(workspace.id);
         router.replace(`/record/${next.serverRecordId}`);
         return;
       }
@@ -115,14 +125,8 @@ export default function LocalRecordDetail() {
 
       {draft.imageUri ? <Image source={{ uri: draft.imageUri }} style={[styles.proof, { backgroundColor: theme.colors.surfaceVariant }]} resizeMode="contain" accessibilityLabel="Saved payment proof" /> : null}
 
-      <View style={styles.form}>
-        <Text variant="titleMedium" style={styles.sectionTitle}>Correct record</Text>
-        <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} disabled={busy || draft.syncStatus === 'UPLOADING'} />
-        <Text variant="labelMedium">Sent from</Text>
-        <View style={styles.providerChoices}>{PROVIDERS.map((item) => <Chip key={item.value} selected={providerValue === item.value} onPress={() => setProviderValue(item.value)} disabled={busy || draft.syncStatus === 'UPLOADING'}>{item.label}</Chip>)}</View>
-        <Button mode="contained" onPress={() => void save()} loading={busy} disabled={busy || draft.syncStatus === 'UPLOADING'} contentStyle={{ minHeight: TOUCH_TARGET }}>
-          Save changes
-        </Button>
+      <View style={styles.recordActions}>
+        <Button icon="pencil-outline" onPress={() => { setError(null); setEditing(true); }} disabled={busy || draft.syncStatus === 'UPLOADING'}>Correct record</Button>
       </View>
 
       {error ? <Notice kind="error">{error}</Notice> : null}
@@ -135,7 +139,22 @@ export default function LocalRecordDetail() {
         </View>
       ) : null}
 
-      <Portal><Snackbar visible={toast !== null} duration={2600} onDismiss={() => setToast(null)}>{toast}</Snackbar></Portal>
+      <Portal>
+        <Dialog visible={editing} onDismiss={busy ? undefined : () => setEditing(false)}>
+          <Dialog.Title>Correct record</Dialog.Title>
+          <Dialog.Content style={{ gap: SPACING.sm }}>
+            <Text variant="bodySmall">The proof stays with this record.</Text>
+            <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} disabled={busy} />
+            <Text variant="labelMedium">Sent from</Text>
+            <View style={styles.providerChoices}>{PROVIDERS.map((item) => <Chip key={item.value} selected={providerValue === item.value} onPress={() => setProviderValue(item.value)} disabled={busy}>{item.label}</Chip>)}</View>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setEditing(false)} disabled={busy}>Cancel</Button>
+            <Button onPress={() => void save()} loading={busy} disabled={busy}>Save</Button>
+          </Dialog.Actions>
+        </Dialog>
+        <Snackbar visible={toast !== null} duration={2600} onDismiss={() => setToast(null)}>{toast}</Snackbar>
+      </Portal>
     </Screen>
   );
 }
@@ -146,8 +165,7 @@ const styles = StyleSheet.create({
   hero: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.xl, padding: SPACING.xl, gap: SPACING.xs },
   amount: { fontWeight: '700', letterSpacing: -0.8 },
   proof: { width: '100%', height: 300, borderRadius: RADIUS.lg },
-  form: { gap: SPACING.md },
+  recordActions: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, alignItems: 'center' },
   providerChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
-  sectionTitle: { fontWeight: '700' },
   sync: { gap: SPACING.xs, alignItems: 'flex-start' },
 });

@@ -92,7 +92,7 @@ export class ReviewService {
   /** Owner-only unlink (optionally reassign in the same transaction). History is preserved. */
   async unlink(orgId: string, ownerId: string, recordId: string, input: UnlinkRequest): Promise<void> {
     await this.db.tx(async (c) => {
-      const cur = await c.query<{ id: string; event_id: string | null; kind: string; source_id: string; amount_centavos: string }>(
+      const cur = await c.query<{ id: string; event_id: string | null; kind: string; source_id: string | null; amount_centavos: string }>(
         `select pm.id, pm.event_id, pm.kind, r.source_id, r.amount_centavos from payment_matches pm join payment_records r on r.id = pm.record_id
           where pm.record_id = $1 and pm.active and r.organization_id = $2 for update of pm`,
         [recordId, orgId],
@@ -102,8 +102,11 @@ export class ReviewService {
       await c.query(`update payment_matches set active = false, unlinked_at = now(), unlinked_by = $2, unlink_reason = $3 where id = $1`, [m.id, ownerId, input.reason]);
       let next = 'UNVERIFIED';
       if (input.reassignToEventId) {
-        const ev = await c.query(`select 1 from notification_events where id = $1 and organization_id = $2 and source_id = $3 and amount_centavos = $4 and purged_at is null`, [input.reassignToEventId, orgId, m.source_id, m.amount_centavos]);
-        if (!ev.rowCount) throw new ApiException('CANDIDATE_OUT_OF_SCOPE', 'Replacement notification is not a candidate for this record');
+        const ev = await c.query<{ source_id: string }>(`select source_id from notification_events where id = $1 and organization_id = $2 and ($3::uuid is null or source_id = $3) and amount_centavos = $4 and purged_at is null`, [input.reassignToEventId, orgId, m.source_id, m.amount_centavos]);
+        if (!ev.rows[0]) throw new ApiException('CANDIDATE_OUT_OF_SCOPE', 'Replacement notification is not a candidate for this record');
+        if (m.source_id === null) {
+          await c.query(`update payment_records set source_id = $2 where id = $1`, [recordId, ev.rows[0].source_id]);
+        }
         try {
           await c.query(
             `insert into payment_matches (organization_id, record_id, event_id, kind, reason_codes, matcher_version, created_by) values ($1,$2,$3,'USER_SELECTED','{USER_SELECTED_CANDIDATE,UNLINKED_BY_OWNER}',$4,$5)`,
