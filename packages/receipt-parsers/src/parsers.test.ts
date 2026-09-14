@@ -98,7 +98,7 @@ describe('capability registry', () => {
     }
   });
 
-  it('never invents cross-provider reference mapping', () => {
+  it('does not auto-match GCash when the receiving push has no shared reference', () => {
     const gcashToGcash = {
       receiptProvider: 'GCASH',
       receivingProvider: 'GCASH',
@@ -107,9 +107,14 @@ describe('capability registry', () => {
       notificationNamespace: 'GCASH_REF_NO',
     } as const;
 
-    expect(autoMatchFlow(gcashToGcash).comparable).toBe(true);
+    expect(autoMatchFlow(gcashToGcash)).toMatchObject({
+      comparable: false,
+      flowId: 'gcash-to-gcash.express-send',
+      reason: 'FLOW_NOT_ENABLED',
+    });
     expect(autoMatchFlow({ ...gcashToGcash, receiptProvider: 'GOTYME', receiptNamespace: 'GOTYME_REF_NO' }).comparable).toBe(false);
     expect(autoMatchFlow({ ...gcashToGcash, receiptNamespace: null }).reason).toBe('MISSING_REFERENCE');
+    expect(autoMatchFlowsForReceivingProvider('GCASH')).toEqual([]);
     expect(autoMatchFlowsForReceivingProvider('GOTYME')).toEqual([]);
   });
 
@@ -121,10 +126,15 @@ describe('capability registry', () => {
       notificationNamespace: 'GCASH_REF_NO',
     } as const;
 
-    expect(autoMatchFlow({ ...base, rail: 'EXPRESS_SEND' }).flowId).toBe('gcash-to-gcash.express-send');
+    expect(autoMatchFlow({ ...base, rail: 'EXPRESS_SEND' })).toMatchObject({
+      comparable: false,
+      flowId: 'gcash-to-gcash.express-send',
+      reason: 'FLOW_NOT_ENABLED',
+    });
     expect(autoMatchFlow({ ...base, rail: 'QR_P2P' })).toMatchObject({
-      comparable: true,
+      comparable: false,
       flowId: 'gcash-to-gcash.qr-p2p',
+      reason: 'FLOW_NOT_ENABLED',
     });
     // Merchant QR shares the namespace but its notification carries no
     // reference, so it must never borrow an enabled rail's rule.
@@ -254,7 +264,7 @@ interface NotifFixture {
   }>;
 }
 
-describe('GCash notification adapter (SYNTHETIC fixtures)', () => {
+describe('GCash notification adapter (redacted real + legacy fixtures)', () => {
   const fx = loadJson<NotifFixture>('notifications/gcash.json');
   for (const c of fx.cases) {
     it(c.id, () => {
@@ -289,13 +299,13 @@ describe('GCash notification adapter (SYNTHETIC fixtures)', () => {
   it('recognizes the observed GCash received-money notification', () => {
     const r = parseNotification({
       packageName: 'com.globe.gcash.android',
-      title: 'You have received money…',
-      text: 'You have received PHP 1.00 of GCash from KI** A M** A. 09277364278.',
+      title: 'You have received money in GCash!',
+      text: 'You have received PHP 1.00 of GCash from KI** A. 0927•••6478.',
       bigText: null,
       textLines: [],
       isGroupSummary: false,
     });
-    expect(r).toMatchObject({ ok: true, event: { provider: 'GCASH', amountCentavos: 100, payerMaskedPhone: '09277364278' } });
+    expect(r).toMatchObject({ ok: true, event: { provider: 'GCASH', amountCentavos: 100, payerMaskedPhone: '0927•••6478', referenceValue: null } });
   });
 
   it('rejects an outgoing lookalike before it can match an incoming template', () => {

@@ -27,6 +27,16 @@
   --color-brand: #155eef;
   --color-brand-2: #1849a9;
   --color-brand-soft: #eaf0ff;
+  /* Fixed-action colors do not invert with the foreground palette in dark
+     mode. Using `ink` or the light-mode brand token as a surface caused
+     white-on-white panels and buttons. */
+  --color-brand-solid: #155eef;
+  --color-brand-solid-hover: #0b4ec4;
+  --color-on-brand: #ffffff;
+  --color-night: #0b0f17;
+  --color-night-2: #121823;
+  --color-night-line: #273142;
+  --color-night-muted: #a9b3c4;
 
   --color-ok: #0f6b46;
   --color-ok-soft: #dcf2e7;
@@ -56,6 +66,8 @@ html {
 
 body {
   @apply bg-bg-2 text-ink antialiased;
+  min-width: 0;
+  overflow-x: clip;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -102,12 +114,14 @@ body {
   .h-display {
     @apply font-sans font-semibold;
     letter-spacing: -0.035em;
+    overflow-wrap: anywhere;
     text-wrap: balance;
   }
 
   .h-section {
     @apply font-sans font-semibold;
     letter-spacing: -0.03em;
+    overflow-wrap: anywhere;
     text-wrap: balance;
   }
 
@@ -143,8 +157,8 @@ body {
     @apply inline-flex items-center justify-center gap-2 rounded-[14px] px-5 text-[15px] font-semibold transition-all;
     min-height: 50px;
   }
-  .btn-primary { @apply bg-brand text-white; box-shadow: 0 8px 20px -10px rgba(21, 94, 239, .85); }
-  .btn-primary:hover { @apply -translate-y-0.5 bg-brand-2; }
+  .btn-primary { @apply bg-brand-solid text-on-brand; box-shadow: 0 8px 20px -10px rgba(21, 94, 239, .85); }
+  .btn-primary:hover { @apply -translate-y-0.5 bg-brand-solid-hover; }
   .btn-secondary { @apply border border-line bg-bg text-ink; }
   .btn-secondary:hover { @apply -translate-y-0.5 border-ink-3 bg-bg; }
 
@@ -226,7 +240,7 @@ body {
 
   /* ---- Dark band ------------------------------------------------------- */
 
-  .band-dark { @apply bg-ink text-white; }
+  .band-dark { @apply bg-night text-on-brand; }
   .band-dark .eyebrow { @apply text-white/45; }
 
   /* ---- Long-form legal / prose ----------------------------------------- */
@@ -268,9 +282,9 @@ body {
 
 .phone-v2 {
   position: relative;
-  border: 9px solid var(--color-ink);
+  border: 9px solid var(--color-night);
   border-radius: 2.65rem;
-  background: var(--color-ink);
+  background: var(--color-night);
   box-shadow: 0 42px 80px -34px rgba(16, 24, 40, .5), inset 0 0 0 1px rgba(255, 255, 255, .12);
   transform: rotate(1.35deg);
 }
@@ -309,12 +323,18 @@ body {
 .evidence-orbit::before,
 .evidence-orbit::after {
   content: "";
+  display: none;
   position: absolute;
   border-radius: 999px;
   border: 1px solid var(--color-line);
 }
 .evidence-orbit::before { inset: 12%; }
 .evidence-orbit::after { inset: 28%; border-style: dashed; }
+
+@media (min-width: 640px) {
+  .evidence-orbit::before,
+  .evidence-orbit::after { display: block; }
+}
 
 .fade-up { animation: fade-up .65s cubic-bezier(.2,.7,.2,1) both; }
 .fade-up-delay { animation: fade-up .75s .12s cubic-bezier(.2,.7,.2,1) both; }

@@ -8,8 +8,8 @@ A flow is **(receipt provider, receiving provider, rail)**, and `autoMatchFlow()
 
 | Flow id | Receipt → Receiving | Rail | Recording | Auto-match | Evidence | Why / what is needed |
 | --- | --- | --- | --- | --- | --- | --- |
-| `gcash-to-gcash.express-send` | GCash → GCash | Express Send | ✔ | ✔ **only when the notification contains the Ref No.** | SYNTHETIC | Based on the user-observed sample (amount, masked sender, masked phone). Whether GCash includes the reference in the notification is not proven; when absent the record goes to Review. Need: 3+ redacted real notification+receipt pairs, app version noted. |
-| `gcash-to-gcash.qr-p2p` | GCash → GCash | QR (personal) | ✔ | ✔ **only when the notification contains the Ref No.** | SYNTHETIC | Same wallet both sides, same `GCASH_REF_NO` namespace, and receiving money produces the same notification whichever rail the payer used — the same assumption already shipped for Express Send. Needs the same redacted real sample pairs. |
+| `gcash-to-gcash.express-send` | GCash → GCash | Express Send | ✔ | ✖ | REDACTED_REAL_SAMPLE | Current Android receiving pushes contain amount, masked sender and sender number, but not the receipt reference. Exact amount + nearby time is shown for Review. |
+| `gcash-to-gcash.qr-p2p` | GCash → GCash | QR (personal) | ✔ | ✖ | REDACTED_REAL_SAMPLE | The payer screenshot contains a reference that the recipient push does not expose. Exact amount + nearby time is shown for Review. |
 | `gcash-to-gcash.qr-merchant` | GCash → GCash | QR (merchant) | ✔ | ✖ | NONE | Merchant Scan-to-Pay confirmations use different channels per GCash help table; text unverified. |
 | `gotyme-to-gcash.instapay-qr` | GoTyme → GCash | InstaPay/QR Ph | ✔ | ✖ | NONE | Cross-provider references are not the same identifier; no invented mapping. |
 | `gotyme-to-gotyme.transfer` | GoTyme → GoTyme | Transfer | ✔ | ✖ | REDACTED_REAL_SAMPLE | Incoming template is recognised, but it has no comparable reference. Review required. |
@@ -35,7 +35,7 @@ Every wallet has a registered notification adapter on both sides (`NOTIFICATION_
 
 | Wallet | Recording | Notification parsing | Auto-match |
 | --- | --- | --- | --- |
-| GCash | ✔ | ✔ `gcash.incoming.v1` | ✔ Express Send + personal QR |
+| GCash | ✔ | ✔ `gcash.incoming.v1` | ✖ (current receiving push has no comparable reference) |
 | GoTyme | ✔ | ✔ `gotyme.incoming.v1` | ✖ (notification has no comparable reference) |
 | Maya | ✔ | ✔ `maya.incoming.v1` | ✖ (notification has no comparable reference) |
 | MariBank | ✔ | ✔ `maribank.incoming.v1` | ✖ (notification has no comparable reference) |

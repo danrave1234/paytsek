@@ -6,31 +6,32 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Parity cases mirroring tests/fixtures/notifications/gcash.json (SYNTHETIC).
+ * Parity cases mirroring the redacted current-push and legacy fixtures in
+ * tests/fixtures/notifications/gcash.json.
  * Run with `./gradlew :payment-collector:testDebugUnitTest` inside an Android build.
  */
 class NotificationParserTest {
   private fun input(text: String, pkg: String = "com.globe.gcash.android", summary: Boolean = false) =
     NotificationParser.Input(pkg, "GCash", text, null, emptyList(), summary)
 
-  @Test fun acceptsIncomingWithReference() {
-    val r = NotificationParser.parse(input("You have received PHP 1,250.00 of GCash from JU•N D. (+63 9•• ••• 1234) on Sep 08, 2026 1:05 AM. Ref. No. 1234567890123."))
+  @Test fun acceptsCurrentAndroidPushWithoutReference() {
+    val r = NotificationParser.parse(NotificationParser.Input("com.globe.gcash.android", "You have received money in GCash!", "You have received PHP 1,096.10 of GCash from MI*A P. 0915••••847.", null, emptyList(), false))
     assertTrue(r is NotificationParser.Result.Accepted)
     val e = (r as NotificationParser.Result.Accepted).event
-    assertEquals(125000L, e.amountCentavos)
-    assertEquals("1234567890123", e.referenceValue)
-    assertEquals("GCASH_REF_NO", e.referenceNamespace)
-    assertEquals("JU•N D.", e.payerMaskedName)
-    assertEquals("+63 9•• ••• 1234", e.payerMaskedPhone)
-    assertEquals("2026-09-07T17:05:00Z", e.providerDescribedAt)
-  }
-
-  @Test fun acceptsIncomingWithoutReferenceAndIgnoresBalance() {
-    val r = NotificationParser.parse(input("You have received ₱500.00 from MA•IA S. (0917•••5678). Your new balance is ₱12,340.50."))
-    val e = (r as NotificationParser.Result.Accepted).event
-    assertEquals(50000L, e.amountCentavos)
+    assertEquals(109610L, e.amountCentavos)
     assertNull(e.referenceValue)
     assertEquals("UNKNOWN", e.referenceNamespace)
+    assertEquals("MI*A P.", e.payerMaskedName)
+    assertEquals("0915••••847", e.payerMaskedPhone)
+    assertNull(e.providerDescribedAt)
+  }
+
+  @Test fun acceptsLegacyOptionalReferenceAndIgnoresBalance() {
+    val r = NotificationParser.parse(input("You have received PHP 500.00 of GCash from MA•IA S. (0917•••5678). Your new balance is PHP 12,340.50. Ref. No. 1234567890123."))
+    val e = (r as NotificationParser.Result.Accepted).event
+    assertEquals(50000L, e.amountCentavos)
+    assertEquals("1234567890123", e.referenceValue)
+    assertEquals("GCASH_REF_NO", e.referenceNamespace)
   }
 
   @Test fun rejectsOutgoing() = assertRejected("You have sent PHP 1,250.00 to JU•N D. Ref. No. 9876543210987.", "OUTGOING_PAYMENT")

@@ -5,7 +5,7 @@
 | Suite | Command | Covers |
 | --- | --- | --- |
 | Contracts | `pnpm --filter @paytsek/contracts test` | Labels/forbidden wording, plan invariants, schema strictness (integer centavos) |
-| Parsers | `pnpm --filter @paytsek/receipt-parsers test` | Money, reference normalization, Manila time, flow registry, GCash adapter (SYNTHETIC fixtures), GoTyme fail-closed, receipt extraction (payer/payee separation, fee vs amount) |
+| Parsers | `pnpm --filter @paytsek/receipt-parsers test` | Money, reference normalization, Manila time, flow registry, redacted current GCash push + legacy parsing, fail-closed wallet templates, receipt extraction |
 | Matcher (adversarial) | `pnpm --filter @paytsek/api test` | Every rule in §6 of the brief: amount+time never auto, cross-provider never maps, 3 same-amount → distinct candidates, delayed exact-ID, edited fields, already-linked, failed/pending, owner approval, capture-time fallback |
 | Kotlin parity | `cd apps/mobile/android && ./gradlew :payment-collector:testDebugUnitTest` | Same fixtures as the TS GCash adapter |
 
@@ -26,14 +26,14 @@ Prereqs: two Android phones (one receives real GCash notifications), one iPhone,
 
 | # | Scenario (brief §16) | Steps | Expected | Status |
 | --- | --- | --- | --- | --- |
-| 1 | Same Android phone scans + collects | Pair phone as BOTH; scan receipt; receive real Express Send | One record, one event, state MATCHED_AUTO only if reference present on both | ☐ untested on real GCash |
+| 1 | Same Android phone scans + collects | Pair phone as BOTH; scan receipt; receive real GCash payment | One record, one event, state REVIEW_REQUIRED when exact amount is nearby; never auto-matched without a shared reference | ☐ untested on real GCash |
 | 2 | iPhone scanner + distant Android collector (mobile data) | Owner code on iPhone, enter on Android over LTE | Approval flow completes without LAN | ☐ |
 | 3 | All-iPhone workspace | Skip pairing | Settings shows manual mode; no collector UI pretends to work | ☐ |
 | 4 | Notification before scan | Receive first, scan later | Record picks up existing event as candidate/match | ☐ |
 | 5 | Notification after scan | Scan first, receive later | Record updates after worker runs (realtime/refetch) | ☐ |
 | 6 | Payer absent, payee present | Receipt with "Sent to" only | payee_name filled, payer null, never compared to notification sender | ✔ unit |
 | 7 | Same amount / masked / time only | Two receipts, one event, no ref in notification | REVIEW_REQUIRED, never AUTO | ✔ unit |
-| 8 | Valid shared namespace + exact ID | Receipt Ref = notification Ref | MATCHED_AUTO with disclosure text | ✔ unit / ☐ device |
+| 8 | Current GCash push without reference | Receipt has Ref; notification has amount + sender number only | REVIEW_REQUIRED; candidate is never auto-confirmed | ✔ unit / ☐ device |
 | 9 | Cross-provider refs differ | GoTyme receipt vs GCash notification | NO_COMPARABLE_NAMESPACE, no auto | ✔ unit |
 | 10 | Three same-amount payments | 3 events, 1 record | 3 distinct candidates sorted by Δt | ✔ unit |
 | 11 | Two cashiers claim one event | Confirm from two phones within 1 s | One MATCHED_BY_USER, one MATCH_CONFLICT | ☐ (DB constraint verified) |

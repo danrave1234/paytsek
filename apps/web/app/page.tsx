@@ -4,7 +4,7 @@ import { PROVIDER_SUPPORT } from '@/lib/providers';
 import { latest } from '@/lib/releases';
 
 const sampleRows = [
-  { time: '8:42 PM', wallet: 'GCash', state: 'Strong match', amount: '₱850.00', tone: 'brand' },
+  { time: '8:42 PM', wallet: 'GCash', state: 'Possible match', amount: '₱850.00', tone: 'warn' },
   { time: '7:18 PM', wallet: 'Maya', state: 'Recorded', amount: '₱240.00', tone: 'plain' },
   { time: '6:05 PM', wallet: 'GoTyme', state: 'Owner confirmed', amount: '₱1,200.00', tone: 'ok' },
 ] as const;
@@ -55,7 +55,7 @@ function TodayPreview() {
             {sampleRows.map((row) => (
               <div key={row.time} className="grid grid-cols-[1fr_auto] gap-3 border-b border-line py-3 last:border-0">
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <span className={`size-2 rounded-full ${row.tone === 'ok' ? 'bg-ok' : row.tone === 'brand' ? 'bg-brand' : 'bg-ink-3'}`} />
+                  <span className={`size-2 rounded-full ${row.tone === 'ok' ? 'bg-ok' : row.tone === 'warn' ? 'bg-warn' : 'bg-ink-3'}`} />
                   <div className="min-w-0">
                     <p className="text-[11px] font-semibold">{row.wallet}</p>
                     <p className="mt-0.5 text-[9px] text-ink-3">{row.time} · {row.state}</p>
@@ -67,12 +67,14 @@ function TodayPreview() {
           </div>
         </div>
 
-        <div className="absolute inset-x-0 bottom-0 grid h-[74px] grid-cols-3 items-center rounded-t-[22px] border-t border-line bg-bg px-3 shadow-[0_-10px_30px_rgba(16,24,40,.08)]">
+        <div className="absolute inset-x-0 bottom-0 grid h-[74px] grid-cols-5 items-center rounded-t-[22px] border-t border-line bg-bg px-2 shadow-[0_-10px_30px_rgba(16,24,40,.08)]">
           <span className="text-center text-[9px] font-semibold text-brand">Today</span>
-          <span className="mx-auto -translate-y-3 rounded-[19px] border-[5px] border-bg-2 bg-brand p-3 text-white shadow-lg shadow-brand/25">
+          <span className="text-center text-[9px] font-semibold text-ink-3">Records</span>
+          <span className="mx-auto -translate-y-3 rounded-[19px] border-[5px] border-bg-2 bg-brand-solid p-3 text-on-brand shadow-lg shadow-brand/25">
             <ScanGlyph className="size-7" />
           </span>
-          <span className="text-center text-[9px] font-semibold text-ink-3">Records</span>
+          <span className="text-center text-[9px] font-semibold text-ink-3">Analytics</span>
+          <span className="text-center text-[9px] font-semibold text-ink-3">Settings</span>
         </div>
       </div>
       <span className="phone-v2-glow" aria-hidden />
@@ -92,7 +94,7 @@ export default function Home() {
               <span className="size-2 rounded-full bg-ok" aria-hidden />
               <span className="text-xs font-semibold text-ink-2">Free Android beta · v{rel.version}</span>
             </div>
-            <h1 className="h-display mt-7 max-w-2xl text-[clamp(3.2rem,8vw,6.4rem)] leading-[.9]">
+            <h1 className="h-display mt-7 max-w-2xl text-[clamp(2.65rem,13vw,6.4rem)] leading-[.92] sm:text-[clamp(3.2rem,8vw,6.4rem)] sm:leading-[.9]">
               Every QR sale.<br /><span className="text-brand">Already counted.</span>
             </h1>
             <p className="mt-7 max-w-xl text-[17px] leading-8 text-ink-2 sm:text-lg">
@@ -110,9 +112,9 @@ export default function Home() {
               <p className="eyebrow">Saved in seconds</p>
               <p className="data mt-1 text-lg font-semibold">₱850.00</p>
             </div>
-            <div className="absolute -right-5 bottom-28 z-20 hidden rounded-2xl border border-brand/20 bg-brand px-4 py-3 text-white shadow-raised sm:block">
+            <div className="absolute -right-5 bottom-28 z-20 hidden rounded-2xl border border-brand-solid/30 bg-brand-solid px-4 py-3 text-on-brand shadow-raised sm:block">
               <p className="text-[10px] font-semibold uppercase tracking-[.12em] text-white/60">Evidence</p>
-              <p className="mt-1 text-sm font-semibold">Strong match</p>
+              <p className="mt-1 text-sm font-semibold">Possible match</p>
             </div>
             <TodayPreview />
           </div>
@@ -152,7 +154,7 @@ export default function Home() {
       </section>
 
       <section className="px-4 sm:px-6">
-        <div className="mx-auto max-w-7xl overflow-hidden rounded-[2rem] bg-ink px-6 py-16 text-white sm:px-10 lg:px-16 lg:py-24">
+        <div className="mx-auto max-w-7xl overflow-hidden rounded-[1.5rem] bg-night px-5 py-14 text-on-brand sm:rounded-[2rem] sm:px-10 sm:py-16 lg:px-16 lg:py-24">
           <div className="grid items-center gap-14 lg:grid-cols-[.92fr_1.08fr] lg:gap-24">
             <div>
               <p className="eyebrow !text-white/45">Your day at a glance</p>
@@ -165,7 +167,7 @@ export default function Home() {
                 <span className="text-xs text-white/45">3 records</span>
               </div>
               {sampleRows.map((row) => (
-                <div key={row.time} className="grid grid-cols-[82px_1fr_auto] items-center gap-3 border-b border-white/10 py-4 last:border-0">
+                <div key={row.time} className="grid grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-2 border-b border-white/10 py-4 last:border-0 sm:grid-cols-[82px_minmax(0,1fr)_auto] sm:gap-3">
                   <span className="data text-xs text-white/45">{row.time}</span>
                   <span className="text-sm font-semibold text-white/80">{row.wallet}<span className="ml-2 hidden text-xs font-normal text-white/35 sm:inline">{row.state}</span></span>
                   <span className="data text-sm font-semibold">{row.amount}</span>
@@ -178,19 +180,19 @@ export default function Home() {
 
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
         <div className="grid items-center gap-14 lg:grid-cols-2 lg:gap-24">
-          <div className="evidence-orbit relative mx-auto aspect-square w-full max-w-md rounded-full border border-line">
-            <div className="absolute left-[8%] top-[26%] w-[58%] rounded-2xl border border-line bg-bg p-5 shadow-raised">
+          <div className="evidence-orbit relative mx-auto grid w-full max-w-md gap-3 sm:block sm:aspect-square sm:rounded-full sm:border sm:border-line">
+            <div className="relative z-[1] w-full rounded-2xl border border-line bg-bg p-5 shadow-raised sm:absolute sm:left-[8%] sm:top-[26%] sm:w-[58%]">
               <p className="eyebrow">Payment proof</p><p className="data mt-3 text-2xl font-semibold">₱850.00</p><p className="mt-1 text-sm text-ink-3">GCash · 8:42 PM</p>
             </div>
-            <div className="absolute bottom-[24%] right-[6%] w-[58%] rounded-2xl border border-brand/20 bg-brand p-5 text-white shadow-raised">
-              <p className="text-[10px] font-semibold uppercase tracking-[.13em] text-white/55">Phone notification</p><p className="data mt-3 text-2xl font-semibold">₱850.00</p><p className="mt-1 text-sm text-white/60">Nearby · linked</p>
+            <span className="relative z-[3] mx-auto -my-1 rounded-full border-4 border-bg-2 bg-night px-3 py-1.5 text-[10px] font-semibold text-on-brand sm:absolute sm:left-1/2 sm:top-1/2 sm:m-0 sm:-translate-x-1/2 sm:-translate-y-1/2">Compare</span>
+            <div className="relative z-[2] w-full rounded-2xl border border-brand-solid/30 bg-brand-solid p-5 text-on-brand shadow-raised sm:absolute sm:bottom-[24%] sm:right-[6%] sm:w-[58%]">
+              <p className="text-[10px] font-semibold uppercase tracking-[.13em] text-white/55">Phone notification</p><p className="data mt-3 text-2xl font-semibold">₱850.00</p><p className="mt-1 text-sm text-white/60">Exact amount · nearby</p>
             </div>
-            <span className="absolute left-1/2 top-1/2 grid size-12 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-[6px] border-bg-2 bg-ok text-lg text-white">✓</span>
           </div>
           <div>
             <p className="eyebrow text-brand">Optional wallet evidence</p>
             <h2 className="h-section mt-4 text-[clamp(2.2rem,5vw,3.8rem)] leading-[1.02]">A second signal, without a false promise.</h2>
-            <p className="mt-6 text-[16px] leading-8 text-ink-2">On Android, PayTsek can compare a proof with an incoming-payment notification from your own phone. A match helps you review faster; it is never presented as provider verification.</p>
+            <p className="mt-6 text-[16px] leading-8 text-ink-2">On Android, PayTsek compares the receiving wallet, exact amount and nearby time with a recognized incoming notification. Because the customer screenshot and receiver notification may not share a reference number, it presents a possible match for review—not provider verification.</p>
             <div className="mt-8 border-l-2 border-brand pl-5">
               <p className="font-semibold">The record is saved either way.</p>
               <p className="mt-1 text-sm leading-6 text-ink-3">Missed notifications never erase a sale from your ledger.</p>
@@ -205,7 +207,7 @@ export default function Home() {
             <p className="eyebrow text-brand">Free public beta</p>
             <h2 className="h-section mt-4 text-[clamp(2.2rem,5vw,4rem)] leading-[1.02]">Make the next payment the first clean record.</h2>
           </div>
-          <Link href="/download" className="btn-primary shrink-0">Download for Android <span aria-hidden>↓</span></Link>
+          <Link href="/download" className="btn-primary w-full shrink-0 sm:w-auto">Download for Android <span aria-hidden>↓</span></Link>
         </div>
       </section>
     </>
