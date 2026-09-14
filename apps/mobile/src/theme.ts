@@ -160,6 +160,15 @@ const darkStates = {
   VOIDED: { bg: '#5A2222', fg: '#FFCFCB', icon: 'cancel' },
 } as const;
 
+/** Semantic success/healthy indicator; keep paired with a label, never color alone. */
+export const successColorFor = (dark: boolean) => (dark ? '#8FE3CE' : '#12B76A');
+
+/** Slightly translucent surface behind the inset navigation dock. */
+export const navBarBackgroundFor = (dark: boolean) => (dark ? '#161B26FA' : '#FFFEFCFA');
+
+/** Neutral shadow tint shared by elevated surfaces. */
+export const SHADOW_COLOR = '#101828';
+
 export type StateColor = { bg: string; fg: string; icon: string };
 
 export const stateColorsFor = (dark: boolean): Record<keyof typeof lightStates, StateColor> =>

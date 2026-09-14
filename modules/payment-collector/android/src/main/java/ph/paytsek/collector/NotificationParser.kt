@@ -101,6 +101,19 @@ object NotificationParser {
   private val REF = Regex("\\b(?:Ref(?:erence)?\\.?\\s*(?:No\\.?|Number|#)?)\\s*[:#]?\\s*([\\d][\\d\\s-]{6,24}\\d)", RegexOption.IGNORE_CASE)
   private val ON_DATE = Regex("\\b(?:on|at)\\s+((?:[A-Za-z]{3,9}\\.?\\s+\\d{1,2},?\\s+\\d{4}|\\d{1,2}[/-]\\d{1,2}[/-]\\d{4}|\\d{4}-\\d{2}-\\d{2})(?:,?\\s+(?:at\\s+)?\\d{1,2}:\\d{2}(?::\\d{2})?\\s*(?:AM|PM|am|pm)?)?)")
 
+  /**
+   * Payer names must never leave the device unmasked. Provider templates usually
+   * mask them already (MI*A P., MA\u2022IA S.); when a template surfaces a fully
+   * unmasked name, mask it locally: keep the first character of each word and
+   * replace the rest with \u2022 (e.g. "Juan Dela Cruz" -> "J\u2022\u2022\u2022 D\u2022\u2022\u2022 C\u2022\u2022\u2022").
+   */
+  private fun maskLocally(name: String): String {
+    if (name.any { it == '\u2022' || it == '*' }) return name
+    return name.split(Regex("\\s+")).joinToString(" ") { w ->
+      if (w.length <= 1) w else w.first() + "\u2022".repeat(w.length - 1)
+    }
+  }
+
   fun parse(input: Input): Result {
     if (input.isGroupSummary) return Result.Rejected("GROUP_SUMMARY")
     val provider = ProviderApps.providerFor(input.packageName) ?: return Result.Rejected("UNKNOWN_PACKAGE")
@@ -144,7 +157,7 @@ object NotificationParser {
     }
     if (amount <= 0) return Result.Rejected("NO_AMOUNT")
 
-    val name = FROM.find(text)?.groupValues?.get(1)?.trim()
+    val name = FROM.find(text)?.groupValues?.get(1)?.trim()?.let { maskLocally(it) }
     val phone = PHONE.find(text)?.value?.replace(Regex("\\s+"), " ")?.trim()
     val ref = REF.find(text)?.groupValues?.get(1)?.replace(Regex("[\\s-]"), "")?.takeIf { Regex("^\\d{8,20}$").matches(it) }
     val described = ON_DATE.find(text)?.groupValues?.get(1)?.let { parseManila(it) }
@@ -173,7 +186,7 @@ object NotificationParser {
   private fun accepted(provider: String, parserId: String, rail: String, amount: Long, payer: String?, text: String): Result {
     if (amount <= 0) return Result.Rejected("NO_AMOUNT")
     val normalized = text.replace(Regex("\\s+"), " ").trim()
-    return Result.Accepted(Parsed(provider, parserId, INCOMING_PARSER_VERSION, rail, amount, "UNKNOWN", null, payer, null, null, normalized, sha256(normalized)))
+    return Result.Accepted(Parsed(provider, parserId, INCOMING_PARSER_VERSION, rail, amount, "UNKNOWN", null, payer?.let { maskLocally(it) }, null, null, normalized, sha256(normalized)))
   }
 
   private fun parseGoTyme(input: Input, text: String): Result {

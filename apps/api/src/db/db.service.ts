@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from 'pg';
 import { loadEnv } from '../config/env';
 
@@ -10,6 +10,7 @@ export type Queryable = Pick<PoolClient, 'query'>;
  */
 @Injectable()
 export class DbService implements OnModuleDestroy {
+  private readonly logger = new Logger(DbService.name);
   readonly pool: Pool;
 
   constructor() {
@@ -26,6 +27,11 @@ export class DbService implements OnModuleDestroy {
       idleTimeoutMillis: serverless ? 10_000 : undefined,
       application_name: 'paytsek-api',
       statement_timeout: 15_000,
+    });
+    // An idle client can error (e.g. server-side disconnect); without a
+    // listener `pg` re-emits it on the pool and crashes the process.
+    this.pool.on('error', (err) => {
+      this.logger.error(`pg pool idle client error: ${err.message}`);
     });
   }
 

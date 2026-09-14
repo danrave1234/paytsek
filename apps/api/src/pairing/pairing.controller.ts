@@ -45,8 +45,9 @@ export class PairingController {
   }
 
   @Get(':sessionId/status')
-  poll(@Param('sessionId') sessionId: string, @Query(zod(PollQuery)) q: z.infer<typeof PollQuery>) {
-    return this.svc.poll(sessionId, q.deviceInstallId, q.code);
+  poll(@Param('sessionId') sessionId: string, @Query(zod(PollQuery)) q: z.infer<typeof PollQuery>, @Ip() ip: string) {
+    const ipBucket = createHash('sha256').update(ip ?? 'unknown').digest('hex').slice(0, 16);
+    return this.svc.poll(sessionId, q.deviceInstallId, q.code, ipBucket);
   }
 }
 

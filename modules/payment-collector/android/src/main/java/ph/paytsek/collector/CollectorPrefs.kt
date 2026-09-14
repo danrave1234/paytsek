@@ -14,10 +14,23 @@ class CollectorPrefs(context: Context) {
   private val prefs: SharedPreferences
 
   init {
+    val appContext = context.applicationContext
+    prefs = try {
+      create(appContext)
+    } catch (e: Exception) {
+      // Crypto corruption (backup restore, keystore reset, direct-boot) makes the
+      // encrypted file unreadable forever. Delete it and recreate once: losing the
+      // pairing (a re-pair) is better than a permanently dead listener.
+      java.io.File(appContext.filesDir.parentFile, "shared_prefs/paytsek_collector_secure.xml").delete()
+      create(appContext)
+    }
+  }
+
+  private fun create(context: Context): SharedPreferences {
     val masterKey = MasterKey.Builder(context, "paytsek_collector_master")
       .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
       .build()
-    prefs = EncryptedSharedPreferences.create(
+    return EncryptedSharedPreferences.create(
       context,
       "paytsek_collector_secure",
       masterKey,

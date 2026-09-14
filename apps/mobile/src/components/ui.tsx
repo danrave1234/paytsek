@@ -1,11 +1,11 @@
-import type { EvidenceState, SyncStatus } from '@paytsek/contracts';
+import type { EvidenceState } from '@paytsek/contracts';
 import React, { useEffect, useRef } from 'react';
 import { Animated, ScrollView, StyleSheet, View, type DimensionValue, type ViewStyle } from 'react-native';
 import { ActivityIndicator, Button, Icon, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { stateLabel } from '@/lib/format';
 import { useReducedMotion } from './motion';
-import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET, stateColorsFor } from '@/theme';
+import { RADIUS, SHADOW_COLOR, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET, stateColorsFor } from '@/theme';
 
 /** True when Paper is running the dark scheme; drives the state palette. */
 function useIsDark() {
@@ -29,19 +29,6 @@ export function StateChip({ state, compact = false }: { state: EvidenceState; co
   );
 }
 
-export function SyncChip({ status, quotaBlocked }: { status: SyncStatus; quotaBlocked?: boolean }) {
-  const theme = useTheme();
-  const label = quotaBlocked
-    ? 'Sync paused'
-    : status === 'SYNCED' ? 'Synced' : status === 'UPLOADING' ? 'Uploading…' : status === 'PARTIAL_UPLOAD' ? 'Partially uploaded' : status === 'FAILED' ? 'Sync failed' : 'Saved on this phone';
-  const icon = status === 'SYNCED' ? 'cloud-check-outline' : status === 'FAILED' ? 'cloud-alert' : 'cloud-upload-outline';
-  return (
-    <View style={[styles.chip, { backgroundColor: theme.colors.surfaceVariant }]}>
-      <Icon source={icon} size={14} color={theme.colors.onSurfaceVariant} />
-      <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{label}</Text>
-    </View>
-  );
-}
 
 /**
  * Standard screen container. Keeps content clear of the notch and of the
@@ -310,11 +297,10 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xl, minHeight: 220 },
   emptyIcon: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   notice: { flexDirection: 'row', gap: 10, alignItems: 'center', padding: SPACING.md, borderRadius: RADIUS.md },
-  group: { borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', shadowColor: '#101828', shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
+  group: { borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', shadowColor: SHADOW_COLOR, shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.md, paddingHorizontal: SPACING.lg, minHeight: TOUCH_TARGET },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: SPACING.md, paddingVertical: 6 },
   skeletonScene: { width: '100%', gap: SPACING.md },
-  skeletonActions: { width: '100%', flexDirection: 'row', justifyContent: 'space-between', gap: SPACING.sm },
   skeletonHeading: { flexDirection: 'row', alignItems: 'center', gap: SPACING.lg },
   skeletonRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: SPACING.md, padding: SPACING.md },
 });

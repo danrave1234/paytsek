@@ -1,7 +1,7 @@
 import { PROVIDERS, PROVIDER_LABELS, type EvidenceState, type Provider } from '@paytsek/contracts';
 import { parseMoneyExact } from '@paytsek/receipt-parsers';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 import { Button, Chip, Dialog, Icon, IconButton, List, Portal, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
 import { ErrorState, Loading, Notice, Screen, StateChip } from '@/components/ui';
@@ -21,7 +21,7 @@ const STATUS_COPY: Record<EvidenceState, { title: string; detail: string; icon: 
   REVIEW_REQUIRED: { title: 'Possible match', detail: 'A nearby incoming notification may fit this proof. Review it before linking.', icon: 'alert-circle-outline' },
   MATCHED_AUTO: { title: 'Strong match', detail: 'The proof aligns with an incoming notification on the payment phone. This is supporting evidence, not a bank guarantee.', icon: 'bell-check-outline' },
   MATCHED_BY_USER: { title: 'Strong match', detail: 'A team member linked this proof to the selected incoming notification.', icon: 'account-check-outline' },
-  CONFIRMED_MANUALLY: { title: 'Confirmed after wallet check', detail: 'An owner confirmed this payment directly in the wallet app.', icon: 'check-decagram-outline' },
+  CONFIRMED_MANUALLY: { title: 'Owner confirmed', detail: 'An owner confirmed this payment directly in the wallet app.', icon: 'check-decagram-outline' },
   VOIDED: { title: 'Voided', detail: 'This record is kept in history but excluded from recorded totals.', icon: 'cancel' },
 };
 
@@ -42,6 +42,10 @@ export default function RecordDetail() {
   const [amountText, setAmountText] = useState('');
   const [providerValue, setProviderValue] = useState<Provider | null>(null);
   const [msg, setMsg] = useState<{ kind: 'info' | 'error' | 'warning'; text: string } | null>(null);
+  // Every poll response carries a freshly signed proof URL; pin the first one so
+  // the already-loaded image never re-downloads (and flashes) while the screen is open.
+  const pinnedProofUrl = useRef<string | null>(null);
+  if (rec.data?.proofImageUrl && !pinnedProofUrl.current) pinnedProofUrl.current = rec.data.proofImageUrl;
   const goBack = useCallback(() => {
     if (router.canGoBack()) router.back();
     else router.replace('/(tabs)/records');
@@ -77,7 +81,9 @@ export default function RecordDetail() {
   const runDialog = async () => {
     setMsg(null);
     try {
-      if (dialog === 'unlink') await unlink.mutateAsync(reason);
+      // The unlink contract requires a reason of at least 3 characters, so an
+      // empty optional input falls back to a stable audit note.
+      if (dialog === 'unlink') await unlink.mutateAsync(reason.trim() || 'Unlinked from the app');
       if (dialog === 'void') await voidRec.mutateAsync(reason);
       if (dialog === 'manual') await manual.mutateAsync(reason || undefined);
       if (dialog === 'edit') {
@@ -133,17 +139,17 @@ export default function RecordDetail() {
       <View style={styles.detailGrid}><DetailCell label="Amount" value={peso(r.amountCentavos)} /><DetailCell label="Sent from" value={receiptWallet} />{receivingWallet ? <DetailCell label="Received in" value={receivingWallet} /> : null}<DetailCell label="Status" value={stateLabel(r.evidenceState)} /><DetailCell label="Time" value={manilaTime(r.corrected.receiptTransactionAt ?? r.capturedAt, r.corrected.receiptTransactionPrecision, workspace?.timezone)} /></View>
     </View>
 
-    {r.proofImageUrl ? <View style={[styles.proofCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}><View style={styles.proofHeader}><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment proof</Text><Icon source="image-outline" size={20} color={theme.colors.onSurfaceVariant} /></View><List.Image source={{ uri: r.proofImageUrl }} style={[styles.proof, { backgroundColor: theme.colors.surfaceVariant }]} /></View> : r.hasProofImage ? <Notice kind="info">The proof image is no longer available.</Notice> : null}
+    {pinnedProofUrl.current ? <View style={[styles.proofCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}><View style={styles.proofHeader}><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment proof</Text><Icon source="image-outline" size={20} color={theme.colors.onSurfaceVariant} /></View><List.Image source={{ uri: pinnedProofUrl.current }} style={[styles.proof, { backgroundColor: theme.colors.surfaceVariant }]} /></View> : r.hasProofImage ? <Notice kind="info">The proof image is no longer available.</Notice> : null}
     <View style={[styles.surface, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}><List.Accordion title="Activity" description={`${r.history.length} recorded event${r.history.length === 1 ? '' : 's'}`} left={(props) => <List.Icon {...props} icon="history" />}><View style={styles.history}>{r.history.map((h, i) => <View key={i} style={styles.historyRow}><View style={[styles.historyDot, { backgroundColor: theme.colors.outline }]} /><View style={{ flex: 1 }}><Text variant="bodySmall" style={{ fontWeight: '600' }}>{h.action.replace(/_/g, ' ').toLowerCase()}</Text><Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(h.at, 'SECOND')}{h.actorDisplayName ? ` · ${h.actorDisplayName}` : ''}</Text></View></View>)}</View></List.Accordion></View>
     {r.voidReason ? <Notice kind="error">Voided: {r.voidReason}</Notice> : null}
     {r.evidenceState !== 'VOIDED' ? <View style={styles.recordActions}>
       {canEdit ? <Button icon="pencil-outline" onPress={openEdit}>Correct record</Button> : null}
       {isOwner && open ? <Button icon="check-circle-outline" onPress={() => setDialog('manual')}>I checked the wallet</Button> : null}
-      {isOwner ? <Button icon="delete-outline" textColor={theme.colors.error} onPress={() => setDialog('void')}>Delete record</Button> : null}
+      {isOwner ? <Button icon="delete-outline" textColor={theme.colors.error} onPress={() => setDialog('void')}>Void record</Button> : null}
     </View> : null}
 
     <Portal>
-      <Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}><Dialog.Title>{dialog === 'edit' ? 'Correct record' : dialog === 'unlink' ? 'Unlink association' : dialog === 'void' ? 'Delete record' : 'Confirm after wallet check'}</Dialog.Title><Dialog.Content style={{ gap: 8 }}>{dialog === 'edit' ? <><Text variant="bodySmall">The proof and correction stay in Activity.</Text><TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} /><Text variant="labelMedium">Sent from</Text><View style={styles.providerChoices}>{PROVIDERS.map((item) => <Chip key={item.value} selected={providerValue === item.value} onPress={() => setProviderValue(item.value)}>{item.label}</Chip>)}</View></> : <><Text variant="bodySmall">{dialog === 'manual' ? 'Use this only after checking the receiving wallet. It is recorded as an owner confirmation, not a provider verification.' : dialog === 'void' ? 'This removes the record from active totals while preserving the proof and Activity history.' : 'The previous state remains in Activity.'}</Text><TextInput label={dialog === 'manual' ? 'Note (optional)' : 'Reason'} mode="outlined" value={reason} onChangeText={setReason} /></>}</Dialog.Content><Dialog.Actions><Button onPress={() => setDialog(null)}>Cancel</Button><Button onPress={() => void runDialog()} disabled={dialog !== 'edit' && dialog !== 'manual' && reason.trim().length < 3}>{dialog === 'edit' ? 'Save' : 'Confirm'}</Button></Dialog.Actions></Dialog>
+      <Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}><Dialog.Title>{dialog === 'edit' ? 'Correct record' : dialog === 'unlink' ? 'Unlink association' : dialog === 'void' ? 'Void record' : 'Confirm after wallet check'}</Dialog.Title><Dialog.Content style={{ gap: 8 }}>{dialog === 'edit' ? <><Text variant="bodySmall">The proof and correction stay in Activity.</Text><TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} /><Text variant="labelMedium">Sent from</Text><View style={styles.providerChoices}>{PROVIDERS.map((item) => <Chip key={item.value} selected={providerValue === item.value} onPress={() => setProviderValue(item.value)}>{item.label}</Chip>)}</View></> : <><Text variant="bodySmall">{dialog === 'manual' ? 'Use this only after checking the receiving wallet. It is recorded as an owner confirmation, not a provider verification.' : dialog === 'void' ? 'This removes the record from active totals while preserving the proof and Activity history.' : 'The previous state remains in Activity.'}</Text><TextInput label={dialog === 'void' ? 'Reason' : dialog === 'manual' ? 'Note (optional)' : 'Reason (optional)'} mode="outlined" value={reason} onChangeText={setReason} /></>}</Dialog.Content><Dialog.Actions><Button onPress={() => setDialog(null)}>Cancel</Button><Button onPress={() => void runDialog()} disabled={dialog === 'void' && reason.trim().length < 3}>{dialog === 'edit' ? 'Save' : 'Confirm'}</Button></Dialog.Actions></Dialog>
       <Snackbar visible={msg?.kind === 'info'} duration={3000} onDismiss={() => setMsg(null)}>{msg?.text}</Snackbar>
     </Portal>
   </Screen>;

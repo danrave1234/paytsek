@@ -16,8 +16,26 @@ import { GITHUB_RELEASES_URL, latest } from '@/lib/releases';
  * bandwidth budget and off the serverless response path.
  */
 const release = latest();
-const APK_URL = `${GITHUB_RELEASES_URL}/download/v${release.version}/PayTsek-v${release.version}.apk`;
+const FALLBACK_APK_URL = `${GITHUB_RELEASES_URL}/download/v${release.version}/PayTsek-v${release.version}.apk`;
 
-export function GET(): Response {
-  return Response.redirect(APK_URL, 302);
+/** Same repo the mobile in-app updater polls (apps/mobile/src/lib/release-update.ts). */
+const GITHUB_LATEST_RELEASE_API = 'https://api.github.com/repos/danrave1234/paytsek/releases/latest';
+
+export async function GET(): Promise<Response> {
+  try {
+    // Resolve the truly latest APK so the redirect never serves a stale build;
+    // revalidation keeps us far under GitHub's unauthenticated rate limit.
+    const response = await fetch(GITHUB_LATEST_RELEASE_API, {
+      headers: { Accept: 'application/vnd.github+json' },
+      next: { revalidate: 300 },
+    });
+    if (response.ok) {
+      const data = await response.json() as { assets?: Array<{ name: string; browser_download_url: string }> };
+      const apk = data.assets?.find((asset) => asset.name.toLowerCase().endsWith('.apk'));
+      if (apk) return Response.redirect(apk.browser_download_url, 302);
+    }
+  } catch {
+    // GitHub unreachable: fall through to the last known release.
+  }
+  return Response.redirect(FALLBACK_APK_URL, 302);
 }

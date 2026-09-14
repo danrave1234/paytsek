@@ -1,4 +1,5 @@
 import { Controller, ForbiddenException, Get, Headers, Query } from '@nestjs/common';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { loadEnv } from '../config/env';
 import { WorkerService } from './worker.service';
 import { BillingService } from '../billing/billing.service';
@@ -26,7 +27,10 @@ export class CronController {
   private authorize(header: string | undefined): void {
     const secret = this.env.CRON_SECRET;
     if (!secret) throw new ForbiddenException('CRON_SECRET is not configured');
-    if (header !== `Bearer ${secret}`) throw new ForbiddenException('Invalid cron credentials');
+    // Hash both sides to fixed length so the comparison is timing-safe regardless of input length.
+    const expected = createHash('sha256').update(`Bearer ${secret}`).digest();
+    const provided = createHash('sha256').update(header ?? '').digest();
+    if (!timingSafeEqual(expected, provided)) throw new ForbiddenException('Invalid cron credentials');
   }
 
   /** Process queued jobs. Scheduled every minute. */

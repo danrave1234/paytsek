@@ -7,6 +7,7 @@ import { loadEnv } from '../config/env';
 import { DbService } from '../db/db.service';
 import { StorageService } from '../db/storage.service';
 import { ReconcileService } from '../matching/reconcile.service';
+import { EFFECTIVE_AT_SQL, PROVIDER_LABEL_SQL } from '../records/records.rows';
 import { JobsService, type JobRow } from './jobs.service';
 
 /**
@@ -121,7 +122,12 @@ export class WorkerService {
     } catch (e) {
       const msg = (e as Error).message ?? String(e);
       this.logger.warn(`job ${job.id} (${job.kind}) failed attempt ${job.attempts}: ${msg}`);
-      await this.jobs.fail(job, msg);
+      try {
+        await this.jobs.fail(job, msg);
+      } catch (failErr) {
+        // A transient DB error while recording the failure must not abort the drain pass; the lease expiry retries the job.
+        this.logger.error(`could not record failure for job ${job.id}: ${(failErr as Error).message}`);
+      }
     }
   }
 
@@ -135,7 +141,8 @@ export class WorkerService {
     await this.db.query(`update export_jobs set status = 'RUNNING' where id = $1`, [exportJobId]);
     try {
       const params: unknown[] = [job.organization_id, job.params.from, job.params.to];
-      let where = `r.organization_id = $1 and r.created_at between $2 and $3`;
+      // Same timestamp basis as Home/Analytics bucketing; half-open so adjacent exports never double-count a record.
+      let where = `r.organization_id = $1 and ${EFFECTIVE_AT_SQL} >= $2 and ${EFFECTIVE_AT_SQL} < $3`;
       if (job.params.sourceId) { params.push(job.params.sourceId); where += ` and r.source_id = $${params.length}`; }
       if (!job.params.includeVoided) where += ` and r.evidence_state <> 'VOIDED'`;
       const rows = await this.db.query<{
@@ -144,12 +151,12 @@ export class WorkerService {
         receipt_transaction_at: Date | null; created_by_name: string | null; match_kind: string | null;
       }>(
         `select r.id, r.created_at, r.captured_at,
-                case r.receipt_provider when 'GCASH' then 'GCash' when 'GOTYME' then 'GoTyme' when 'MAYA' then 'Maya' when 'MARIBANK' then 'MariBank' else coalesce(s.label, 'Payment') end as source_label,
+                ${PROVIDER_LABEL_SQL} as source_label,
                 r.amount_centavos, r.evidence_state, r.flags, r.reference_namespace, r.reference_value,
                 r.payer_name, r.payee_name, r.customer_label, r.note, r.receipt_transaction_at, p.display_name as created_by_name,
                 (select kind from payment_matches pm where pm.record_id = r.id and pm.active) as match_kind
            from payment_records r left join payment_sources s on s.id = r.source_id left join profiles p on p.user_id = r.created_by
-          where ${where} order by r.created_at`,
+          where ${where} order by ${EFFECTIVE_AT_SQL}`,
         params,
       );
       // XLSX is delivered as CSV in the MVP (opens in Excel/Sheets); the format flag is retained for a future writer.
@@ -178,41 +185,88 @@ export class WorkerService {
 
   // ---- Retention -------------------------------------------------------------
   private async purgeRetention(orgId: string | null, hardDelete: boolean): Promise<void> {
+    // Each step runs independently so one failing step/org cannot starve the rest;
+    // failures are collected and rethrown so the job still retries.
+    const errors: Error[] = [];
+    const step = async (label: string, fn: () => Promise<void>) => {
+      try {
+        await fn();
+      } catch (e) {
+        const err = e as Error;
+        this.logger.warn(`purgeRetention step ${label} failed: ${err.message}`);
+        errors.push(err);
+      }
+    };
     // 1. Unlinked, unsaved events past purge_after.
-    await this.db.query(
-      `update notification_events e set purged_at = now(), payer_masked_name = null, payer_masked_phone = null, reference_value = null
-        where e.purged_at is null and e.purge_after < now() and e.saved_as_record_id is null
-          and not exists (select 1 from payment_matches pm where pm.event_id = e.id and pm.active)
-          ${orgId ? 'and e.organization_id = $1' : ''}`,
-      orgId ? [orgId] : [],
-    );
+    await step('events', async () => {
+      await this.db.query(
+        `update notification_events e set purged_at = now(), payer_masked_name = null, payer_masked_phone = null, reference_value = null
+          where e.purged_at is null and e.purge_after < now() and e.saved_as_record_id is null
+            and not exists (select 1 from payment_matches pm where pm.event_id = e.id and pm.active)
+            ${orgId ? 'and e.organization_id = $1' : ''}`,
+        orgId ? [orgId] : [],
+      );
+    });
     // 2. Proof images past their retention entitlement (records keep structured data).
-    const proofs = await this.db.query<{ id: string; storage_path: string | null }>(
-      `select id, storage_path from payment_proofs where purged_at is null and (retention_until < now() ${hardDelete && orgId ? 'or organization_id = $1' : ''}) ${orgId && !hardDelete ? 'and organization_id = $1' : ''} limit 500`,
-      orgId ? [orgId] : [],
-    );
-    if (proofs.rowCount) {
-      await this.storage.remove(this.storage.proofsBucket, proofs.rows.map((p) => p.storage_path).filter((p): p is string => !!p));
-      await this.db.query(`update payment_proofs set purged_at = now() where id = any($1::uuid[])`, [proofs.rows.map((p) => p.id)]);
-    }
+    //    Loop in batches so a hard delete never orphans files beyond the first 500.
+    await step('proofs', async () => {
+      for (;;) {
+        const proofs = await this.db.query<{ id: string; storage_path: string | null }>(
+          `select id, storage_path from payment_proofs where purged_at is null and (retention_until < now() ${hardDelete && orgId ? 'or organization_id = $1' : ''}) ${orgId && !hardDelete ? 'and organization_id = $1' : ''} limit 500`,
+          orgId ? [orgId] : [],
+        );
+        if (!proofs.rowCount) break;
+        await this.storage.remove(this.storage.proofsBucket, proofs.rows.map((p) => p.storage_path).filter((p): p is string => !!p));
+        await this.db.query(`update payment_proofs set purged_at = now() where id = any($1::uuid[])`, [proofs.rows.map((p) => p.id)]);
+        if (proofs.rowCount < 500) break;
+      }
+    });
     // 3. Expired exports.
-    const exp = await this.db.query<{ id: string; storage_path: string | null }>(`select id, storage_path from export_jobs where status = 'READY' and expires_at < now() limit 500`);
-    if (exp.rowCount) {
-      await this.storage.remove(this.storage.exportsBucket, exp.rows.map((p) => p.storage_path).filter((p): p is string => !!p));
-      await this.db.query(`update export_jobs set status = 'EXPIRED', storage_path = null where id = any($1::uuid[])`, [exp.rows.map((p) => p.id)]);
-    }
+    await step('exports', async () => {
+      const exp = await this.db.query<{ id: string; storage_path: string | null }>(`select id, storage_path from export_jobs where status = 'READY' and expires_at < now() limit 500`);
+      if (exp.rowCount) {
+        await this.storage.remove(this.storage.exportsBucket, exp.rows.map((p) => p.storage_path).filter((p): p is string => !!p));
+        await this.db.query(`update export_jobs set status = 'EXPIRED', storage_path = null where id = any($1::uuid[])`, [exp.rows.map((p) => p.id)]);
+      }
+    });
     // 4. Structured records older than the retention policy (default 12 months) for soft-deleted workspaces,
-    //    then hard-delete the workspace when requested.
+    //    then hard-delete the workspace when requested. Remove ALL of the org's export files first:
+    //    the cascade would otherwise orphan still-READY exports in storage.
     if (hardDelete && orgId) {
-      await this.db.query(`delete from organizations where id = $1 and deleted_at is not null`, [orgId]);
+      await step('hard-delete', async () => {
+        for (;;) {
+          const orgExports = await this.db.query<{ id: string; storage_path: string | null }>(
+            `select id, storage_path from export_jobs where organization_id = $1 and storage_path is not null limit 500`,
+            [orgId],
+          );
+          if (!orgExports.rowCount) break;
+          await this.storage.remove(this.storage.exportsBucket, orgExports.rows.map((p) => p.storage_path).filter((p): p is string => !!p));
+          await this.db.query(`update export_jobs set status = 'EXPIRED', storage_path = null where id = any($1::uuid[])`, [orgExports.rows.map((p) => p.id)]);
+          if (orgExports.rowCount < 500) break;
+        }
+        await this.db.query(`delete from organizations where id = $1 and deleted_at is not null`, [orgId]);
+      });
     }
     // 5. Rate-limit table hygiene.
-    await this.db.query(`delete from pairing_attempts where attempted_at < now() - interval '1 day'`);
+    await step('pairing-attempts', async () => {
+      await this.db.query(`delete from pairing_attempts where attempted_at < now() - interval '1 day'`);
+    });
+    // 6. Ingestion batch replay window hygiene.
+    await step('ingest-batches', async () => {
+      await this.db.query(`delete from ingest_batches where created_at < now() - interval '30 days'`);
+    });
+    // 7. Finished job rows hygiene.
+    await step('jobs', async () => {
+      await this.db.query(`delete from jobs where status in ('DONE','DEAD') and finished_at < now() - interval '14 days'`);
+    });
+    if (errors.length) throw new Error(`purgeRetention: ${errors.length} step(s) failed: ${errors.map((e) => e.message).join('; ')}`);
   }
 }
 
-function csvEscape(v: string): string {
-  return /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+export function csvEscape(v: string): string {
+  // Neutralize spreadsheet formula injection before quoting.
+  const safe = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 function sleep(ms: number): Promise<void> {

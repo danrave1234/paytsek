@@ -53,7 +53,8 @@ class NotificationParserTest {
   @Test fun acceptsSuppliedGoTymeTemplateAndIgnoresBalance() {
     val r = NotificationParser.parse(NotificationParser.Input("com.gotyme.gotymebank", "Transfer received", "You received P1,250.00 from A. Santos. Your available balance is P9,000.00.", null, emptyList(), false))
     val e = (r as NotificationParser.Result.Accepted).event
-    assertEquals("GOTYME", e.provider); assertEquals(125000L, e.amountCentavos); assertEquals("A. Santos", e.payerMaskedName)
+    // The template surfaces an unmasked payer name; the parser masks it locally.
+    assertEquals("GOTYME", e.provider); assertEquals(125000L, e.amountCentavos); assertEquals("A• S•••••", e.payerMaskedName)
   }
 
   @Test fun acceptsSuppliedMayaTemplate() {

@@ -38,9 +38,14 @@ export default function PairCollector() {
 
   useEffect(() => {
     if (step !== 'waiting' || !accepted) return;
+    let active = true;
+    let inFlight = false;
     const timer = setInterval(async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const next = await api<AcceptPairingResponse>(`/v1/pairing/${accepted.pairingSessionId}/status?deviceInstallId=${await getInstallId()}&code=${encodeURIComponent(code)}`, { anonymous: true });
+        if (!active) return;
         if (next.state === 'REJECTED' || next.state === 'EXPIRED') {
           setError('This pairing code is no longer active.');
           setStep('code');
@@ -51,9 +56,14 @@ export default function PairCollector() {
         }
       } catch {
         // Keep checking quietly through brief network interruptions.
+      } finally {
+        inFlight = false;
       }
     }, 3000);
-    return () => clearInterval(timer);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
   }, [step, accepted, code]);
 
   if (Platform.OS !== 'android') {

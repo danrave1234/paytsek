@@ -3,6 +3,19 @@ import { formatCentavos } from '@paytsek/receipt-parsers';
 
 export const peso = (centavos: number): string => formatCentavos(centavos);
 
+/** Intl.DateTimeFormat construction is expensive; cache instances per locale+options. */
+const formatterCache = new Map<string, Intl.DateTimeFormat>();
+
+export function getFormatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${locale}|${JSON.stringify(options)}`;
+  let formatter = formatterCache.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, options);
+    formatterCache.set(key, formatter);
+  }
+  return formatter;
+}
+
 export const stateLabel = (s: EvidenceState): string => EVIDENCE_STATE_LABELS[s];
 
 /** "Last seen 3 minutes ago" — never a permanent green "online" badge. */
@@ -29,13 +42,13 @@ export function manilaTime(iso: string | null, precision?: string, timezone = 'A
   const opts: Intl.DateTimeFormatOptions = { timeZone: timezone, year: 'numeric', month: 'short', day: '2-digit' };
   if (precision !== 'DAY') Object.assign(opts, { hour: '2-digit', minute: '2-digit' });
   if (precision === 'SECOND') Object.assign(opts, { second: '2-digit' });
-  return new Intl.DateTimeFormat('en-PH', opts).format(d);
+  return getFormatter('en-PH', opts).format(d);
 }
 
 /** Compact transaction time in the workspace's configured IANA timezone. */
 export function transactionTime(iso: string | null, timezone = 'Asia/Manila'): string {
   if (!iso) return '—';
-  return new Intl.DateTimeFormat('en-PH', {
+  return getFormatter('en-PH', {
     timeZone: timezone,
     hour: 'numeric',
     minute: '2-digit',
@@ -45,17 +58,11 @@ export function transactionTime(iso: string | null, timezone = 'Asia/Manila'): s
 
 /** Calendar heading for the workspace day, derived from the phone's current time. */
 export function workspaceDate(now: Date, timezone = 'Asia/Manila'): string {
-  return new Intl.DateTimeFormat('en-PH', {
+  return getFormatter('en-PH', {
     timeZone: timezone,
     weekday: 'long',
     month: 'long',
     day: 'numeric',
     year: 'numeric',
   }).format(now);
-}
-
-export function maskPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.length < 7) return phone;
-  return `${digits.slice(0, 2)}•• ••• ${digits.slice(-4)}`;
 }

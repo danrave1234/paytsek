@@ -35,10 +35,16 @@ export default function ConnectAnotherPhone() {
 
   useEffect(() => {
     if (!session) return;
-    const update = () => setSecondsLeft(Math.max(0, Math.round((Date.parse(session.expiresAt) - Date.now()) / 1000)));
-    update();
+    const remaining = () => Math.max(0, Math.round((Date.parse(session.expiresAt) - Date.now()) / 1000));
+    setSecondsLeft(remaining());
     const timer = setInterval(() => {
-      update();
+      const left = remaining();
+      setSecondsLeft(left);
+      if (left <= 0) {
+        // The code expired: stop polling on this terminal state.
+        clearInterval(timer);
+        return;
+      }
       void devices.refetch();
     }, 3000);
     return () => clearInterval(timer);

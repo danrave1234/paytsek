@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Module, Param, Patch, Post } from '@nestjs/common';
-import { AcceptInviteRequest, CreateWorkspaceRequest, InviteMemberRequest, UpdateMemberRequest } from '@paytsek/contracts';
+import { AcceptInviteRequest, CreateWorkspaceRequest, InviteMemberRequest, UpdateMemberRequest, UpdateWorkspaceRequest } from '@paytsek/contracts';
 import { z } from 'zod';
 import { CurrentUser, UserRoute, Workspace, WorkspaceRoute } from '../auth/decorators';
 import { OwnerOnly, type AuthUser, type WorkspaceContext } from '../auth/guards';
@@ -26,6 +26,13 @@ export class WorkspacesController {
   @UserRoute()
   accept(@CurrentUser() user: AuthUser, @Body(zod(AcceptInviteRequest.extend({ displayName: z.string().max(80).optional() }))) body: { inviteToken: string; displayName?: string }) {
     return this.svc.acceptInvite(user.id, user.email, body.inviteToken, body.displayName);
+  }
+
+  @Patch('current')
+  @WorkspaceRoute()
+  @OwnerOnly()
+  updateWorkspace(@Workspace() ws: WorkspaceContext, @CurrentUser() user: AuthUser, @Body(zod(UpdateWorkspaceRequest)) body: UpdateWorkspaceRequest) {
+    return this.svc.updateWorkspace(ws.organizationId, user.id, body);
   }
 
   @Get('current/members')

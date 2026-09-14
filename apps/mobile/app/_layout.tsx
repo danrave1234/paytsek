@@ -5,16 +5,27 @@ import { AppState, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useTheme } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { queryClient } from '@/lib/queries';
+import { invalidateDrafts, queryClient } from '@/lib/queries';
 import { SessionProvider, useSession } from '@/lib/session';
 import { syncAll, pruneSynced } from '@/lib/drafts';
 import { reportHealth, restoreCollectorFilters } from '@/lib/collector';
 import { SPACING } from '@/theme';
-import { Loading } from '@/components/ui';
+import { ErrorState, Loading } from '@/components/ui';
 import { ThemeModeProvider } from '@/lib/theme-mode';
 import { useReducedMotion } from '@/components/motion';
 
 export const unstable_settings = { initialRouteName: '(tabs)' };
+
+/** Render-time throws land on this themed screen instead of Expo Router's default red screen. */
+export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
+  return (
+    <SafeAreaProvider>
+      <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: SPACING.xl }}>
+        <ErrorState error={error} retry={() => { void retry(); }} />
+      </View>
+    </SafeAreaProvider>
+  );
+}
 
 function Gate({ children }: { children: React.ReactNode }) {
   const { ready, configured, session, workspace } = useSession();
@@ -58,17 +69,27 @@ function Gate({ children }: { children: React.ReactNode }) {
     if (Platform.OS === 'android') {
       void restoreCollectorFilters().then(reportHealth);
     }
+    const runSync = () => {
+      if (!workspace || syncing) return;
+      syncing = true;
+      void syncAll(workspace.id).then(async ({ synced }) => {
+        if (synced > 0) {
+          await Promise.all(['records', 'home', 'inbox'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
+        }
+        await pruneSynced(workspace.id);
+        // Signal the Today/Records screens to re-read local drafts now that
+        // synced rows are pruned, without keying re-reads to server polling.
+        void invalidateDrafts();
+      }).catch(() => { /* Durable drafts will retry on the next resume. */ }).finally(() => { syncing = false; });
+    };
+    // A fresh launch never emits an AppState change, so drafts left over from
+    // a previous session must be retried here, not only on resume.
+    if (AppState.currentState === 'active') runSync();
     const sub = AppState.addEventListener('change', (s) => {
       focusManager.setFocused(s === 'active');
-      if (s === 'active' && workspace && !syncing) {
+      if (s === 'active') {
         if (Platform.OS === 'android') void restoreCollectorFilters().then(reportHealth);
-        syncing = true;
-        void syncAll(workspace.id).then(async ({ synced }) => {
-          if (synced > 0) {
-            await Promise.all(['records', 'home', 'inbox'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
-          }
-          await pruneSynced(workspace.id);
-        }).catch(() => { /* Durable drafts will retry on the next resume. */ }).finally(() => { syncing = false; });
+        runSync();
       }
     });
     return () => sub.remove();

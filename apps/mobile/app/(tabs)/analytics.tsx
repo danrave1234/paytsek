@@ -7,7 +7,7 @@ import { ProviderLogo } from '@/components/provider-logo';
 import { ErrorState, Loading } from '@/components/ui';
 import { peso } from '@/lib/format';
 import { useAnalytics } from '@/lib/queries';
-import { RADIUS, SPACING, TAB_BAR_CLEARANCE, stateColorsFor } from '@/theme';
+import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET, stateColorsFor } from '@/theme';
 
 const RANGES: Array<{ value: AnalyticsRange; label: string }> = [
   { value: '7D', label: '7 days' },
@@ -122,7 +122,8 @@ export default function Analytics() {
               <Text variant="titleMedium" style={styles.sectionTitle}>By evidence</Text>
               {query.data.byEvidence.map((item) => {
                 const colors = stateColorsFor(theme.dark)[item.state];
-                const width = query.data.recordedCentavos ? Math.max(3, item.recordedCentavos / query.data.recordedCentavos * 100) : 0;
+                const share = query.data.recordedCentavos ? item.recordedCentavos / query.data.recordedCentavos * 100 : 0;
+                const width = item.recordedCount > 0 ? Math.max(3, share) : 0;
                 return (
                   <View key={item.state} style={styles.evidenceRow}>
                     <View style={styles.evidenceLabels}>
@@ -147,7 +148,7 @@ const styles = StyleSheet.create({
   page: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.lg },
   title: { fontWeight: '800', letterSpacing: -0.45 },
   rangeBar: { flexDirection: 'row', marginTop: SPACING.md, padding: 4, borderRadius: RADIUS.md },
-  rangeButton: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.sm },
+  rangeButton: { flex: 1, minHeight: TOUCH_TARGET, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.sm },
   hero: { paddingTop: SPACING.xl },
   total: { marginTop: 2, fontWeight: '800', letterSpacing: -1.2, fontVariant: ['tabular-nums'] },
   metrics: { flexDirection: 'row', marginTop: SPACING.lg, paddingVertical: SPACING.md, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },

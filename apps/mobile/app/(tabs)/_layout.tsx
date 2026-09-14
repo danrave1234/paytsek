@@ -4,6 +4,7 @@ import { Animated, Platform, Pressable, StyleSheet, View, type GestureResponderE
 import { Icon, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from '@/components/motion';
+import { SHADOW_COLOR, navBarBackgroundFor } from '@/theme';
 
 type ScanButtonProps = {
   children?: React.ReactNode;
@@ -57,6 +58,7 @@ function ScanTabButton({ children, onPress, onLongPress, accessibilityLabel, acc
             styles.scanInner,
             {
               backgroundColor: theme.colors.primary,
+              shadowColor: theme.colors.primary,
               opacity: pressed && reducedMotion ? 0.88 : 1,
             },
           ]}
@@ -97,8 +99,8 @@ export default function TabsLayout() {
           borderTopRightRadius: 26,
           borderTopWidth: StyleSheet.hairlineWidth,
           borderColor: theme.colors.outlineVariant,
-          backgroundColor: theme.dark ? '#161B26FA' : '#FFFEFCFA',
-          shadowColor: '#101828',
+          backgroundColor: navBarBackgroundFor(theme.dark),
+          shadowColor: SHADOW_COLOR,
           shadowOpacity: theme.dark ? 0.34 : 0.11,
           shadowRadius: 18,
           shadowOffset: { width: 0, height: -5 },
@@ -166,7 +168,6 @@ export default function TabsLayout() {
           ),
         }}
       />
-      <Tabs.Screen name="review" options={{ href: null }} />
     </Tabs>
   );
 }
@@ -183,7 +184,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 1,
-    shadowColor: '#155EEF',
     shadowOpacity: 0.28,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },

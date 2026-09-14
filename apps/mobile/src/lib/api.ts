@@ -16,8 +16,8 @@ export class ApiError extends Error {
 }
 
 export class OfflineError extends Error {
-  constructor() {
-    super('You appear to be offline. Your work is saved locally and will sync when you reconnect.');
+  constructor(message = 'You appear to be offline. Your work is saved locally and will sync when you reconnect.') {
+    super(message);
   }
 }
 
@@ -53,7 +53,8 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
   const abort = () => controller.abort();
   opts.signal?.addEventListener('abort', abort, { once: true });
   if (opts.signal?.aborted) controller.abort();
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 20_000);
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, opts.timeoutMs ?? 20_000);
   let res: Response;
   let text: string;
   try {
@@ -61,13 +62,22 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
     text = res.status === 204 ? '' : await res.text();
   } catch (error) {
     if (opts.signal?.aborted) throw error;
+    if (timedOut) throw new OfflineError('The request timed out. It will retry automatically.');
     throw new OfflineError();
   } finally {
     clearTimeout(timer);
     opts.signal?.removeEventListener('abort', abort);
   }
   if (res.status === 204) return undefined as T;
-  const json = text ? (JSON.parse(text) as unknown) : null;
+  let json: unknown = null;
+  if (text) {
+    try {
+      json = JSON.parse(text) as unknown;
+    } catch {
+      // Gateway/proxy HTML error pages are not JSON; keep the status-based semantics.
+      throw new ApiError('INTERNAL', `Request failed (${res.status})`, res.status);
+    }
+  }
   if (!res.ok) {
     const body = (json ?? {}) as Partial<ApiErrorBody>;
     throw new ApiError(body.code ?? 'INTERNAL', body.message ?? `Request failed (${res.status})`, res.status, body.details, body.requestId);
