@@ -4,13 +4,14 @@ import { loadEnv } from '../config/env';
 import { AuditService } from '../db/audit.service';
 import { DbService, isUniqueViolation, type Queryable } from '../db/db.service';
 import { JobsService } from '../jobs/jobs.service';
-import { MATCHER_VERSION, decide, type MatchEventInput, type MatchRecordInput, type MatcherConfig } from './matcher';
+import { MATCHER_VERSION, decide, type MatchDecision, type MatchEventInput, type MatchRecordInput, type MatcherConfig } from './matcher';
+import { decideUnscoped } from './unscoped-matcher';
 
 interface RecordRow {
   id: string;
   organization_id: string;
-  source_id: string;
-  provider: Provider;
+  source_id: string | null;
+  provider: Provider | null;
   currency: 'PHP';
   amount_centavos: string;
   reference_namespace: ReferenceNamespace | null;
@@ -73,8 +74,9 @@ export class ReconcileService {
   async reconcileEvent(eventId: string): Promise<void> {
     const recs = await this.db.query<{ id: string }>(
       `select r.id from payment_records r
-         join notification_events e on e.source_id = r.source_id and e.amount_centavos = r.amount_centavos and e.currency = r.currency
+         join notification_events e on e.organization_id = r.organization_id and e.amount_centavos = r.amount_centavos and e.currency = r.currency
         where e.id = $1 and r.evidence_state in ('UNVERIFIED','REVIEW_REQUIRED')
+          and (r.source_id is null or r.source_id = e.source_id)
         order by r.created_at limit 200`,
       [eventId],
     );
@@ -92,9 +94,8 @@ export class ReconcileService {
       if (!rec) return null;
       if (!OPEN_STATES.includes(rec.evidence_state)) return rec.evidence_state; // never downgrade a human/auto decision here
 
-      const input = toMatchInput(rec);
       const events = await this.loadCandidateEvents(c, rec);
-      const decision = decide(input, events.map(toEventInput), this.cfg);
+      const decision = this.decideForRecord(rec, events);
 
       let next: EvidenceState = 'UNVERIFIED';
       if (decision.kind === 'AUTO') {
@@ -135,15 +136,19 @@ export class ReconcileService {
     const rec = await this.loadRecord(this.db.pool, recordId, false);
     if (!rec || rec.organization_id !== orgId) return { recordId, timeBasis: 'NONE', windowSeconds: 0, candidates: [], collectorStale: true, collectorLastSeenAt: null };
     const events = await this.loadCandidateEvents(this.db.pool, rec);
-    const decision = decide(toMatchInput(rec), events.map(toEventInput), this.cfg);
+    const decision = this.decideForRecord(rec, events);
     const assessed = decision.kind === 'REVIEW' ? decision.candidates : [];
     const byId = new Map(events.map((e) => [e.id, e]));
 
     const collector = await this.db.one<{ last: Date | null }>(
       // A source can have historical bindings. Use the most recently contacted
       // active collector, not an arbitrary row, for its health indicator.
-      `select d.last_server_contact_at as last from device_bindings b join devices d on d.id = b.device_id where b.source_id = $1 and b.status = 'ACTIVE' and d.status <> 'REVOKED' order by d.last_server_contact_at desc nulls last limit 1`,
-      [rec.source_id],
+      `select d.last_server_contact_at as last
+         from device_bindings b join devices d on d.id = b.device_id
+        where b.organization_id = $1 and ($2::uuid is null or b.source_id = $2)
+          and b.status = 'ACTIVE' and d.status <> 'REVOKED'
+        order by d.last_server_contact_at desc nulls last limit 1`,
+      [rec.organization_id, rec.source_id],
     );
     const lastSeen = collector?.last ?? null;
     const stale = !lastSeen || Date.now() - lastSeen.getTime() > 10 * 60 * 1000;
@@ -185,9 +190,9 @@ export class ReconcileService {
     const r = await q.query<RecordRow>(
       `select r.id, r.organization_id, r.source_id, s.provider, r.currency, r.amount_centavos, r.reference_namespace, r.reference_value,
               r.receipt_provider, r.payment_rail, r.receipt_status, r.receipt_transaction_at, r.receipt_transaction_precision, r.captured_at, r.edited_fields, r.evidence_state,
-              m.role as creator_role, s.require_owner_approval_for_staff_matches as require_owner_approval
+              m.role as creator_role, coalesce(s.require_owner_approval_for_staff_matches, false) as require_owner_approval
          from payment_records r
-         join payment_sources s on s.id = r.source_id
+         left join payment_sources s on s.id = r.source_id
          left join memberships m on m.organization_id = r.organization_id and m.user_id = r.created_by
         where r.id = $1 ${lock ? 'for update of r' : ''}`,
       [recordId],
@@ -195,17 +200,20 @@ export class ReconcileService {
     return r.rows[0] ?? null;
   }
 
-  /** Same source, exact amount, not purged; wide time bounds (the matcher applies the precise window). */
+  /** Exact amount in the workspace. Once a receiving source is known, keep the
+   * search scoped to it; otherwise every enabled listener is supplementary
+   * evidence and the result always requires a human choice. */
   private async loadCandidateEvents(q: Queryable, rec: RecordRow): Promise<EventRow[]> {
     const r = await q.query<EventRow>(
       `select e.id, e.currency, e.amount_centavos, e.reference_namespace, e.reference_value, e.provider_described_at, e.notification_when_at, e.posted_at,
               e.payer_masked_name, e.payer_masked_phone, e.provider, e.payment_rail,
               (select pm.record_id from payment_matches pm where pm.event_id = e.id and pm.active and pm.record_id <> $1 limit 1) as linked_record_id
          from notification_events e
-        where e.source_id = $2 and e.amount_centavos = $3 and e.currency = $4 and e.purged_at is null
-          and e.posted_at between $5::timestamptz - interval '3 days' and $5::timestamptz + interval '3 days'
+        where e.organization_id = $2 and ($3::uuid is null or e.source_id = $3)
+          and e.amount_centavos = $4 and e.currency = $5 and e.purged_at is null
+          and e.posted_at between $6::timestamptz - interval '3 days' and $6::timestamptz + interval '3 days'
         order by e.posted_at limit 200`,
-      [rec.id, rec.source_id, rec.amount_centavos, rec.currency, rec.receipt_transaction_at ?? rec.captured_at],
+      [rec.id, rec.organization_id, rec.source_id, rec.amount_centavos, rec.currency, rec.receipt_transaction_at ?? rec.captured_at],
     );
     // Exact-reference events outside the 3-day bound are still valid (delayed match): fetch them explicitly.
     if (rec.reference_value && rec.reference_namespace) {
@@ -214,14 +222,21 @@ export class ReconcileService {
                 e.payer_masked_name, e.payer_masked_phone, e.provider, e.payment_rail,
                 (select pm.record_id from payment_matches pm where pm.event_id = e.id and pm.active and pm.record_id <> $1 limit 1) as linked_record_id
            from notification_events e
-          where e.source_id = $2 and e.amount_centavos = $3 and e.currency = $4 and e.purged_at is null
-            and e.reference_value is not null and regexp_replace(e.reference_value, '[^A-Za-z0-9]', '', 'g') = regexp_replace($5, '[^A-Za-z0-9]', '', 'g')`,
-        [rec.id, rec.source_id, rec.amount_centavos, rec.currency, rec.reference_value],
+          where e.organization_id = $2 and ($3::uuid is null or e.source_id = $3)
+            and e.amount_centavos = $4 and e.currency = $5 and e.purged_at is null
+            and e.reference_value is not null and regexp_replace(e.reference_value, '[^A-Za-z0-9]', '', 'g') = regexp_replace($6, '[^A-Za-z0-9]', '', 'g')`,
+        [rec.id, rec.organization_id, rec.source_id, rec.amount_centavos, rec.currency, rec.reference_value],
       );
       const seen = new Set(r.rows.map((x) => x.id));
       for (const e of extra.rows) if (!seen.has(e.id)) r.rows.push(e);
     }
     return r.rows;
+  }
+
+  private decideForRecord(rec: RecordRow, events: EventRow[]): MatchDecision {
+    if (rec.provider) return decide(toMatchInput(rec, rec.provider), events.map(toEventInput), this.cfg);
+    const { receivingProvider: _ignored, ...record } = toMatchInput(rec, rec.receipt_provider ?? 'GCASH');
+    return decideUnscoped(record, events.map((event) => ({ provider: event.provider, event: toEventInput(event) })), this.cfg);
   }
 }
 
@@ -231,10 +246,10 @@ function bestEventTime(e: EventRow): { at: Date; source: CandidateEvent['eventTi
   return { at: e.posted_at, source: 'POSTED' };
 }
 
-function toMatchInput(r: RecordRow): MatchRecordInput {
+function toMatchInput(r: RecordRow, receivingProvider: Provider): MatchRecordInput {
   return {
     id: r.id,
-    receivingProvider: r.provider,
+    receivingProvider,
     receiptProvider: r.receipt_provider,
     paymentRail: r.payment_rail,
     currency: r.currency,

@@ -1,11 +1,12 @@
-import { Body, Controller, Get, Ip, Module, Param, Post, Query } from '@nestjs/common';
-import { AcceptPairingRequest, ApprovePairingRequest, CollectorHealthReport, CreatePairingSessionRequest, DevicePlatform } from '@paytsek/contracts';
+import { Body, Controller, Get, Ip, Module, Param, Post, Put, Query } from '@nestjs/common';
+import { AcceptPairingRequest, ApprovePairingRequest, CollectorHealthReport, ConfigureCurrentCollectorRequest, CreatePairingSessionRequest, DevicePlatform } from '@paytsek/contracts';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { Collector, CollectorRoute, CurrentUser, Workspace, WorkspaceRoute } from '../auth/decorators';
 import { OwnerOnly, type AuthUser, type CollectorContext, type WorkspaceContext } from '../auth/guards';
 import { zod } from '../common/zod.pipe';
 import { PairingService } from './pairing.service';
+import { CurrentCollectorService } from './current-collector.service';
 
 const PollQuery = z.object({ deviceInstallId: z.string().uuid(), code: z.string().min(8).max(16) });
 const StatusBody = z.object({ status: z.enum(['ACTIVE', 'PAUSED', 'REVOKED']), reason: z.string().max(200).optional() });
@@ -52,7 +53,10 @@ export class PairingController {
 @Controller('v1/devices')
 @WorkspaceRoute()
 export class DevicesController {
-  constructor(private readonly svc: PairingService) {}
+  constructor(
+    private readonly svc: PairingService,
+    private readonly currentCollector: CurrentCollectorService,
+  ) {}
 
   @Get()
   list(@Workspace() ws: WorkspaceContext) {
@@ -62,6 +66,16 @@ export class DevicesController {
   @Post('register-scanner')
   register(@Workspace() ws: WorkspaceContext, @Body(zod(RegisterScannerBody)) b: z.infer<typeof RegisterScannerBody>) {
     return this.svc.registerScanner(ws.organizationId, b.deviceInstallId, b.platform, b.label, b.appVersion, b.osVersion);
+  }
+
+  @Put('current/collector')
+  @OwnerOnly()
+  configureCurrentCollector(
+    @Workspace() ws: WorkspaceContext,
+    @CurrentUser() u: AuthUser,
+    @Body(zod(ConfigureCurrentCollectorRequest)) body: ConfigureCurrentCollectorRequest,
+  ) {
+    return this.currentCollector.configure(ws.organizationId, u.id, body);
   }
 
   @Post(':id/status')
@@ -90,5 +104,5 @@ export class CollectorController {
   }
 }
 
-@Module({ controllers: [PairingController, DevicesController, CollectorController], providers: [PairingService], exports: [PairingService] })
+@Module({ controllers: [PairingController, DevicesController, CollectorController], providers: [PairingService, CurrentCollectorService], exports: [PairingService, CurrentCollectorService] })
 export class PairingModule {}

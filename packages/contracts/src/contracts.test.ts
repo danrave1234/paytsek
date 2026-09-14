@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   AUTO_MATCH_DISCLOSURE,
+  ConfigureCurrentCollectorRequest,
+  CreateRecordRequest,
   EVIDENCE_STATE_LABELS,
   EvidenceState,
   IncomingPaymentEventInput,
@@ -46,6 +48,23 @@ describe('contracts', () => {
       receiptStatus: 'UNKNOWN',
     });
     expect(parsed.amountCentavos).toBeNull();
+  });
+
+  it('does not require notification setup before recording a proof', () => {
+    expect(CreateRecordRequest.shape.sourceId.parse(undefined)).toBeNull();
+    expect(CreateRecordRequest.shape.sourceId.parse(null)).toBeNull();
+  });
+
+  it('limits direct notification-listener setup to the signed-in Android flow', () => {
+    const base = {
+      deviceInstallId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+      appVersion: '0.2.0',
+      osVersion: '16',
+      providers: ['GCASH'],
+      detectedProviderApps: [],
+    };
+    expect(ConfigureCurrentCollectorRequest.safeParse({ ...base, platform: 'ANDROID' }).success).toBe(true);
+    expect(ConfigureCurrentCollectorRequest.safeParse({ ...base, platform: 'IOS' }).success).toBe(false);
   });
 
   it('rejects non-integer or non-positive event amounts', () => {

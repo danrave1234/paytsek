@@ -69,11 +69,12 @@ export const useDevices = () => useQuery({ queryKey: keys.devices, queryFn: ({ s
 export const useMembers = () => useQuery({ queryKey: keys.members, queryFn: ({ signal }) => api<MemberSummary[]>('/v1/workspaces/current/members', { signal }) });
 export const useInbox = () => useQuery({ queryKey: keys.inbox, queryFn: ({ signal }) => api<OwnerInboxEvent[]>('/v1/inbox?unlinkedOnly=true&limit=100', { signal }) });
 
-export function useRecords(filters: { q?: string; state?: string[]; sourceId?: string; staffUserId?: string; from?: string; to?: string; cursor?: string }) {
+export function useRecords(filters: { q?: string; state?: string[]; sourceId?: string; provider?: string; staffUserId?: string; from?: string; to?: string; cursor?: string }) {
   const qs = new URLSearchParams();
   if (filters.q) qs.set('q', filters.q);
   if (filters.state?.length) qs.set('state', filters.state.join(','));
   if (filters.sourceId) qs.set('sourceId', filters.sourceId);
+  if (filters.provider) qs.set('provider', filters.provider);
   if (filters.staffUserId) qs.set('staffUserId', filters.staffUserId);
   if (filters.from) qs.set('from', filters.from);
   if (filters.to) qs.set('to', filters.to);
@@ -83,7 +84,7 @@ export function useRecords(filters: { q?: string; state?: string[]; sourceId?: s
 }
 
 /** Full ledger pagination. It is mounted only by Records and fetches the next page near scroll end. */
-export function useInfiniteRecords(filters: { q?: string; state?: string[]; sourceId?: string; staffUserId?: string; from?: string; to?: string }) {
+export function useInfiniteRecords(filters: { q?: string; state?: string[]; sourceId?: string; provider?: string; staffUserId?: string; from?: string; to?: string }) {
   return useInfiniteQuery({
     queryKey: keys.recordsInfinite(filters),
     initialPageParam: null as string | null,
@@ -92,6 +93,7 @@ export function useInfiniteRecords(filters: { q?: string; state?: string[]; sour
       if (filters.q) qs.set('q', filters.q);
       if (filters.state?.length) qs.set('state', filters.state.join(','));
       if (filters.sourceId) qs.set('sourceId', filters.sourceId);
+      if (filters.provider) qs.set('provider', filters.provider);
       if (filters.staffUserId) qs.set('staffUserId', filters.staffUserId);
       if (filters.from) qs.set('from', filters.from);
       if (filters.to) qs.set('to', filters.to);
