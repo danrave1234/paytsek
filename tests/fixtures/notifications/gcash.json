@@ -48,6 +48,73 @@
       }
     },
     {
+      "id": "current-android-push-peso-sign",
+      "flowId": "gcash-to-gcash.express-send",
+      "expect": "ACCEPT",
+      "input": {
+        "title": "You have received money in GCash!",
+        "text": "You have received ₱2,350.75 of GCash from JO*L R. 0917••••234.",
+        "bigText": null,
+        "textLines": [],
+        "isGroupSummary": false
+      },
+      "expected": {
+        "amountCentavos": 235075,
+        "referenceNamespace": "UNKNOWN",
+        "referenceValue": null,
+        "payerMaskedName": "JO*L R.",
+        "payerMaskedPhone": "0917••••234"
+      }
+    },
+    {
+      "id": "unmasked-name-is-masked-locally",
+      "flowId": "gcash-to-gcash.express-send",
+      "expect": "ACCEPT",
+      "input": {
+        "title": "GCash",
+        "text": "You have received PHP 750.00 of GCash from Juan Dela Cruz via QR.",
+        "bigText": null,
+        "textLines": [],
+        "isGroupSummary": false
+      },
+      "expected": {
+        "amountCentavos": 75000,
+        "payerMaskedName": "J••• D••• C•••",
+        "payerMaskedPhone": null
+      }
+    },
+    {
+      "id": "instapay-with-ref-and-described-time",
+      "flowId": "gcash-to-gcash.express-send",
+      "expect": "ACCEPT",
+      "input": {
+        "title": "GCash",
+        "text": "You have received PHP 5,000.00 via InstaPay from BDO on Sep 8, 2025 1:45 PM. Ref. No. 7031245896012.",
+        "bigText": null,
+        "textLines": [],
+        "isGroupSummary": false
+      },
+      "expected": {
+        "amountCentavos": 500000,
+        "paymentRail": "INSTAPAY",
+        "referenceNamespace": "GCASH_REF_NO",
+        "referenceValue": "7031245896012",
+        "providerDescribedAt": "2025-09-08T05:45:00.000Z"
+      }
+    },
+    {
+      "id": "ambiguous-amount",
+      "expect": "REJECT",
+      "reason": "AMBIGUOUS_AMOUNT",
+      "input": {
+        "title": "You have received money in GCash!",
+        "text": "You have received money in GCash. Amounts PHP 500.00 and PHP 300.00 arrived today.",
+        "bigText": null,
+        "textLines": [],
+        "isGroupSummary": false
+      }
+    },
+    {
       "id": "outgoing-express-send",
       "expect": "REJECT",
       "reason": "OUTGOING_PAYMENT",

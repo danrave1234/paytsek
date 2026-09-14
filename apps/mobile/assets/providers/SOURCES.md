@@ -7,4 +7,6 @@ The app icons in this directory were downloaded on 2026-09-14 from the current P
 - `gotyme.jpg` — GoTyme Bank, seller GOTYME BANK CORPORATION, bundle `ph.com.gotyme`
 - `maribank.jpg` — MariBank PH, seller MariBank Philippines, Inc., bundle `ph.seabank.seabank`
 
+The same files are copied to `apps/web/public/providers/` for the website hero and provider strip; update both locations together when replacing artwork.
+
 These trademarks identify the payment source selected or detected by the user. PayTsek is independent and is not endorsed by these providers. Recheck the official listing before replacing any artwork.

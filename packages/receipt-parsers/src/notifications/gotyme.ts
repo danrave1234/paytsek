@@ -1,7 +1,7 @@
 import { findMoneyCandidates } from '../money';
 import { PROVIDER_PACKAGES } from '../registry';
 import { classifyNegative } from './filters';
-import { joinNotificationText, normalizeForHash } from './types';
+import { joinNotificationText, maskName, normalizeForHash } from './types';
 import type { NotificationAdapter, NotificationParseResult, NotificationText } from './types';
 
 export const GOTYME_PARSER_ID = 'gotyme.incoming.v1';
@@ -37,7 +37,7 @@ export const gotymeAdapter: NotificationAdapter = {
     return { ok: true, event: {
       provider: 'GOTYME', parserId: GOTYME_PARSER_ID, parserVersion: GOTYME_PARSER_VERSION,
       paymentRail: 'UNKNOWN', currency: 'PHP', amountCentavos, referenceNamespace: 'UNKNOWN', referenceValue: null,
-      payerMaskedName: match[2].trim(), payerMaskedPhone: null, providerDescribedAt: null, normalizedText: normalizeForHash(text),
+      payerMaskedName: maskName(match[2].trim()), payerMaskedPhone: null, providerDescribedAt: null, normalizedText: normalizeForHash(text),
     } };
   },
 };
