@@ -76,7 +76,7 @@ export default function TabsLayout() {
 
   return (
     <Tabs
-      initialRouteName="scan"
+      initialRouteName="index"
       backBehavior="history"
       screenOptions={{
         animation: reducedMotion ? 'none' : 'fade',
@@ -116,7 +116,6 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused, color }) => (
             <View style={styles.regularIcon}>
               <Icon source={focused ? 'home-variant' : 'home-variant-outline'} size={25} color={String(color)} />
-              {focused ? <View style={[styles.activeDot, { backgroundColor: theme.colors.primary }]} /> : null}
             </View>
           ),
         }}
@@ -129,7 +128,6 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused, color }) => (
             <View style={styles.regularIcon}>
               <Icon source={focused ? 'receipt-text' : 'receipt-text-outline'} size={23} color={String(color)} />
-              {focused ? <View style={[styles.activeDot, { backgroundColor: theme.colors.primary }]} /> : null}
             </View>
           ),
         }}
@@ -152,7 +150,6 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused, color }) => (
             <View style={styles.regularIcon}>
               <Icon source={focused ? 'chart-box' : 'chart-box-outline'} size={23} color={String(color)} />
-              {focused ? <View style={[styles.activeDot, { backgroundColor: theme.colors.primary }]} /> : null}
             </View>
           ),
         }}
@@ -165,7 +162,6 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused, color }) => (
             <View style={styles.regularIcon}>
               <Icon source={focused ? 'cog' : 'cog-outline'} size={23} color={String(color)} />
-              {focused ? <View style={[styles.activeDot, { backgroundColor: theme.colors.primary }]} /> : null}
             </View>
           ),
         }}
@@ -180,7 +176,6 @@ const styles = StyleSheet.create({
   label: { marginTop: 2, fontSize: 10.5, fontWeight: '700' },
   scanSlot: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   regularIcon: { height: 30, alignItems: 'center', justifyContent: 'center' },
-  activeDot: { position: 'absolute', bottom: -6, width: 5, height: 5, borderRadius: 3 },
   scanOuter: { width: 76, height: 76, padding: 6, borderRadius: 23 },
   scanInner: {
     flex: 1,

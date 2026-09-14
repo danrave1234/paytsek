@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Linking, StyleSheet, View } from 'react-native';
+import { Alert, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Dialog, Icon, Portal, ProgressBar, Text, useTheme } from 'react-native-paper';
 import { downloadAndInstallUpdate, type AppUpdate } from '@/lib/release-update';
 import { SPACING } from '@/theme';
@@ -35,14 +35,20 @@ export function AppUpdateDialog({ update, visible, onDismiss }: Props) {
           <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
             Version {update?.version}{update?.sizeBytes ? ` · ${(update.sizeBytes / 1_048_576).toFixed(1)} MB` : ''}
           </Text>
-          <View style={styles.notes}>
+          <ScrollView
+            style={styles.notesScroll}
+            contentContainerStyle={styles.notes}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+            accessibilityLabel="Release notes"
+          >
             {(update?.notes ?? []).map((note, index) => (
               <View key={`${index}.${note}`} style={styles.note}>
                 <Icon source="check" size={17} color={theme.colors.primary} />
                 <Text variant="bodyMedium" style={{ flex: 1 }}>{note}</Text>
               </View>
             ))}
-          </View>
+          </ScrollView>
           {progress !== null ? (
             <View style={styles.progress}>
               <ProgressBar progress={progress} color={theme.colors.primary} />
@@ -62,7 +68,8 @@ export function AppUpdateDialog({ update, visible, onDismiss }: Props) {
 }
 
 const styles = StyleSheet.create({
-  notes: { marginTop: SPACING.lg, gap: SPACING.sm },
+  notesScroll: { maxHeight: 260, marginTop: SPACING.lg },
+  notes: { gap: SPACING.sm, paddingBottom: SPACING.xs },
   note: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm },
   progress: { marginTop: SPACING.lg, gap: SPACING.sm },
 });
