@@ -18,6 +18,8 @@
 - Prefer current stable, security-patched versions compatible with the repository. Do not adopt canary or release-candidate dependencies merely because they are newer.
 - Keep request/response validation in `@paytsek/contracts`. Screens must not maintain handwritten copies of API types.
 - Keep matching, parsing, idempotency, authorization, retention, and audit rules in testable domain/server code. UI labels never replace server enforcement.
+- Keep the wallet that issued a customer's receipt separate from the seller wallet that received the payment. Receipt-provider classification may use proof OCR/layout; only an allowlisted Android notification package identifies the receiving wallet. Never let one silently substitute for the other.
+- Preserve privacy-safe provider-classifier method, confidence, candidate scores, and signal codes with OCR provenance. Raw OCR text remains restricted evidence and must never be copied into classifier signal codes, logs, or analytics.
 
 ## Authentication and privacy
 

@@ -1,10 +1,11 @@
+import { PROVIDERS, PROVIDER_LABELS, type Provider } from '@paytsek/contracts';
 import { parseMoneyExact } from '@paytsek/receipt-parsers';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { BackHandler, Image, StyleSheet, View } from 'react-native';
-import { Button, IconButton, Portal, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, Chip, IconButton, Portal, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
 import { Loading, Notice, Screen } from '@/components/ui';
-import { correctDraftAmount, getDraft, syncDraft, type Draft } from '@/lib/drafts';
+import { correctDraft, getDraft, syncDraft, type Draft } from '@/lib/drafts';
 import { manilaTime, peso } from '@/lib/format';
 import { useInvalidateRecord } from '@/lib/queries';
 import { useSession } from '@/lib/session';
@@ -18,6 +19,7 @@ export default function LocalRecordDetail() {
   const invalidate = useInvalidateRecord();
   const [draft, setDraft] = useState<Draft | null | undefined>(undefined);
   const [amountText, setAmountText] = useState('');
+  const [providerValue, setProviderValue] = useState<Provider | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -31,7 +33,10 @@ export default function LocalRecordDetail() {
     if (!workspace || !id) return setDraft(null);
     const next = await getDraft(workspace.id, id);
     setDraft(next);
-    if (next) setAmountText((next.request.corrected.amountCentavos / 100).toFixed(2));
+    if (next) {
+      setAmountText((next.request.corrected.amountCentavos / 100).toFixed(2));
+      setProviderValue(next.request.corrected.receiptProvider);
+    }
   }, [id, workspace]);
 
   useFocusEffect(useCallback(() => {
@@ -50,10 +55,13 @@ export default function LocalRecordDetail() {
     setBusy(true);
     setError(null);
     try {
-      const next = await correctDraftAmount(workspace.id, draft.clientRecordId, amount.centavos);
+      const next = await correctDraft(workspace.id, draft.clientRecordId, {
+        amountCentavos: amount.centavos,
+        receiptProvider: providerValue,
+      });
       setDraft(next);
       invalidate();
-      setToast('Amount updated');
+      setToast('Record updated');
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Could not update this record.');
     } finally {
@@ -101,17 +109,19 @@ export default function LocalRecordDetail() {
         <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>SAVED ON THIS PHONE</Text>
         <Text variant="headlineLarge" style={styles.amount}>{peso(fields.amountCentavos)}</Text>
         <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-          {fields.receiptProvider ?? 'Payment'} · {manilaTime(occurredAt, fields.receiptTransactionPrecision, workspace?.timezone)}
+          {fields.receiptProvider ? PROVIDER_LABELS[fields.receiptProvider] : 'Unknown wallet'} · {manilaTime(occurredAt, fields.receiptTransactionPrecision, workspace?.timezone)}
         </Text>
       </View>
 
       {draft.imageUri ? <Image source={{ uri: draft.imageUri }} style={[styles.proof, { backgroundColor: theme.colors.surfaceVariant }]} resizeMode="contain" accessibilityLabel="Saved payment proof" /> : null}
 
       <View style={styles.form}>
-        <Text variant="titleMedium" style={styles.sectionTitle}>Correct amount</Text>
+        <Text variant="titleMedium" style={styles.sectionTitle}>Correct record</Text>
         <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} disabled={busy || draft.syncStatus === 'UPLOADING'} />
+        <Text variant="labelMedium">Sent from</Text>
+        <View style={styles.providerChoices}>{PROVIDERS.map((item) => <Chip key={item.value} selected={providerValue === item.value} onPress={() => setProviderValue(item.value)} disabled={busy || draft.syncStatus === 'UPLOADING'}>{item.label}</Chip>)}</View>
         <Button mode="contained" onPress={() => void save()} loading={busy} disabled={busy || draft.syncStatus === 'UPLOADING'} contentStyle={{ minHeight: TOUCH_TARGET }}>
-          Save amount
+          Save changes
         </Button>
       </View>
 
@@ -137,6 +147,7 @@ const styles = StyleSheet.create({
   amount: { fontWeight: '700', letterSpacing: -0.8 },
   proof: { width: '100%', height: 300, borderRadius: RADIUS.lg },
   form: { gap: SPACING.md },
+  providerChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
   sectionTitle: { fontWeight: '700' },
   sync: { gap: SPACING.xs, alignItems: 'flex-start' },
 });

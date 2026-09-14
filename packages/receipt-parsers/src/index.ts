@@ -4,3 +4,4 @@ export * from './registry';
 export * from './time';
 export * from './notifications';
 export * from './receipt/extract';
+export * from './receipt/provider';

@@ -1,10 +1,11 @@
-import type { PaymentRail, Provider, ReceiptFields, ReceiptStatus, ReferenceNamespace } from '@paytsek/contracts';
+import type { OcrResult, PaymentRail, Provider, ReceiptFields, ReceiptProviderDetection, ReceiptStatus, ReferenceNamespace } from '@paytsek/contracts';
 import { findMoneyCandidates } from '../money';
 import { normalizeReference } from '../reference';
 import { parseManilaDateTime } from '../time';
+import { detectReceiptProvider } from './provider';
 
 export const RECEIPT_PARSER_ID = 'receipt.generic-label.v1';
-export const RECEIPT_PARSER_VERSION = '1';
+export const RECEIPT_PARSER_VERSION = '2';
 
 export interface ReceiptExtraction {
   parserId: string;
@@ -14,6 +15,7 @@ export interface ReceiptExtraction {
   provenance: Partial<Record<keyof ReceiptFields, string>>;
   /** 0..1 — share of expected fields found; drives the low-readability warning. */
   readabilityScore: number;
+  providerDetection: ReceiptProviderDetection;
   warnings: string[];
 }
 
@@ -36,33 +38,6 @@ const EMPTY_FIELDS: ReceiptFields = {
 };
 
 const PHONE_RE = /(?:\+?63|0)\s?9\d{2}[\s-]?\d{3}[\s-]?\d{4}/;
-
-const GCASH_BRAND = /\bGCash\b|\bExpress\s+Send\b|\bGlobe\s+Fintech\b/i;
-const GOTYME_BRAND = /\bGoTyme\b|\bGo\s*Tyme\b/i;
-const MAYA_BRAND = /\bMaya\b|\bPayMaya\b|\bVoyager\s+Innovations\b/i;
-/** MariBank PH is the rebranded SeaBank Philippines; confirmations may say either. */
-const MARIBANK_BRAND = /\bMariBank\b|\bMari\s+Bank\b|\bSeaBank\b|\bSea\s+Bank\b/i;
-
-const BRANDS: readonly (readonly [Provider, RegExp])[] = [
-  ['GCASH', GCASH_BRAND],
-  ['GOTYME', GOTYME_BRAND],
-  ['MAYA', MAYA_BRAND],
-  ['MARIBANK', MARIBANK_BRAND],
-];
-
-function detectProvider(lines: string[]): Provider | null {
-  const matching = (scope: string) => BRANDS.filter(([, re]) => re.test(scope)).map(([provider]) => provider);
-
-  const whole = matching(lines.join('\n'));
-  if (whole.length === 1) return whole[0]!;
-  if (whole.length > 1) {
-    // A confirmation often names the destination wallet too (e.g. GoTyme -> GCash).
-    // The issuing app's brand is on the header; only trust the first two lines.
-    const header = matching(lines.slice(0, 2).join('\n'));
-    if (header.length === 1) return header[0]!;
-  }
-  return null; // ambiguous or neither -> unknown, never guessed
-}
 
 function detectRail(text: string, provider: Provider | null): PaymentRail | null {
   if (/\bExpress\s+Send\b/i.test(text)) return 'EXPRESS_SEND';
@@ -119,7 +94,11 @@ function splitNameAndPhone(value: string): { name: string | null; phone: string 
  *  - "From / Sender / Paid by" is the PAYER.
  *  - Missing fields stay null. Nothing is inferred from other fields.
  */
-export function extractReceiptFields(fullText: string): ReceiptExtraction {
+export function extractReceiptFields(
+  fullText: string,
+  blocks: ReadonlyArray<OcrResult['blocks'][number]> = [],
+  hints: { fileName?: string | null } = {},
+): ReceiptExtraction {
   const lines = fullText
     .split(/\r?\n/)
     .map((l) => l.replace(/\s+/g, ' ').trim())
@@ -129,7 +108,8 @@ export function extractReceiptFields(fullText: string): ReceiptExtraction {
   const provenance: ReceiptExtraction['provenance'] = {};
   const warnings: string[] = [];
 
-  fields.receiptProvider = detectProvider(lines);
+  const providerDetection = detectReceiptProvider(fullText, blocks, hints);
+  fields.receiptProvider = providerDetection.provider;
   fields.paymentRail = detectRail(text, fields.receiptProvider);
   fields.receiptStatus = detectStatus(text);
 
@@ -234,5 +214,5 @@ export function extractReceiptFields(fullText: string): ReceiptExtraction {
   const readabilityScore = Math.round((found / expected.length) * 100) / 100;
   if (readabilityScore < 0.6) warnings.push('Low readability: several expected fields were not found.');
 
-  return { parserId: RECEIPT_PARSER_ID, parserVersion: RECEIPT_PARSER_VERSION, fields, provenance, readabilityScore, warnings };
+  return { parserId: RECEIPT_PARSER_ID, parserVersion: RECEIPT_PARSER_VERSION, fields, provenance, readabilityScore, providerDetection, warnings };
 }

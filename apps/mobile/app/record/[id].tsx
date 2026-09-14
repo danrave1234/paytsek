@@ -1,9 +1,9 @@
-import type { EvidenceState } from '@paytsek/contracts';
+import { PROVIDERS, PROVIDER_LABELS, type EvidenceState, type Provider } from '@paytsek/contracts';
 import { parseMoneyExact } from '@paytsek/receipt-parsers';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
-import { Button, Dialog, Icon, IconButton, List, Portal, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, Chip, Dialog, Icon, IconButton, List, Portal, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
 import { ErrorState, Loading, Notice, Screen, StateChip } from '@/components/ui';
 import { isApiError } from '@/lib/api';
 import { lastSeenWithTime, manilaTime, peso, stateLabel } from '@/lib/format';
@@ -40,6 +40,7 @@ export default function RecordDetail() {
   const [dialog, setDialog] = useState<'unlink' | 'void' | 'manual' | 'edit' | null>(null);
   const [reason, setReason] = useState('');
   const [amountText, setAmountText] = useState('');
+  const [providerValue, setProviderValue] = useState<Provider | null>(null);
   const [msg, setMsg] = useState<{ kind: 'info' | 'error' | 'warning'; text: string } | null>(null);
   const goBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -83,7 +84,7 @@ export default function RecordDetail() {
         const amount = parseMoneyExact(amountText.trim());
         if (!amount) throw new Error('Enter a valid amount.');
         await correct.mutateAsync({
-          corrected: { amountCentavos: amount.centavos },
+          corrected: { amountCentavos: amount.centavos, receiptProvider: providerValue },
           reason: 'Updated from the app',
         });
         setMsg({ kind: 'info', text: 'Record updated.' });
@@ -96,8 +97,14 @@ export default function RecordDetail() {
 
   const openEdit = () => {
     setAmountText((r.amountCentavos / 100).toFixed(2));
+    setProviderValue(r.corrected.receiptProvider);
     setDialog('edit');
   };
+
+  const receiptWallet = r.corrected.receiptProvider ? PROVIDER_LABELS[r.corrected.receiptProvider] : 'Unknown';
+  const receivingWallet = r.receivingProvider
+    ? PROVIDER_LABELS[r.receivingProvider]
+    : r.receivingSourceLabel ?? null;
 
   return <Screen>
     <View style={styles.topBar}><IconButton icon="arrow-left" accessibilityLabel="Back to records" onPress={goBack} /><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment record</Text><View style={{ width: 48 }} /></View>
@@ -116,27 +123,27 @@ export default function RecordDetail() {
     {open && cands?.candidates.length ? <View style={[styles.surface, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
       <View style={styles.sectionHeader}><View style={[styles.sectionIcon, { backgroundColor: theme.colors.surfaceVariant }]}><Icon source="bell-sync-outline" size={20} color={theme.colors.primary} /></View><View style={{ flex: 1 }}><Text variant="titleMedium" style={{ fontWeight: '700' }}>Possible notification match</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{cands.candidates.length} option{cands.candidates.length === 1 ? '' : 's'} found</Text></View></View>
       {cands.collectorStale ? <Notice kind="warning">Payment phone {lastSeenWithTime(cands.collectorLastSeenAt).toLowerCase()}.</Notice> : null}
-      {cands?.candidates.map((c) => <View key={c.eventId} style={[styles.candidate, { borderColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surfaceVariant }]}><View style={{ flex: 1, gap: 2 }}><Text variant="titleSmall">{peso(c.amountCentavos)}</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(c.eventAt, 'SECOND', workspace?.timezone)}{c.deltaSeconds !== null ? ` · ${Math.abs(c.deltaSeconds) < 60 ? `${Math.abs(c.deltaSeconds)}s` : `${Math.round(Math.abs(c.deltaSeconds) / 60)} min`} from proof` : ''}</Text></View>{c.alreadyLinkedToOtherRecord ? <Text variant="labelSmall" style={{ color: theme.colors.error }}>Already linked</Text> : null}<Button mode="contained" compact disabled={c.alreadyLinkedToOtherRecord || confirm.isPending || !canConfirm} onPress={() => void onConfirm(c.eventId)}>Use this match</Button></View>)}
+      {cands?.candidates.map((c) => <View key={c.eventId} style={[styles.candidate, { borderColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surfaceVariant }]}><View style={{ flex: 1, gap: 2 }}><Text variant="titleSmall">{peso(c.amountCentavos)}</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{PROVIDER_LABELS[c.provider]} notification · {manilaTime(c.eventAt, 'SECOND', workspace?.timezone)}{c.deltaSeconds !== null ? ` · ${Math.abs(c.deltaSeconds) < 60 ? `${Math.abs(c.deltaSeconds)}s` : `${Math.round(Math.abs(c.deltaSeconds) / 60)} min`} from proof` : ''}</Text></View>{c.alreadyLinkedToOtherRecord ? <Text variant="labelSmall" style={{ color: theme.colors.error }}>Already linked</Text> : null}<Button mode="contained" compact disabled={c.alreadyLinkedToOtherRecord || confirm.isPending || !canConfirm} onPress={() => void onConfirm(c.eventId)}>Use this match</Button></View>)}
     </View> : null}
 
     {r.matchExplanation.kind ? <View style={[styles.matchNote, { borderColor: theme.colors.outlineVariant }]}><Icon source="information-outline" size={18} color={theme.colors.onSurfaceVariant} /><Text variant="bodySmall" style={{ flex: 1, color: theme.colors.onSurfaceVariant }}>{r.matchExplanation.disclosure ?? (r.matchExplanation.supportingFields.length ? `Matched using ${r.matchExplanation.supportingFields.join(' and ')}.` : 'Confirmation evidence recorded.')}</Text>{isOwner && r.evidenceState !== 'VOIDED' ? <Button compact onPress={() => setDialog('unlink')}>Unlink</Button> : null}</View> : null}
 
     <View style={[styles.surface, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
       <View style={styles.sectionHeader}><View style={[styles.sectionIcon, { backgroundColor: theme.colors.surfaceVariant }]}><Icon source="text-box-outline" size={20} color={theme.colors.primary} /></View><View><Text variant="titleMedium" style={{ fontWeight: '700' }}>Receipt details</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Read from the payment proof</Text></View></View>
-      <View style={styles.detailGrid}><DetailCell label="Amount" value={peso(r.amountCentavos)} /><DetailCell label="Wallet" value={r.corrected.receiptProvider ?? r.sourceLabel} /><DetailCell label="Status" value={stateLabel(r.evidenceState)} /><DetailCell label="Time" value={manilaTime(r.corrected.receiptTransactionAt ?? r.capturedAt, r.corrected.receiptTransactionPrecision, workspace?.timezone)} /></View>
+      <View style={styles.detailGrid}><DetailCell label="Amount" value={peso(r.amountCentavos)} /><DetailCell label="Sent from" value={receiptWallet} />{receivingWallet ? <DetailCell label="Received in" value={receivingWallet} /> : null}<DetailCell label="Status" value={stateLabel(r.evidenceState)} /><DetailCell label="Time" value={manilaTime(r.corrected.receiptTransactionAt ?? r.capturedAt, r.corrected.receiptTransactionPrecision, workspace?.timezone)} /></View>
     </View>
 
     {r.proofImageUrl ? <View style={[styles.proofCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}><View style={styles.proofHeader}><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment proof</Text><Icon source="image-outline" size={20} color={theme.colors.onSurfaceVariant} /></View><List.Image source={{ uri: r.proofImageUrl }} style={[styles.proof, { backgroundColor: theme.colors.surfaceVariant }]} /></View> : r.hasProofImage ? <Notice kind="info">The proof image is no longer available.</Notice> : null}
     <View style={[styles.surface, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}><List.Accordion title="Activity" description={`${r.history.length} recorded event${r.history.length === 1 ? '' : 's'}`} left={(props) => <List.Icon {...props} icon="history" />}><View style={styles.history}>{r.history.map((h, i) => <View key={i} style={styles.historyRow}><View style={[styles.historyDot, { backgroundColor: theme.colors.outline }]} /><View style={{ flex: 1 }}><Text variant="bodySmall" style={{ fontWeight: '600' }}>{h.action.replace(/_/g, ' ').toLowerCase()}</Text><Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(h.at, 'SECOND')}{h.actorDisplayName ? ` · ${h.actorDisplayName}` : ''}</Text></View></View>)}</View></List.Accordion></View>
     {r.voidReason ? <Notice kind="error">Voided: {r.voidReason}</Notice> : null}
     {r.evidenceState !== 'VOIDED' ? <View style={styles.recordActions}>
-      {canEdit ? <Button icon="pencil-outline" onPress={openEdit}>Correct amount</Button> : null}
+      {canEdit ? <Button icon="pencil-outline" onPress={openEdit}>Correct record</Button> : null}
       {isOwner && open ? <Button icon="check-circle-outline" onPress={() => setDialog('manual')}>I checked the wallet</Button> : null}
       {isOwner ? <Button icon="delete-outline" textColor={theme.colors.error} onPress={() => setDialog('void')}>Delete record</Button> : null}
     </View> : null}
 
     <Portal>
-      <Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}><Dialog.Title>{dialog === 'edit' ? 'Correct amount' : dialog === 'unlink' ? 'Unlink association' : dialog === 'void' ? 'Delete record' : 'Confirm after wallet check'}</Dialog.Title><Dialog.Content style={{ gap: 8 }}>{dialog === 'edit' ? <><Text variant="bodySmall">The proof and correction stay in Activity.</Text><TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} /></> : <><Text variant="bodySmall">{dialog === 'manual' ? 'Use this only after checking the receiving wallet. It is recorded as an owner confirmation, not a provider verification.' : dialog === 'void' ? 'This removes the record from active totals while preserving the proof and Activity history.' : 'The previous state remains in Activity.'}</Text><TextInput label={dialog === 'manual' ? 'Note (optional)' : 'Reason'} mode="outlined" value={reason} onChangeText={setReason} /></>}</Dialog.Content><Dialog.Actions><Button onPress={() => setDialog(null)}>Cancel</Button><Button onPress={() => void runDialog()} disabled={dialog !== 'edit' && dialog !== 'manual' && reason.trim().length < 3}>{dialog === 'edit' ? 'Save' : 'Confirm'}</Button></Dialog.Actions></Dialog>
+      <Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}><Dialog.Title>{dialog === 'edit' ? 'Correct record' : dialog === 'unlink' ? 'Unlink association' : dialog === 'void' ? 'Delete record' : 'Confirm after wallet check'}</Dialog.Title><Dialog.Content style={{ gap: 8 }}>{dialog === 'edit' ? <><Text variant="bodySmall">The proof and correction stay in Activity.</Text><TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} /><Text variant="labelMedium">Sent from</Text><View style={styles.providerChoices}>{PROVIDERS.map((item) => <Chip key={item.value} selected={providerValue === item.value} onPress={() => setProviderValue(item.value)}>{item.label}</Chip>)}</View></> : <><Text variant="bodySmall">{dialog === 'manual' ? 'Use this only after checking the receiving wallet. It is recorded as an owner confirmation, not a provider verification.' : dialog === 'void' ? 'This removes the record from active totals while preserving the proof and Activity history.' : 'The previous state remains in Activity.'}</Text><TextInput label={dialog === 'manual' ? 'Note (optional)' : 'Reason'} mode="outlined" value={reason} onChangeText={setReason} /></>}</Dialog.Content><Dialog.Actions><Button onPress={() => setDialog(null)}>Cancel</Button><Button onPress={() => void runDialog()} disabled={dialog !== 'edit' && dialog !== 'manual' && reason.trim().length < 3}>{dialog === 'edit' ? 'Save' : 'Confirm'}</Button></Dialog.Actions></Dialog>
       <Snackbar visible={msg?.kind === 'info'} duration={3000} onDismiss={() => setMsg(null)}>{msg?.text}</Snackbar>
     </Portal>
   </Screen>;
@@ -155,6 +162,7 @@ const styles = StyleSheet.create({
   matchNote: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
   recordActions: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, alignItems: 'center' },
   detailGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: SPACING.md, rowGap: SPACING.lg }, detailCell: { width: '47%', gap: SPACING.xs }, detailCellWide: { width: '100%' },
+  providerChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
   proofCard: { borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' }, proofHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SPACING.lg }, proof: { width: '100%', height: 320, borderRadius: 0 },
   history: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg, gap: SPACING.md }, historyRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm }, historyDot: { width: 7, height: 7, borderRadius: 4, marginTop: 5 },
 });
