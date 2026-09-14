@@ -62,3 +62,18 @@ export function joinNotificationText(input: NotificationText): string {
 export function normalizeForHash(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
+
+/**
+ * Payer names must never leave the parser unmasked. Provider templates usually
+ * mask them already (MI*A P., MA•IA S.); when a template surfaces a fully
+ * unmasked name, mask it locally: keep the first character of each word and
+ * replace the rest with • (e.g. "Juan Dela Cruz" -> "J••• D••• C•••").
+ * MUST stay in parity with NotificationParser.maskLocally on the Kotlin side.
+ */
+export function maskName(name: string): string {
+  if (/[•*]/.test(name)) return name;
+  return name
+    .split(/\s+/)
+    .map((w) => (w.length <= 1 ? w : w[0] + '•'.repeat(w.length - 1)))
+    .join(' ');
+}

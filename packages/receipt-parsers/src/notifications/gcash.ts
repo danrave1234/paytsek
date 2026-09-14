@@ -4,7 +4,7 @@ import { normalizeReference } from '../reference';
 import { PROVIDER_PACKAGES } from '../registry';
 import { parseManilaDateTime } from '../time';
 import { classifyNegative } from './filters';
-import { joinNotificationText, normalizeForHash } from './types';
+import { joinNotificationText, maskName, normalizeForHash } from './types';
 import type { NotificationAdapter, NotificationParseResult, NotificationText } from './types';
 
 /**
@@ -88,7 +88,7 @@ export const gcashAdapter: NotificationAdapter = {
     if (amountCentavos === null) return { ok: false, reason: 'NO_AMOUNT' };
 
     const from = FROM_RE.exec(text);
-    const payerMaskedName = from?.[1]?.trim() ?? null;
+    const payerMaskedName = from?.[1] ? maskName(from[1].trim()) : null;
     const phoneMatch = PHONE_RE.exec(text);
     const payerMaskedPhone = phoneMatch ? phoneMatch[0].replace(/\s+/g, ' ').trim() : null;
 
