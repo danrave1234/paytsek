@@ -206,16 +206,7 @@ export default function Today() {
 
         {home.isLoading && feed.length === 0 ? <Loading variant="list" label="Loading records" /> : null}
         {!home.isLoading && feed.length === 0 ? (
-          <TouchableRipple onPress={() => router.navigate('/(tabs)/scan')} borderless accessibilityRole="button">
-            <View style={styles.empty}>
-              <Icon source="qrcode-scan" size={26} color={theme.colors.primary} />
-              <View style={{ flex: 1 }}>
-                <Text variant="titleSmall" style={{ fontWeight: '700' }}>Record your first payment</Text>
-                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Scan a proof or import a screenshot.</Text>
-              </View>
-              <Icon source="arrow-right" size={20} color={theme.colors.primary} />
-            </View>
-          </TouchableRipple>
+          <Text variant="bodyMedium" style={[styles.empty, { color: theme.colors.onSurfaceVariant }]}>No payments recorded today.</Text>
         ) : null}
 
         <View>
@@ -228,7 +219,9 @@ export default function Today() {
               state={item.state}
               timezone={timezone}
               divider={index > 0}
-              onPress={item.kind === 'remote' ? () => router.push(`/record/${item.record.id}`) : undefined}
+              onPress={item.kind === 'remote'
+                ? () => router.push(`/record/${item.record.id}`)
+                : () => router.push(`/record/local/${item.draft.clientRecordId}`)}
               onPressIn={item.kind === 'remote' ? () => { void prefetchRecord(item.record.id); } : undefined}
             />
           ))}
@@ -268,5 +261,5 @@ const styles = StyleSheet.create({
   sectionHeader: { minHeight: 58, marginTop: SPACING.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth },
   sectionTitle: { fontWeight: '800', letterSpacing: -0.2 },
   viewAll: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', gap: 4 },
-  empty: { minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
+  empty: { minHeight: 72, textAlignVertical: 'center' },
 });

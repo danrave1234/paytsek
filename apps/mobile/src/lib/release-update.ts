@@ -27,6 +27,7 @@ export type AppUpdate = {
 
 const APK_MIME_TYPE = 'application/vnd.android.package-archive';
 const FLAG_GRANT_READ_URI_PERMISSION = 1;
+const FLAG_ACTIVITY_NEW_TASK = 0x10000000;
 
 function versionParts(value: string): number[] {
   const match = value.match(/v?(\d+(?:\.\d+){0,2})/i)?.[1] ?? '0';
@@ -108,25 +109,50 @@ export async function downloadAndInstallUpdate(
 
   const safeVersion = update.version.replace(/[^0-9A-Za-z.-]/g, '-');
   const destination = `${cacheDirectory}PayTsek-${safeVersion}.apk`;
+  const partialDestination = `${destination}.download`;
   // Android may send the person to Settings to allow installs from PayTsek.
   // The app becomes active again afterwards, so reuse the completed, versioned
   // APK rather than deleting it and downloading it a second time.
   const existing = await FileSystem.getInfoAsync(destination);
-  let apkUri = existing.exists && (existing.size ?? 0) > 0 ? destination : null;
+  let apkUri = existing.exists && existing.size === update.sizeBytes ? destination : null;
+
+  // A cancelled download used to be treated as a complete APK merely because
+  // it contained some bytes. Remove every incomplete cache entry before retrying.
+  if (existing.exists && !apkUri) await FileSystem.deleteAsync(destination, { idempotent: true });
 
   if (!apkUri) {
-    const task = FileSystem.createDownloadResumable(update.downloadUrl, destination, {}, ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
+    await FileSystem.deleteAsync(partialDestination, { idempotent: true });
+    const task = FileSystem.createDownloadResumable(update.downloadUrl, partialDestination, {}, ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
       onProgress(totalBytesExpectedToWrite > 0 ? totalBytesWritten / totalBytesExpectedToWrite : 0);
     });
     const result = await task.downloadAsync();
-    if (!result?.uri) throw new Error('The update download did not finish.');
-    apkUri = result.uri;
+    if (!result?.uri || result.status < 200 || result.status >= 300) {
+      await FileSystem.deleteAsync(partialDestination, { idempotent: true });
+      throw new Error('The update download did not finish.');
+    }
+    const downloaded = await FileSystem.getInfoAsync(result.uri);
+    if (!downloaded.exists || downloaded.size !== update.sizeBytes) {
+      await FileSystem.deleteAsync(partialDestination, { idempotent: true });
+      throw new Error('The downloaded APK was incomplete. Please try again.');
+    }
+    const signature = await FileSystem.readAsStringAsync(result.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+      position: 0,
+      length: 4,
+    });
+    if (!signature.startsWith('UEsDB')) {
+      await FileSystem.deleteAsync(partialDestination, { idempotent: true });
+      throw new Error('GitHub did not return a valid Android package. Please try again.');
+    }
+    await FileSystem.moveAsync({ from: result.uri, to: destination });
+    apkUri = destination;
   }
 
+  onProgress(1);
   const contentUri = await FileSystem.getContentUriAsync(apkUri);
   await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
     data: contentUri,
     type: APK_MIME_TYPE,
-    flags: FLAG_GRANT_READ_URI_PERMISSION,
+    flags: FLAG_GRANT_READ_URI_PERMISSION | FLAG_ACTIVITY_NEW_TASK,
   });
 }

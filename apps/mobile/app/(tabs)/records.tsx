@@ -199,7 +199,7 @@ export default function Records() {
             ? <ErrorState error={query.error} retry={refresh} />
             : hasFilters
               ? <EmptyState icon="filter-outline" title="No matching records" action={{ label: 'Clear filters', onPress: clearFilters }} />
-              : <EmptyState icon="receipt-text-outline" title="No records yet" body="Your saved payment proofs will appear here." action={{ label: 'Scan payment', onPress: () => router.navigate('/(tabs)/scan') }} />}
+              : <EmptyState icon="receipt-text-outline" title="No records yet" body="Saved payment proofs will appear here." />}
         ListFooterComponent={query.isFetchingNextPage ? <ActivityIndicator style={styles.footer} /> : <View style={styles.footer} />}
         renderItem={({ item, index }) => {
           const showDay = index === 0 || dayKey(rows[index - 1]!.at, timezone) !== dayKey(item.at, timezone);
@@ -218,7 +218,9 @@ export default function Records() {
                 state={item.state}
                 timezone={timezone}
                 divider={previousSameDay}
-                onPress={item.kind === 'record' ? () => router.push(`/record/${item.record.id}`) : undefined}
+                onPress={item.kind === 'record'
+                  ? () => router.push(`/record/${item.record.id}`)
+                  : () => router.push(`/record/local/${item.draft.clientRecordId}`)}
                 onPressIn={item.kind === 'record' ? () => { void prefetchRecord(item.record.id); } : undefined}
               />
             </View>

@@ -6,7 +6,7 @@ import {
 } from '@paytsek/contracts';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { PaymentCollector, type CollectorStatus, type DetectedProviderApp } from 'payment-collector';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Button, Portal, Snackbar, Switch, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { ProviderLogo } from '@/components/provider-logo';
@@ -15,6 +15,7 @@ import { api } from '@/lib/api';
 import { activateCollector, getCollectorBinding, type WalletProvider } from '@/lib/collector';
 import { getInstallId, osVersion } from '@/lib/device';
 import { APP_VERSION } from '@/lib/env';
+import { lastSeen } from '@/lib/format';
 import { keys, queryClient, useSources } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import { SPACING, TOUCH_TARGET } from '@/theme';
@@ -47,6 +48,7 @@ export default function WalletNotifications() {
   const [saving, setSaving] = useState<Provider | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const saveLock = useRef(false);
 
   const refreshDevice = useCallback(async () => {
     if (Platform.OS !== 'android') return;
@@ -76,7 +78,8 @@ export default function WalletNotifications() {
   );
 
   const toggle = async (provider: Provider, value: boolean) => {
-    if (!workspace || saving) return;
+    if (!workspace || saveLock.current) return;
+    saveLock.current = true;
     const next = value
       ? [...new Set([...enabled, provider])]
       : enabled.filter((item) => item !== provider);
@@ -111,6 +114,13 @@ export default function WalletNotifications() {
         deviceId: result.deviceId,
         pairedAt: new Date().toISOString(),
       }, result.collectorCredential);
+      if (result.providers.length > 0) {
+        // Rebind the listener and retry any payment notification that is still
+        // active. This is deduplicated natively and never reads notification history.
+        await PaymentCollector.recoverActiveNotifications();
+        await PaymentCollector.flushNow();
+      }
+      void PaymentCollector.reportHealth();
       await queryClient.invalidateQueries({ queryKey: keys.sources });
       const nextStatus = await PaymentCollector.getStatus();
       setStatus(nextStatus);
@@ -124,6 +134,7 @@ export default function WalletNotifications() {
       setEnabled(previous);
       setError(saveError);
     } finally {
+      saveLock.current = false;
       setSaving(null);
     }
   };
@@ -167,21 +178,32 @@ export default function WalletNotifications() {
         {PROVIDERS.map((item) => {
           const installed = apps.find((app) => app.provider === item.value)?.installed;
           const source = serverByProvider.get(item.value);
-          const anotherPhone = Boolean(source?.activeCollectorDeviceId && source.activeCollectorDeviceId !== localDeviceId);
+          const isEnabled = enabled.includes(item.value);
+          // Never lock an enabled switch in the on position. When local
+          // bookkeeping is unavailable, let the server make the conflict
+          // decision and return an actionable error.
+          const anotherPhone = Boolean(
+            !isEnabled
+            && localDeviceId
+            && source?.activeCollectorDeviceId
+            && source.activeCollectorDeviceId !== localDeviceId,
+          );
           const subtitle = anotherPhone
             ? 'Listening on another phone'
             : installed === false
               ? 'App not found on this phone'
-              : enabled.includes(item.value)
-                ? status.notificationAccessGranted ? 'Listening for incoming payments' : 'Waiting for Android access'
+              : isEnabled
+                ? status.notificationAccessGranted
+                  ? status.listenerConnected ? 'Listening for incoming payments' : 'Listener reconnecting'
+                  : 'Waiting for Android access'
                 : 'Off';
           return (
             <TouchableRipple
               key={item.value}
-              onPress={() => void toggle(item.value, !enabled.includes(item.value))}
+              onPress={() => void toggle(item.value, !isEnabled)}
               disabled={saving !== null || anotherPhone}
               accessibilityRole="switch"
-              accessibilityState={{ checked: enabled.includes(item.value), disabled: saving !== null || anotherPhone }}
+              accessibilityState={{ checked: isEnabled, disabled: saving !== null || anotherPhone }}
             >
               <View style={styles.walletRow}>
                 <ProviderLogo provider={item.value} size={40} />
@@ -189,7 +211,9 @@ export default function WalletNotifications() {
                   <Text variant="bodyLarge">{item.label}</Text>
                   <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{subtitle}</Text>
                 </View>
-                <Switch value={enabled.includes(item.value)} disabled={saving !== null || anotherPhone} pointerEvents="none" />
+                <View pointerEvents="none">
+                  <Switch value={isEnabled} disabled={saving !== null || anotherPhone} />
+                </View>
               </View>
             </TouchableRipple>
           );
@@ -203,6 +227,25 @@ export default function WalletNotifications() {
           </Text>
           <Button compact onPress={() => setError(null)}>Dismiss</Button>
         </View>
+      ) : null}
+
+      {enabled.length > 0 ? (
+        <Group title="Listener status">
+          <ListRow
+            icon={!status.notificationAccessGranted || !status.listenerConnected
+              ? 'bell-alert-outline'
+              : status.pendingUploadCount > 0 ? 'cloud-upload-outline' : 'bell-check-outline'}
+            title={!status.notificationAccessGranted || !status.listenerConnected
+              ? 'Android access needs attention'
+              : status.pendingUploadCount > 0 ? 'Captured — waiting to sync' : 'Ready for incoming payments'}
+            subtitle={status.pendingUploadCount > 0
+              ? `${status.pendingUploadCount} recognized notification${status.pendingUploadCount === 1 ? '' : 's'} safely queued on this phone`
+              : status.lastObservedEventAt
+                ? `Last payment notification ${lastSeen(status.lastObservedEventAt).toLowerCase()}`
+                : 'Waiting for the next recognized wallet notification'}
+            onPress={!status.notificationAccessGranted ? () => PaymentCollector.openNotificationAccessSettings() : undefined}
+          />
+        </Group>
       ) : null}
 
       <Group title="Another phone">
