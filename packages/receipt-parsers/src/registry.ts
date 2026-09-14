@@ -45,14 +45,13 @@ export const FLOW_REGISTRY: readonly FlowCapability[] = [
     rail: 'EXPRESS_SEND',
     receiptReferenceNamespace: 'GCASH_REF_NO',
     notificationReferenceNamespace: 'GCASH_REF_NO',
-    // The user-observed sample shows amount / masked sender / phone in the
-    // notification. Whether the Ref No. also appears is NOT yet proven, so the
-    // namespaces are marked comparable (same provider, same field name) but the
-    // adapter only emits a reference when it is literally present.
-    referenceNamespacesComparable: true,
-    autoMatchEnabled: true,
-    disabledReason: null,
-    evidence: 'SYNTHETIC',
+    // Current Android push samples contain amount + masked sender + phone, but
+    // no receipt reference. Older SMS/inbox formats sometimes included a Ref
+    // No.; that is not a safe assumption for the receiving notification.
+    referenceNamespacesComparable: false,
+    autoMatchEnabled: false,
+    disabledReason: 'Current GCash receiving notifications do not provide the customer receipt reference. Amount and nearby time require review.',
+    evidence: 'REDACTED_REAL_SAMPLE',
     observedAppVersions: [],
   },
   {
@@ -62,14 +61,12 @@ export const FLOW_REGISTRY: readonly FlowCapability[] = [
     rail: 'QR_P2P',
     receiptReferenceNamespace: 'GCASH_REF_NO',
     notificationReferenceNamespace: 'GCASH_REF_NO',
-    // Same wallet on both sides, same GCASH_REF_NO namespace, and receiving
-    // money produces the same notification whichever rail the payer used — so
-    // this rests on exactly the assumption already shipped for Express Send.
-    // Enabling one and not the other was arbitrary. Both remain SYNTHETIC.
-    referenceNamespacesComparable: true,
-    autoMatchEnabled: true,
-    disabledReason: null,
-    evidence: 'SYNTHETIC',
+    // The payer's QR receipt has a reference, but the recipient's current push
+    // notification does not expose that same identifier.
+    referenceNamespacesComparable: false,
+    autoMatchEnabled: false,
+    disabledReason: 'The QR receipt reference is not present in the current GCash receiving notification. Amount and nearby time require review.',
+    evidence: 'REDACTED_REAL_SAMPLE',
     observedAppVersions: [],
   },
   {

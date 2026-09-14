@@ -64,7 +64,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="flex min-h-dvh flex-col font-sans">
         <a
           href="#main"
-          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-ink focus:px-4 focus:py-2 focus:text-white"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-night focus:px-4 focus:py-2 focus:text-on-brand"
         >
           Skip to content
         </a>
@@ -80,7 +80,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <div>
               <Image src="/brand/paytsek-wordmark.png" alt="PayTsek" width={152} height={51} className="h-auto w-[152px]" />
               <p className="mt-4 max-w-sm text-sm leading-6 text-ink-2">
-                Recordkeeping for sellers who get paid by QR through GCash, GoTyme and Maya. We never touch the money.
+                Recordkeeping for sellers who get paid by QR through GCash, GoTyme, Maya and MariBank. We never touch the money.
               </p>
               <p className="mt-4 max-w-sm font-mono text-[11px] leading-5 text-ink-3">
                 Not affiliated with, endorsed by, or verified by GCash, GoTyme, Maya, or any bank.

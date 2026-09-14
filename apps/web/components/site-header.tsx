@@ -73,7 +73,7 @@ export function SiteHeader({ version }: { version: string }) {
               second route to the same place in a very tight bar. */}
           <Link
             href="/download"
-            className="ml-3 hidden min-h-10 items-center gap-2 whitespace-nowrap rounded-xl bg-ink px-4 py-2 text-[13px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-brand sm:inline-flex"
+            className="ml-3 hidden min-h-10 items-center gap-2 whitespace-nowrap rounded-xl bg-night px-4 py-2 text-[13px] font-semibold text-on-brand transition-all hover:-translate-y-0.5 hover:bg-brand-solid-hover sm:inline-flex"
           >
             Get the app
             <span className="data text-[11px] text-white/55">v{version}</span>

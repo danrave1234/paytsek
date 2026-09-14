@@ -39,27 +39,25 @@ function event(over: Partial<MatchEventInput> = {}): MatchEventInput {
   };
 }
 
-describe('matcher v1 — automatic match', () => {
-  it('auto-matches on exact comparable reference + exact amount + same source', () => {
+describe('matcher v1 — current GCash receiving-notification safety', () => {
+  it('keeps an exact-looking GCash reference in review because current pushes do not expose it', () => {
     const d = decide(record(), [event()], cfg);
-    expect(d.kind).toBe('AUTO');
-    if (d.kind === 'AUTO') {
-      expect(d.eventId).toBe('ev-1');
-      expect(d.reasonCodes).toEqual(['EXACT_REFERENCE_AND_AMOUNT']);
+    expect(d.kind).toBe('REVIEW');
+    if (d.kind === 'REVIEW') {
+      expect(d.reasonCodes).toContain('NO_COMPARABLE_NAMESPACE');
       expect(d.timeBasis).toBe('RECEIPT_TRANSACTION_TIME');
-      expect(d.flowId).toBe('gcash-to-gcash.express-send');
+      expect(d.candidates[0]?.event.id).toBe('ev-1');
     }
   });
 
-  it('tolerates OCR spacing in the reference but never character substitutions', () => {
-    expect(decide(record({ referenceValue: '1234 567 890123' }), [event()], cfg).kind).toBe('AUTO');
+  it('never lets OCR normalization bypass the disabled flow', () => {
+    expect(decide(record({ referenceValue: '1234 567 890123' }), [event()], cfg).kind).toBe('REVIEW');
     expect(decide(record({ referenceValue: '12345O7890123' }), [event()], cfg).kind).not.toBe('AUTO');
   });
 
-  it('accepts a delayed exact-ID match outside the window and explains the delay', () => {
+  it('does not resurrect a delayed event using an unproven GCash reference', () => {
     const d = decide(record(), [event({ eventAt: plus(3 * 3600) })], cfg);
-    expect(d.kind).toBe('AUTO');
-    if (d.kind === 'AUTO') expect(d.reasonCodes).toContain('DELAYED_EXACT_REFERENCE');
+    expect(d.kind).toBe('NONE');
   });
 });
 
@@ -122,15 +120,18 @@ describe('matcher v1 — never auto-confirm on weak evidence', () => {
   it('user-edited matching-critical field -> REVIEW', () => {
     const d = decide(record({ editedFields: ['referenceValue'] }), [event()], cfg);
     expect(d.kind).toBe('REVIEW');
-    if (d.kind === 'REVIEW') expect(d.reasonCodes).toContain('RECEIPT_EDITED_AFTER_MATCH');
-    // Non-critical edits (customer label) do not block.
-    expect(decide(record({ editedFields: ['customerLabel'] }), [event()], cfg).kind).toBe('AUTO');
+    if (d.kind === 'REVIEW') expect(d.reasonCodes).toContain('NO_COMPARABLE_NAMESPACE');
+    // A non-critical edit still cannot enable an unproven flow.
+    expect(decide(record({ editedFields: ['customerLabel'] }), [event()], cfg).kind).toBe('REVIEW');
   });
 
-  it('owner approval requirement for staff records -> REVIEW with the exact candidate', () => {
+  it('owner approval requirement cannot elevate an amount-only candidate', () => {
     const d = decide(record({ requiresOwnerApproval: true }), [event()], cfg);
     expect(d.kind).toBe('REVIEW');
-    if (d.kind === 'REVIEW') expect(d.candidates[0]!.supportingFields).toContain('reference');
+    if (d.kind === 'REVIEW') {
+      expect(d.candidates[0]!.supportingFields).toContain('amount');
+      expect(d.candidates[0]!.blockers).toContain('NO_COMPARABLE_NAMESPACE');
+    }
   });
 
   it('falls back to capture time with a wider window when receipt time is missing/imprecise', () => {
@@ -142,9 +143,10 @@ describe('matcher v1 — never auto-confirm on weak evidence', () => {
   });
 
   it('resolves the flow by the receipt rail, not by namespace alone', () => {
-    // Both GCash-to-GCash rails are enabled in the registry.
-    expect(decide(record({ paymentRail: 'EXPRESS_SEND' }), [event()], cfg).kind).toBe('AUTO');
-    expect(decide(record({ paymentRail: 'QR_P2P' }), [event()], cfg).kind).toBe('AUTO');
+    // Current GCash receiving pushes do not expose the payer receipt reference,
+    // so neither rail is eligible for automatic matching.
+    expect(decide(record({ paymentRail: 'EXPRESS_SEND' }), [event()], cfg).kind).toBe('REVIEW');
+    expect(decide(record({ paymentRail: 'QR_P2P' }), [event()], cfg).kind).toBe('REVIEW');
 
     // Merchant QR shares the provider and namespace but its own flow is
     // disabled, so it must go to Review rather than borrow an enabled rule.

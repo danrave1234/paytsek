@@ -28,6 +28,7 @@ export const RELEASES: Release[] = [
     fixes: [
       'Improves offline draft sync, notification-collector recovery after upgrades, light and dark themes, caching, and loading behavior.',
       'Keeps receipt records even when notification evidence is unavailable and limits visible record facts to data the proof can supply.',
+      'Keeps current GCash receiving notifications in Review because they show the sender number rather than the customer receipt reference.',
     ],
     notes: 'PayTsek remains a free public beta. Notification matching is supplementary evidence, not confirmation from a wallet provider.',
   },

@@ -12,9 +12,9 @@ import type { NotificationAdapter, NotificationParseResult, NotificationText } f
  * rather than being guessed from the fact that money arrived.
  */
 function railNamedIn(text: string): PaymentRail {
-  if (/InstaPay/i.test(text)) return 'INSTAPAY';
-  if (/PESONet/i.test(text)) return 'PESONET';
-  if (/Express\s+Send/i.test(text)) return 'EXPRESS_SEND';
+  if (/\bInstaPay\b/i.test(text)) return 'INSTAPAY';
+  if (/\bPESONet\b/i.test(text)) return 'PESONET';
+  if (/\bExpress\s+Send\b/i.test(text)) return 'EXPRESS_SEND';
   return 'UNKNOWN';
 }
 
@@ -25,10 +25,10 @@ export const GCASH_PARSER_VERSION = '1';
  * Positive incoming-payment phrases. An adapter must require one of these; the
  * absence of a negative pattern is never enough.
  *
- * Template basis: the user-observed Express Send notification sample
- * (amount + masked sender name + masked phone). Treated as a *sample to
- * support*, not as a universal GCash contract. Additional forms are added only
- * with redacted real samples under tests/fixtures.
+ * Template basis: current Android push samples contain amount + masked sender
+ * name + sender phone, but normally no receipt reference. Older SMS/inbox
+ * formats may contain more fields. A reference remains optional and must never
+ * be assumed for automatic matching.
  */
 const POSITIVE_INCOMING = [
   /\byou\s+(have\s+)?received\b/i,
