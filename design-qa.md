@@ -180,6 +180,37 @@ passed
 
 ---
 
+## Responsive web and notification-claim QA — 2026-09-14
+
+### Source of truth
+
+- User-supplied desktop failure captures:
+  - `C:/Users/Danrave/AppData/Local/Temp/codex-clipboard-20b53943-7c3e-438c-aa57-2d1807a7d80c.png`
+  - `C:/Users/Danrave/AppData/Local/Temp/codex-clipboard-197683fd-efaf-4203-80c0-e7c23c7b5039.png`
+  - `C:/Users/Danrave/AppData/Local/Temp/codex-clipboard-ef77424c-033f-4548-97ed-e90674247c49.png`
+- Notification research and provider limitations: `docs/notification-format-research-2026-09-14.md`.
+
+### Findings and corrections
+
+- [P1] Dark-mode semantic colors inverted fixed dark and brand surfaces, producing nearly white text on white cards and buttons. Fixed with non-inverting night, brand-action, and on-brand tokens.
+- [P1] GCash examples and product copy overstated notification evidence as a strong match. Current GCash receiving pushes may expose amount plus sender name/number without the payer receipt reference, so all wallet notification candidates now remain review-only.
+- [P2] The evidence comparison illustration used overlapping absolute cards at phone widths. Fixed with a stacked mobile composition that restores the orbit layout at the `sm` breakpoint.
+- [P2] Dashboard selectors, sign-out, record rows, device metadata, and team email values could overflow narrow viewports. Fixed with min-width containment, flexible columns, truncation/breaking, and mobile-first panel headers.
+- [P2] The desktop-first hero scale and CTA sizing were too aggressive on small screens. Fixed with a smaller mobile clamp and full-width mobile primary actions.
+
+### Responsive verification steps
+
+1. Homepage at 320 × 720 — passed. Hero, five-item phone navigation, stacked evidence cards, and full-width CTA stay inside the viewport.
+2. Homepage at 390 × 844 — passed. Compact navigation, hero hierarchy, and Today preview remain legible without horizontal clipping.
+3. Dashboard/sign-in at 320 × 720 — passed. The authentication card and controls remain contained; the expected localhost configuration warning wraps normally.
+4. Homepage at 1440 × 900 — passed. Hero balance, daily summary contrast, evidence composition, CTA, and footer preserve the desktop layout.
+
+No actionable P0, P1, or P2 visual issue remains in the inspected web states.
+
+passed
+
+---
+
 ## Scan-first redesign QA — 2026-09-11
 
 ### Source and implementation

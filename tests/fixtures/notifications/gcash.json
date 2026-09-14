@@ -3,45 +3,45 @@
   "provider": "GCASH",
   "platform": "ANDROID",
   "packageName": "com.globe.gcash.android",
-  "provenance": "SYNTHETIC",
+  "provenance": "REDACTED_REAL_SAMPLE",
   "observedAppVersion": null,
-  "note": "SYNTHETIC fixtures modeled on the user-described Express Send sample (amount + masked sender + masked phone). They do NOT demonstrate real GCash notification coverage. Replace/extend with REDACTED_REAL_SAMPLE entries before enabling a flow for production auto-match.",
+  "note": "Current Android push samples show amount + masked sender + sender phone and no receipt reference. Legacy formats are retained only for parsing compatibility. No GCash flow is eligible for automatic matching.",
   "cases": [
     {
-      "id": "express-send-incoming-with-ref",
+      "id": "current-android-push-no-ref",
       "flowId": "gcash-to-gcash.express-send",
       "expect": "ACCEPT",
       "input": {
-        "title": "GCash",
-        "text": "You have received PHP 1,250.00 of GCash from JU•N D. (+63 9•• ••• 1234) on Sep 08, 2026 1:05 AM. Ref. No. 1234567890123.",
+        "title": "You have received money in GCash!",
+        "text": "You have received PHP 1,096.10 of GCash from MI*A P. 0915••••847.",
         "bigText": null,
         "textLines": [],
         "isGroupSummary": false
       },
       "expected": {
-        "amountCentavos": 125000,
-        "referenceNamespace": "GCASH_REF_NO",
-        "referenceValue": "1234567890123",
-        "payerMaskedName": "JU•N D.",
-        "payerMaskedPhone": "+63 9•• ••• 1234",
-        "providerDescribedAt": "2026-09-07T17:05:00.000Z"
+        "amountCentavos": 109610,
+        "referenceNamespace": "UNKNOWN",
+        "referenceValue": null,
+        "payerMaskedName": "MI*A P.",
+        "payerMaskedPhone": "0915••••847",
+        "providerDescribedAt": null
       }
     },
     {
-      "id": "express-send-incoming-no-ref",
+      "id": "legacy-incoming-with-optional-ref",
       "flowId": "gcash-to-gcash.express-send",
       "expect": "ACCEPT",
       "input": {
         "title": "GCash",
-        "text": "You have received ₱500.00 from MA•IA S. (0917•••5678). Your new balance is ₱12,340.50.",
+        "text": "You have received PHP 500.00 of GCash from MA•IA S. (0917•••5678). Your new balance is PHP 12,340.50. Ref. No. 1234567890123.",
         "bigText": null,
         "textLines": [],
         "isGroupSummary": false
       },
       "expected": {
         "amountCentavos": 50000,
-        "referenceNamespace": "UNKNOWN",
-        "referenceValue": null,
+        "referenceNamespace": "GCASH_REF_NO",
+        "referenceValue": "1234567890123",
         "payerMaskedName": "MA•IA S.",
         "payerMaskedPhone": "0917•••5678",
         "providerDescribedAt": null

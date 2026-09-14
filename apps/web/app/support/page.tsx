@@ -33,7 +33,7 @@ const groups = [
       },
       {
         q: 'Which wallets auto-match?',
-        a: 'GCash → GCash Express Send is enabled when an exact comparable reference is present. GoTyme, Maya and MariBank incoming notifications are recognised, then sent to Review because those templates do not contain a comparable reference. The support table on the home page is generated from the app’s own capability registry, so it is always current.',
+        a: 'None automatically during the current beta. GCash receiving pushes show the amount and sender number but normally not the reference printed on the customer’s screenshot. GCash, GoTyme, Maya and MariBank notifications can therefore suggest a Possible match by wallet, exact amount and nearby time; a person must review it.',
       },
       {
         q: 'Does PayTsek see my balance or MPIN?',
