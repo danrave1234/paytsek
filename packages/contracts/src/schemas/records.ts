@@ -59,6 +59,22 @@ export const OcrBlock = z.object({
   box: z.tuple([z.number(), z.number(), z.number(), z.number()]).nullable(),
 });
 
+/**
+ * Auditable, privacy-safe explanation of receipt-wallet classification.
+ * Signal codes describe rules and positions; they never contain OCR text.
+ */
+export const ReceiptProviderDetection = z.object({
+  provider: Provider.nullable(),
+  confidence: z.number().min(0).max(1),
+  method: z.literal('OCR_LAYOUT_V1'),
+  signalCodes: z.array(z.string().regex(/^[A-Z0-9_]+$/).max(60)).max(16),
+  candidates: z.array(z.object({
+    provider: Provider,
+    score: z.number().min(0).max(1),
+  })).max(4),
+});
+export type ReceiptProviderDetection = z.infer<typeof ReceiptProviderDetection>;
+
 export const OcrResult = z.object({
   engine: z.literal('MLKIT_TEXT_V2'),
   engineVersion: z.string().max(40),
@@ -66,6 +82,8 @@ export const OcrResult = z.object({
   blocks: z.array(OcrBlock).max(500),
   /** 0..1 heuristic readability score from the parser; low values trigger warnings. */
   readabilityScore: z.number().min(0).max(1),
+  /** Optional for backward compatibility with scans created before classifier v1. */
+  providerDetection: ReceiptProviderDetection.nullable().optional(),
 });
 export type OcrResult = z.infer<typeof OcrResult>;
 
@@ -165,6 +183,11 @@ export const RecordSummary = z.object({
   organizationId: uuid,
   sourceId: uuid.nullable(),
   sourceLabel: z.string(),
+  /** Wallet app that issued the customer's proof, when confidently classified. */
+  receiptProvider: Provider.nullable().optional(),
+  /** Seller wallet identified independently by the Android notification source. */
+  receivingProvider: Provider.nullable().optional(),
+  receivingSourceLabel: z.string().nullable().optional(),
   evidenceState: EvidenceState,
   flags: z.array(RecordFlag),
   syncStatus: SyncStatus,

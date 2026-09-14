@@ -7,6 +7,7 @@ import {
   PROVIDER_PACKAGES,
   adapterForPackage,
   autoMatchFlowsForReceivingProvider,
+  detectReceiptProvider,
   extractReceiptFields,
   findMoneyCandidates,
   formatCentavos,
@@ -350,6 +351,25 @@ describe('receipt extraction (SYNTHETIC fixtures)', () => {
     expect(r.warnings.some((w) => /does not equal total/.test(w))).toBe(true);
   });
 
+  it('recognizes the compact GCash proof wording used by the scanner flow', () => {
+    const r = extractReceiptFields(`TEST USER
++63 900 000 0000
+Sent via GCash
+Amount 1.00
+Total Amount Sent P1.00
+Ref No. 3000000000000
+Sep 14, 2026 8:41 PM`);
+    expect(r.fields).toMatchObject({
+      receiptProvider: 'GCASH',
+      amountCentavos: 100,
+      totalChargedCentavos: 100,
+      referenceNamespace: 'GCASH_REF_NO',
+      referenceValue: '3000000000000',
+      receiptTransactionAt: '2026-09-14T12:41:00.000Z',
+      receiptStatus: 'SUCCESS',
+    });
+  });
+
   it('never turns environmental copy into a payer name', () => {
     const r = extractReceiptFields(`GCash
 Total Amount Sent ₱1.00
@@ -358,5 +378,56 @@ Sep 11, 2026 4:54 PM
 By going digital, you reduce your carbon footprint from transportation, paper, and plastic.`);
     expect(r.fields.payerName).toBeNull();
     expect(r.fields.payerPhone).toBeNull();
+  });
+});
+
+describe('receipt provider classification', () => {
+  it('uses receipt layout and ignores a destination wallet', () => {
+    const blocks = [
+      { text: 'GoTyme Bank', confidence: 0.98, box: [0.08, 0.08, 0.34, 0.05] as [number, number, number, number] },
+      { text: 'Transfer successful', confidence: 0.97, box: [0.08, 0.18, 0.50, 0.05] as [number, number, number, number] },
+      { text: 'Amount ₱750.50', confidence: 0.99, box: [0.08, 0.32, 0.42, 0.05] as [number, number, number, number] },
+      { text: 'To TEST USER', confidence: 0.96, box: [0.08, 0.44, 0.36, 0.05] as [number, number, number, number] },
+      { text: 'GCash 0900 000 0000', confidence: 0.95, box: [0.08, 0.50, 0.50, 0.05] as [number, number, number, number] },
+    ];
+    const result = detectReceiptProvider(blocks.map((block) => block.text).join('\n'), blocks);
+    expect(result.provider).toBe('GOTYME');
+    expect(result.signalCodes).toContain('GOTYME_TOP_REGION');
+    expect(result.candidates.find((candidate) => candidate.provider === 'GCASH')?.score).toBe(0);
+  });
+
+  it('does not call a destination-only mention the receipt issuer', () => {
+    const result = detectReceiptProvider('Payment successful\nAmount ₱500.00\nTo TEST USER\nGCash 0900 000 0000');
+    expect(result.provider).toBeNull();
+    expect(result.confidence).toBe(0);
+  });
+
+  it('recognizes an issuer phrase even below unrelated photographed-screen text', () => {
+    const blocks = [
+      { text: 'Browser toolbar', confidence: 0.91, box: [0.02, 0.02, 0.40, 0.04] as [number, number, number, number] },
+      { text: 'TEST USER', confidence: 0.88, box: [0.30, 0.25, 0.25, 0.04] as [number, number, number, number] },
+      { text: 'Sent via GCash', confidence: 0.97, box: [0.30, 0.31, 0.28, 0.04] as [number, number, number, number] },
+      { text: 'Amount 1.00', confidence: 0.99, box: [0.30, 0.43, 0.24, 0.04] as [number, number, number, number] },
+    ];
+    const result = detectReceiptProvider(blocks.map((block) => block.text).join('\n'), blocks);
+    expect(result.provider).toBe('GCASH');
+    expect(result.signalCodes).toContain('GCASH_ISSUER_PHRASE');
+  });
+
+  it('fails closed when the only wallet text has poor OCR confidence', () => {
+    const blocks = [
+      { text: 'GCash', confidence: 0.28, box: [0.10, 0.08, 0.20, 0.05] as [number, number, number, number] },
+      { text: 'Amount ₱100.00', confidence: 0.98, box: [0.10, 0.30, 0.40, 0.05] as [number, number, number, number] },
+    ];
+    expect(detectReceiptProvider('GCash\nAmount ₱100.00', blocks).provider).toBeNull();
+  });
+
+  it('uses an imported screenshot filename only as supporting evidence', () => {
+    const text = 'Payment successful\nAmount ₱250.00\nMaya';
+    expect(detectReceiptProvider(text).provider).toBeNull();
+    const supported = detectReceiptProvider(text, [], { fileName: 'Screenshot_20260915_Maya.jpg' });
+    expect(supported.provider).toBe('MAYA');
+    expect(supported.signalCodes).toContain('MAYA_FILENAME_HINT');
+    expect(detectReceiptProvider('Amount ₱250.00', [], { fileName: 'Screenshot_Maya.jpg' }).provider).toBeNull();
   });
 });

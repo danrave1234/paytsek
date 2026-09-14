@@ -79,7 +79,7 @@ export default function Today() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ savedAmount?: string }>();
+  const params = useLocalSearchParams<{ savedAmount?: string; savedProvider?: string }>();
   const { workspace } = useSession();
   const timezone = workspace?.timezone || 'Asia/Manila';
   const home = useHome();
@@ -133,11 +133,15 @@ export default function Today() {
   useEffect(() => {
     const savedAmount = Number(params.savedAmount);
     if (!Number.isFinite(savedAmount) || savedAmount <= 0) return;
-    setSavedToast(`${peso(savedAmount)} recorded`);
+    const savedProvider = params.savedProvider as Provider | undefined;
+    const providerLabel = savedProvider && Object.hasOwn(PROVIDER_LABELS, savedProvider)
+      ? PROVIDER_LABELS[savedProvider]
+      : null;
+    setSavedToast(`${peso(savedAmount)}${providerLabel ? ` · ${providerLabel}` : ''} recorded`);
     // Route parameters outlive a render. Clear this one immediately so the
     // confirmation cannot stick around or replay after later navigation.
-    router.setParams({ savedAmount: '' });
-  }, [params.savedAmount, router]);
+    router.setParams({ savedAmount: '', savedProvider: '' });
+  }, [params.savedAmount, params.savedProvider, router]);
   const offline = home.error instanceof OfflineError;
   const refresh = () => {
     refreshLocal();
