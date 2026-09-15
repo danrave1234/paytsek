@@ -2,14 +2,15 @@ import { PROVIDERS, PROVIDER_LABELS, type Provider } from '@paytsek/contracts';
 import { parseMoneyExact } from '@paytsek/receipt-parsers';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { BackHandler, Image, StyleSheet, View } from 'react-native';
-import { Button, Chip, Dialog, IconButton, Portal, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import { BackHandler, Image, Pressable, StyleSheet, View } from 'react-native';
+import { Button, Chip, Dialog, Icon, IconButton, Portal, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import { ProviderLogo } from '@/components/provider-logo';
 import { Loading, Notice, Screen } from '@/components/ui';
 import { correctDraft, getDraft, pruneSynced, syncDraft, type Draft } from '@/lib/drafts';
 import { manilaTime, peso } from '@/lib/format';
 import { useInvalidateRecord } from '@/lib/queries';
 import { useSession } from '@/lib/session';
-import { RADIUS, SPACING } from '@/theme';
+import { SPACING } from '@/theme';
 
 export default function LocalRecordDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -22,6 +23,7 @@ export default function LocalRecordDetail() {
   const [providerValue, setProviderValue] = useState<Provider | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [proofExpanded, setProofExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -115,15 +117,39 @@ export default function LocalRecordDetail() {
         <View style={{ width: 48 }} />
       </View>
 
-      <View style={[styles.hero, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
-        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>SAVED ON THIS PHONE</Text>
-        <Text variant="headlineLarge" style={styles.amount}>{peso(fields.amountCentavos)}</Text>
+      <View style={styles.hero}>
+        <View style={styles.heroTop}>
+          <ProviderLogo provider={fields.receiptProvider} size={44} />
+          <View style={[styles.localChip, { backgroundColor: theme.colors.surfaceVariant }]} accessibilityRole="text" accessibilityLabel="Status: Saved on this phone">
+            <Icon source="cellphone-check" size={14} color={theme.colors.onSurfaceVariant} />
+            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, fontWeight: '600' }}>Saved on this phone</Text>
+          </View>
+        </View>
+        <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={styles.amount}>{peso(fields.amountCentavos)}</Text>
         <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-          {fields.receiptProvider ? PROVIDER_LABELS[fields.receiptProvider] : 'Unknown wallet'} · {manilaTime(occurredAt, fields.receiptTransactionPrecision, workspace?.timezone)}
+          {manilaTime(occurredAt, fields.receiptTransactionPrecision, workspace?.timezone)} · Sent from {fields.receiptProvider ? PROVIDER_LABELS[fields.receiptProvider] : 'Unknown wallet'}
         </Text>
       </View>
 
-      {draft.imageUri ? <Image source={{ uri: draft.imageUri }} style={[styles.proof, { backgroundColor: theme.colors.surfaceVariant }]} resizeMode="contain" accessibilityLabel="Saved payment proof" /> : null}
+      {draft.imageUri ? (
+        <Pressable
+          onPress={() => setProofExpanded((current) => !current)}
+          accessibilityRole="button"
+          accessibilityLabel={proofExpanded ? 'Collapse payment proof' : 'Expand payment proof'}
+          style={[styles.proofBand, { borderTopColor: theme.colors.outlineVariant, borderBottomColor: theme.colors.outlineVariant }]}
+        >
+          <View style={styles.proofHeader}>
+            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 0.6 }}>PAYMENT PROOF</Text>
+            <Icon source={proofExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={theme.colors.onSurfaceVariant} />
+          </View>
+          <Image
+            source={{ uri: draft.imageUri }}
+            resizeMode={proofExpanded ? 'contain' : 'cover'}
+            accessibilityLabel="Saved payment proof"
+            style={[styles.proof, { height: proofExpanded ? 420 : 116, backgroundColor: theme.colors.surfaceVariant }]}
+          />
+        </Pressable>
+      ) : null}
 
       <View style={styles.recordActions}>
         <Button icon="pencil-outline" onPress={() => { setError(null); setEditing(true); }} disabled={busy || draft.syncStatus === 'UPLOADING'}>Correct record</Button>
@@ -162,9 +188,13 @@ export default function LocalRecordDetail() {
 const styles = StyleSheet.create({
   topBar: { height: 44, marginHorizontal: -SPACING.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   topTitle: { fontWeight: '700' },
-  hero: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.xl, padding: SPACING.xl, gap: SPACING.xs },
-  amount: { fontWeight: '700', letterSpacing: -0.8 },
-  proof: { width: '100%', height: 300, borderRadius: RADIUS.lg },
+  hero: { paddingTop: SPACING.sm, gap: SPACING.xs },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.sm },
+  localChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, alignSelf: 'flex-start' },
+  amount: { fontWeight: '800', letterSpacing: -1.2, fontVariant: ['tabular-nums'] },
+  proofBand: { marginTop: SPACING.sm, paddingVertical: SPACING.sm, gap: SPACING.sm, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
+  proofHeader: { minHeight: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  proof: { width: '100%', borderRadius: 0 },
   recordActions: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, alignItems: 'center' },
   providerChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
   sync: { gap: SPACING.xs, alignItems: 'flex-start' },

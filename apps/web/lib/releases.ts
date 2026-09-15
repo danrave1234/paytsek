@@ -15,6 +15,21 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.2.6',
+    date: '2026-09-15',
+    channel: 'beta',
+    highlights: [
+      'Matching happens immediately: a proof scanned after its wallet notification is matched by amount and time as soon as it is saved, and a notification arriving after the scan matches on arrival.',
+      'Settings › Notifications › “Send test notification” posts a GCash-style incoming-payment notification on this phone so you can verify the listener end-to-end.',
+      'Redesigned payment record page with the amount, wallet logo, evidence status, proof band, notification evidence list, and collapsible history.',
+    ],
+    fixes: [
+      'Background refreshes are silent; the top loading indicator appears only on pull-to-refresh.',
+      'Opening an older record that was never matched catches it up automatically.',
+    ],
+    notes: 'PayTsek remains a free public beta. Notification matching is supplementary evidence, not confirmation from a wallet provider.',
+  },
+  {
     version: '0.2.5',
     date: '2026-09-15',
     channel: 'beta',

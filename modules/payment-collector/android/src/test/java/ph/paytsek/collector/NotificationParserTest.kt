@@ -26,6 +26,19 @@ class NotificationParserTest {
     assertNull(e.providerDescribedAt)
   }
 
+  @Test fun acceptsListenerTestNotificationText() {
+    // Same shape PaymentCollectorModule.postTestNotification generates: masked
+    // payer, no Ref No. — can only ever produce a Possible match downstream.
+    val r = NotificationParser.parse(NotificationParser.Input("com.globe.gcash.android", "You have received money in GCash!", "You have received PHP 123.45 of GCash from JU•N D. 0917••••123.", null, emptyList(), false))
+    assertTrue(r is NotificationParser.Result.Accepted)
+    val e = (r as NotificationParser.Result.Accepted).event
+    assertEquals(12345L, e.amountCentavos)
+    assertNull(e.referenceValue)
+    assertEquals("UNKNOWN", e.referenceNamespace)
+    assertEquals("JU•N D.", e.payerMaskedName)
+    assertEquals("0917••••123", e.payerMaskedPhone)
+  }
+
   @Test fun acceptsLegacyOptionalReferenceAndIgnoresBalance() {
     val r = NotificationParser.parse(input("You have received PHP 500.00 of GCash from MA•IA S. (0917•••5678). Your new balance is PHP 12,340.50. Ref. No. 1234567890123."))
     val e = (r as NotificationParser.Result.Accepted).event

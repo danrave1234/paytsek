@@ -2,28 +2,60 @@ import { PROVIDERS, PROVIDER_LABELS, type EvidenceState, type Provider } from '@
 import { parseMoneyExact } from '@paytsek/receipt-parsers';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
-import { BackHandler, StyleSheet, View } from 'react-native';
-import { Button, Chip, Dialog, Icon, IconButton, List, Portal, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import { BackHandler, Image, Pressable, StyleSheet, View } from 'react-native';
+import { Button, Chip, Dialog, Icon, IconButton, Portal, Snackbar, Text, TextInput, TouchableRipple, useTheme } from 'react-native-paper';
+import { ProviderLogo } from '@/components/provider-logo';
 import { ErrorState, Loading, Notice, Screen, StateChip } from '@/components/ui';
 import { isApiError } from '@/lib/api';
-import { lastSeenWithTime, manilaTime, peso, stateLabel } from '@/lib/format';
+import { lastSeenWithTime, manilaTime, peso } from '@/lib/format';
 import { useConfirmCandidate, useConfirmManually, useCorrectRecord, useRecord, useUnlink, useVoid } from '@/lib/queries';
 import { useIsOwner, useSession } from '@/lib/session';
-import { RADIUS, SPACING, stateColorsFor } from '@/theme';
+import { SPACING, TOUCH_TARGET } from '@/theme';
 
-function DetailCell({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
-  const theme = useTheme();
-  return <View style={[styles.detailCell, wide && styles.detailCellWide]}><Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant, textTransform: 'uppercase', letterSpacing: 0.6 }}>{label}</Text><Text variant="bodyMedium" numberOfLines={wide ? undefined : 2} style={{ fontWeight: '600' }}>{value}</Text></View>;
+const STATUS_COPY: Record<EvidenceState, { detail: string }> = {
+  UNVERIFIED: { detail: 'Saved from the proof. No wallet evidence is linked yet.' },
+  REVIEW_REQUIRED: { detail: 'A nearby incoming notification may fit this proof. Review it before linking.' },
+  MATCHED_AUTO: { detail: 'The proof aligns with an incoming notification on the payment phone. This is supporting evidence, not a bank guarantee.' },
+  MATCHED_BY_USER: { detail: 'A team member linked this proof to the selected incoming notification.' },
+  CONFIRMED_MANUALLY: { detail: 'An owner confirmed this payment directly in the wallet app.' },
+  VOIDED: { detail: 'This record is kept in history but excluded from recorded totals.' },
+};
+
+function deltaLabel(deltaSeconds: number | null): string | null {
+  if (deltaSeconds === null) return null;
+  const abs = Math.abs(deltaSeconds);
+  return `${abs < 60 ? `${abs}s` : `${Math.round(abs / 60)} min`} from proof`;
 }
 
-const STATUS_COPY: Record<EvidenceState, { title: string; detail: string; icon: string }> = {
-  UNVERIFIED: { title: 'Recorded', detail: 'Saved from the proof. No wallet evidence is linked yet.', icon: 'shield-outline' },
-  REVIEW_REQUIRED: { title: 'Possible match', detail: 'A nearby incoming notification may fit this proof. Review it before linking.', icon: 'alert-circle-outline' },
-  MATCHED_AUTO: { title: 'Strong match', detail: 'The proof aligns with an incoming notification on the payment phone. This is supporting evidence, not a bank guarantee.', icon: 'bell-check-outline' },
-  MATCHED_BY_USER: { title: 'Strong match', detail: 'A team member linked this proof to the selected incoming notification.', icon: 'account-check-outline' },
-  CONFIRMED_MANUALLY: { title: 'Owner confirmed', detail: 'An owner confirmed this payment directly in the wallet app.', icon: 'check-decagram-outline' },
-  VOIDED: { title: 'Voided', detail: 'This record is kept in history but excluded from recorded totals.', icon: 'cancel' },
-};
+/** Underlined section heading; typography and a hairline instead of a card. */
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  const theme = useTheme();
+  return (
+    <View style={[styles.sectionTitle, { borderBottomColor: theme.colors.outlineVariant }]}>
+      <Text variant="titleMedium" style={{ fontWeight: '800', letterSpacing: -0.2 }}>{children}</Text>
+    </View>
+  );
+}
+
+/** 48dp text action row; grouped with hairline dividers instead of a card grid. */
+function ActionRow({ icon, label, onPress, divider = false, destructive = false }: {
+  icon: string;
+  label: string;
+  onPress: () => void;
+  divider?: boolean;
+  destructive?: boolean;
+}) {
+  const theme = useTheme();
+  const fg = destructive ? theme.colors.error : theme.colors.primary;
+  return (
+    <TouchableRipple onPress={onPress} accessibilityRole="button">
+      <View style={[styles.actionRow, divider && { borderTopColor: theme.colors.outlineVariant, borderTopWidth: StyleSheet.hairlineWidth }]}>
+        <Icon source={icon} size={20} color={fg} />
+        <Text variant="labelLarge" style={{ color: fg }}>{label}</Text>
+      </View>
+    </TouchableRipple>
+  );
+}
 
 export default function RecordDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -42,6 +74,8 @@ export default function RecordDetail() {
   const [amountText, setAmountText] = useState('');
   const [providerValue, setProviderValue] = useState<Provider | null>(null);
   const [msg, setMsg] = useState<{ kind: 'info' | 'error' | 'warning'; text: string } | null>(null);
+  const [proofExpanded, setProofExpanded] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   // Every poll response carries a freshly signed proof URL; pin the first one so
   // the already-loaded image never re-downloads (and flashes) while the screen is open.
   const pinnedProofUrl = useRef<string | null>(null);
@@ -66,8 +100,6 @@ export default function RecordDetail() {
   const cands = r.candidates;
   const canConfirm = isOwner || session?.user.id === r.createdByUserId;
   const canEdit = isOwner || session?.user.id === r.createdByUserId;
-  const status = STATUS_COPY[r.evidenceState];
-  const stateColor = stateColorsFor(theme.dark)[r.evidenceState];
 
   const onConfirm = async (eventId: string) => {
     setMsg(null);
@@ -107,49 +139,116 @@ export default function RecordDetail() {
     setDialog('edit');
   };
 
-  const receiptWallet = r.corrected.receiptProvider ? PROVIDER_LABELS[r.corrected.receiptProvider] : 'Unknown';
+  const receiptWallet = r.corrected.receiptProvider ? PROVIDER_LABELS[r.corrected.receiptProvider] : 'Unknown wallet';
   const receivingWallet = r.receivingProvider
     ? PROVIDER_LABELS[r.receivingProvider]
     : r.receivingSourceLabel ?? null;
+  const occurredAt = manilaTime(r.corrected.receiptTransactionAt ?? r.capturedAt, r.corrected.receiptTransactionPrecision, workspace?.timezone);
 
   return <Screen>
     <View style={styles.topBar}><IconButton icon="arrow-left" accessibilityLabel="Back to records" onPress={goBack} /><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment record</Text><View style={{ width: 48 }} /></View>
 
-    <View style={[styles.hero, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
-      <View style={styles.heroTop}><View style={[styles.walletIcon, { backgroundColor: theme.colors.primaryContainer }]}><Icon source="wallet-outline" size={23} color={theme.colors.primary} /></View><StateChip state={r.evidenceState} /></View>
-      <Text variant="headlineLarge" style={styles.amount}>{peso(r.amountCentavos)}</Text>
-      <Text variant="titleMedium" style={{ fontWeight: '700' }}>{r.sourceLabel}</Text>
-      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(r.corrected.receiptTransactionAt ?? r.capturedAt, r.corrected.receiptTransactionPrecision, workspace?.timezone)}</Text>
+    <View style={styles.hero}>
+      <View style={styles.heroTop}>
+        <ProviderLogo provider={r.corrected.receiptProvider} label={r.sourceLabel} size={44} />
+        <StateChip state={r.evidenceState} compact />
+      </View>
+      <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={styles.amount}>{peso(r.amountCentavos)}</Text>
+      <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+        {occurredAt} · Sent from {receiptWallet}{receivingWallet ? ` · Received in ${receivingWallet}` : ''}
+      </Text>
+      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{STATUS_COPY[r.evidenceState].detail}</Text>
     </View>
 
-    {r.evidenceState !== 'UNVERIFIED' ? <View style={[styles.statusCard, { backgroundColor: stateColor.bg }]} accessibilityLiveRegion="polite"><Icon source={status.icon} size={22} color={stateColor.fg} /><View style={{ flex: 1, gap: 3 }}><Text variant="titleSmall" style={{ color: stateColor.fg }}>{status.title}</Text><Text variant="bodySmall" style={{ color: stateColor.fg }}>{status.detail}</Text></View></View> : null}
     {r.flags.length ? <Notice kind="warning">Review note: {r.flags.map((f) => f.replace(/_/g, ' ').toLowerCase()).join(', ')}.</Notice> : null}
+    {r.voidReason ? <Notice kind="error">Voided: {r.voidReason}</Notice> : null}
     {msg && msg.kind !== 'info' ? <Notice kind={msg.kind}>{msg.text}</Notice> : null}
 
-    {open && cands?.candidates.length ? <View style={[styles.surface, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
-      <View style={styles.sectionHeader}><View style={[styles.sectionIcon, { backgroundColor: theme.colors.surfaceVariant }]}><Icon source="bell-sync-outline" size={20} color={theme.colors.primary} /></View><View style={{ flex: 1 }}><Text variant="titleMedium" style={{ fontWeight: '700' }}>Possible notification match</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{cands.candidates.length} option{cands.candidates.length === 1 ? '' : 's'} found</Text></View></View>
-      {cands.collectorStale ? <Notice kind="warning">Payment phone {lastSeenWithTime(cands.collectorLastSeenAt).toLowerCase()}.</Notice> : null}
-      {cands?.candidates.map((c) => <View key={c.eventId} style={[styles.candidate, { borderColor: theme.colors.outlineVariant, backgroundColor: theme.colors.surfaceVariant }]}><View style={{ flex: 1, gap: 2 }}><Text variant="titleSmall">{peso(c.amountCentavos)}</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{PROVIDER_LABELS[c.provider]} notification · {manilaTime(c.eventAt, 'SECOND', workspace?.timezone)}{c.deltaSeconds !== null ? ` · ${Math.abs(c.deltaSeconds) < 60 ? `${Math.abs(c.deltaSeconds)}s` : `${Math.round(Math.abs(c.deltaSeconds) / 60)} min`} from proof` : ''}</Text></View>{c.alreadyLinkedToOtherRecord ? <Text variant="labelSmall" style={{ color: theme.colors.error }}>Already linked</Text> : null}<Button mode="contained" compact disabled={c.alreadyLinkedToOtherRecord || confirm.isPending || !canConfirm} onPress={() => void onConfirm(c.eventId)}>Use this match</Button></View>)}
-    </View> : null}
+    {pinnedProofUrl.current ? (
+      <Pressable
+        onPress={() => setProofExpanded((current) => !current)}
+        accessibilityRole="button"
+        accessibilityLabel={proofExpanded ? 'Collapse payment proof' : 'Expand payment proof'}
+        style={[styles.proofBand, { borderTopColor: theme.colors.outlineVariant, borderBottomColor: theme.colors.outlineVariant }]}
+      >
+        <View style={styles.proofHeader}>
+          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 0.6 }}>PAYMENT PROOF</Text>
+          <Icon source={proofExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={theme.colors.onSurfaceVariant} />
+        </View>
+        <Image
+          source={{ uri: pinnedProofUrl.current }}
+          resizeMode={proofExpanded ? 'contain' : 'cover'}
+          accessibilityLabel="Saved payment proof"
+          style={[styles.proof, { height: proofExpanded ? 420 : 116, backgroundColor: theme.colors.surfaceVariant }]}
+        />
+      </Pressable>
+    ) : r.hasProofImage ? <Notice kind="info">The proof image is no longer available.</Notice> : null}
 
-    {r.matchExplanation.kind ? <View style={[styles.matchNote, { borderColor: theme.colors.outlineVariant }]}><Icon source="information-outline" size={18} color={theme.colors.onSurfaceVariant} /><Text variant="bodySmall" style={{ flex: 1, color: theme.colors.onSurfaceVariant }}>{r.matchExplanation.disclosure ?? (r.matchExplanation.supportingFields.length ? `Matched using ${r.matchExplanation.supportingFields.join(' and ')}.` : 'Confirmation evidence recorded.')}</Text>{isOwner && r.evidenceState !== 'VOIDED' ? <Button compact onPress={() => setDialog('unlink')}>Unlink</Button> : null}</View> : null}
+    <SectionTitle>Evidence</SectionTitle>
+    {open && cands?.candidates.length ? (
+      <View>
+        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+          {cands.candidates.length} nearby notification{cands.candidates.length === 1 ? '' : 's'} on the payment phone. Linking one is notification evidence, not a provider confirmation.
+        </Text>
+        {cands.collectorStale ? <Notice kind="warning">Payment phone {lastSeenWithTime(cands.collectorLastSeenAt).toLowerCase()}.</Notice> : null}
+        {cands.candidates.map((c, index) => {
+          const payer = c.payerMaskedName ?? c.payerMaskedPhone;
+          const meta = [PROVIDER_LABELS[c.provider], deltaLabel(c.deltaSeconds), payer].filter(Boolean).join(' · ');
+          return (
+            <View key={c.eventId} style={[styles.candidateRow, index > 0 && { borderTopColor: theme.colors.outlineVariant, borderTopWidth: StyleSheet.hairlineWidth }]}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text variant="titleSmall" style={{ fontVariant: ['tabular-nums'] }}>{peso(c.amountCentavos)}</Text>
+                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{meta}</Text>
+                <Text variant="labelSmall" style={{ color: c.alreadyLinkedToOtherRecord ? theme.colors.error : theme.colors.onSurfaceVariant }}>
+                  {c.alreadyLinkedToOtherRecord ? 'Already linked to another record' : manilaTime(c.eventAt, 'SECOND', workspace?.timezone)}
+                </Text>
+              </View>
+              <Button mode="text" compact style={styles.candidateAction} disabled={c.alreadyLinkedToOtherRecord || confirm.isPending || !canConfirm} onPress={() => void onConfirm(c.eventId)}>Use match</Button>
+            </View>
+          );
+        })}
+      </View>
+    ) : null}
+    {r.matchExplanation.kind ? (
+      <View style={styles.matchNote}>
+        <Icon source="information-outline" size={18} color={theme.colors.onSurfaceVariant} />
+        <Text variant="bodySmall" style={{ flex: 1, color: theme.colors.onSurfaceVariant }}>{r.matchExplanation.disclosure ?? (r.matchExplanation.supportingFields.length ? `Matched using ${r.matchExplanation.supportingFields.join(' and ')}.` : 'Confirmation evidence recorded.')}</Text>
+      </View>
+    ) : null}
+    {!r.matchExplanation.kind && !(open && cands?.candidates.length) ? (
+      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>No wallet notification evidence is linked to this record.</Text>
+    ) : null}
 
-    <View style={[styles.surface, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
-      <View style={styles.sectionHeader}><View style={[styles.sectionIcon, { backgroundColor: theme.colors.surfaceVariant }]}><Icon source="text-box-outline" size={20} color={theme.colors.primary} /></View><View><Text variant="titleMedium" style={{ fontWeight: '700' }}>Receipt details</Text><Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Read from the payment proof</Text></View></View>
-      <View style={styles.detailGrid}><DetailCell label="Amount" value={peso(r.amountCentavos)} /><DetailCell label="Sent from" value={receiptWallet} />{receivingWallet ? <DetailCell label="Received in" value={receivingWallet} /> : null}<DetailCell label="Status" value={stateLabel(r.evidenceState)} /><DetailCell label="Time" value={manilaTime(r.corrected.receiptTransactionAt ?? r.capturedAt, r.corrected.receiptTransactionPrecision, workspace?.timezone)} /></View>
-    </View>
+    <SectionTitle>History</SectionTitle>
+    <TouchableRipple onPress={() => setHistoryOpen((current) => !current)} accessibilityRole="button" accessibilityState={{ expanded: historyOpen }}>
+      <View style={styles.historyToggle}>
+        <Icon source="history" size={20} color={theme.colors.onSurfaceVariant} />
+        <Text variant="bodyMedium" style={{ flex: 1 }}>{r.history.length} recorded event{r.history.length === 1 ? '' : 's'}</Text>
+        <Icon source={historyOpen ? 'chevron-up' : 'chevron-down'} size={20} color={theme.colors.onSurfaceVariant} />
+      </View>
+    </TouchableRipple>
+    {historyOpen ? (
+      <View style={[styles.timeline, { borderLeftColor: theme.colors.outlineVariant }]}>
+        {r.history.map((h, i) => (
+          <View key={i} style={{ gap: 2 }}>
+            <Text variant="bodySmall" style={{ fontWeight: '600' }}>{h.action.replace(/_/g, ' ').toLowerCase()}</Text>
+            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(h.at, 'SECOND', workspace?.timezone)}{h.actorDisplayName ? ` · ${h.actorDisplayName}` : ''}</Text>
+          </View>
+        ))}
+      </View>
+    ) : null}
 
-    {pinnedProofUrl.current ? <View style={[styles.proofCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}><View style={styles.proofHeader}><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment proof</Text><Icon source="image-outline" size={20} color={theme.colors.onSurfaceVariant} /></View><List.Image source={{ uri: pinnedProofUrl.current }} style={[styles.proof, { backgroundColor: theme.colors.surfaceVariant }]} /></View> : r.hasProofImage ? <Notice kind="info">The proof image is no longer available.</Notice> : null}
-    <View style={[styles.surface, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}><List.Accordion title="Activity" description={`${r.history.length} recorded event${r.history.length === 1 ? '' : 's'}`} left={(props) => <List.Icon {...props} icon="history" />}><View style={styles.history}>{r.history.map((h, i) => <View key={i} style={styles.historyRow}><View style={[styles.historyDot, { backgroundColor: theme.colors.outline }]} /><View style={{ flex: 1 }}><Text variant="bodySmall" style={{ fontWeight: '600' }}>{h.action.replace(/_/g, ' ').toLowerCase()}</Text><Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(h.at, 'SECOND')}{h.actorDisplayName ? ` · ${h.actorDisplayName}` : ''}</Text></View></View>)}</View></List.Accordion></View>
-    {r.voidReason ? <Notice kind="error">Voided: {r.voidReason}</Notice> : null}
-    {r.evidenceState !== 'VOIDED' ? <View style={styles.recordActions}>
-      {canEdit ? <Button icon="pencil-outline" onPress={openEdit}>Correct record</Button> : null}
-      {isOwner && open ? <Button icon="check-circle-outline" onPress={() => setDialog('manual')}>I checked the wallet</Button> : null}
-      {isOwner ? <Button icon="delete-outline" textColor={theme.colors.error} onPress={() => setDialog('void')}>Void record</Button> : null}
-    </View> : null}
+    {r.evidenceState !== 'VOIDED' ? (
+      <View style={[styles.actions, { borderTopColor: theme.colors.outlineVariant }]}>
+        {canEdit ? <ActionRow icon="pencil-outline" label="Correct record" onPress={openEdit} /> : null}
+        {isOwner && open ? <ActionRow icon="check-circle-outline" label="I checked the wallet" onPress={() => setDialog('manual')} divider={canEdit} /> : null}
+        {isOwner && r.matchExplanation.kind ? <ActionRow icon="link-off" label="Unlink evidence" onPress={() => setDialog('unlink')} divider /> : null}
+        {isOwner ? <ActionRow icon="delete-outline" label="Void record" onPress={() => setDialog('void')} divider destructive /> : null}
+      </View>
+    ) : null}
 
     <Portal>
-      <Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}><Dialog.Title>{dialog === 'edit' ? 'Correct record' : dialog === 'unlink' ? 'Unlink association' : dialog === 'void' ? 'Void record' : 'Confirm after wallet check'}</Dialog.Title><Dialog.Content style={{ gap: 8 }}>{dialog === 'edit' ? <><Text variant="bodySmall">The proof and correction stay in Activity.</Text><TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} /><Text variant="labelMedium">Sent from</Text><View style={styles.providerChoices}>{PROVIDERS.map((item) => <Chip key={item.value} selected={providerValue === item.value} onPress={() => setProviderValue(item.value)}>{item.label}</Chip>)}</View></> : <><Text variant="bodySmall">{dialog === 'manual' ? 'Use this only after checking the receiving wallet. It is recorded as an owner confirmation, not a provider verification.' : dialog === 'void' ? 'This removes the record from active totals while preserving the proof and Activity history.' : 'The previous state remains in Activity.'}</Text><TextInput label={dialog === 'void' ? 'Reason' : dialog === 'manual' ? 'Note (optional)' : 'Reason (optional)'} mode="outlined" value={reason} onChangeText={setReason} /></>}</Dialog.Content><Dialog.Actions><Button onPress={() => setDialog(null)}>Cancel</Button><Button onPress={() => void runDialog()} disabled={dialog === 'void' && reason.trim().length < 3}>{dialog === 'edit' ? 'Save' : 'Confirm'}</Button></Dialog.Actions></Dialog>
+      <Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}><Dialog.Title>{dialog === 'edit' ? 'Correct record' : dialog === 'unlink' ? 'Unlink association' : dialog === 'void' ? 'Void record' : 'Confirm after wallet check'}</Dialog.Title><Dialog.Content style={{ gap: 8 }}>{dialog === 'edit' ? <><Text variant="bodySmall">The proof and correction stay in History.</Text><TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} /><Text variant="labelMedium">Sent from</Text><View style={styles.providerChoices}>{PROVIDERS.map((item) => <Chip key={item.value} selected={providerValue === item.value} onPress={() => setProviderValue(item.value)}>{item.label}</Chip>)}</View></> : <><Text variant="bodySmall">{dialog === 'manual' ? 'Use this only after checking the receiving wallet. It is recorded as an owner confirmation, not a provider verification.' : dialog === 'void' ? 'This removes the record from active totals while preserving the proof and History.' : 'The previous state remains in History.'}</Text><TextInput label={dialog === 'void' ? 'Reason' : dialog === 'manual' ? 'Note (optional)' : 'Reason (optional)'} mode="outlined" value={reason} onChangeText={setReason} /></>}</Dialog.Content><Dialog.Actions><Button onPress={() => setDialog(null)}>Cancel</Button><Button onPress={() => void runDialog()} disabled={dialog === 'void' && reason.trim().length < 3}>{dialog === 'edit' ? 'Save' : 'Confirm'}</Button></Dialog.Actions></Dialog>
       <Snackbar visible={msg?.kind === 'info'} duration={3000} onDismiss={() => setMsg(null)}>{msg?.text}</Snackbar>
     </Portal>
   </Screen>;
@@ -157,18 +256,19 @@ export default function RecordDetail() {
 
 const styles = StyleSheet.create({
   topBar: { height: 44, marginHorizontal: -SPACING.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  hero: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.xl, padding: SPACING.xl, gap: SPACING.xs },
+  hero: { paddingTop: SPACING.sm, gap: SPACING.xs },
   heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.sm },
-  walletIcon: { width: 46, height: 46, borderRadius: RADIUS.md, alignItems: 'center', justifyContent: 'center' },
-  amount: { fontWeight: '700', letterSpacing: -0.8 },
-  statusCard: { flexDirection: 'row', gap: SPACING.md, padding: SPACING.md, borderRadius: RADIUS.lg, alignItems: 'flex-start' },
-  surface: { borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, padding: SPACING.lg, gap: SPACING.md },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md }, sectionIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  candidate: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.md, padding: SPACING.md, gap: SPACING.sm }, verificationAction: { alignItems: 'flex-start' },
-  matchNote: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.md, paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
-  recordActions: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, alignItems: 'center' },
-  detailGrid: { flexDirection: 'row', flexWrap: 'wrap', columnGap: SPACING.md, rowGap: SPACING.lg }, detailCell: { width: '47%', gap: SPACING.xs }, detailCellWide: { width: '100%' },
+  amount: { fontWeight: '800', letterSpacing: -1.2, fontVariant: ['tabular-nums'] },
+  proofBand: { marginTop: SPACING.sm, paddingVertical: SPACING.sm, gap: SPACING.sm, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth },
+  proofHeader: { minHeight: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  proof: { width: '100%', borderRadius: 0 },
+  sectionTitle: { minHeight: 40, marginTop: SPACING.sm, justifyContent: 'flex-end', paddingBottom: SPACING.xs, borderBottomWidth: StyleSheet.hairlineWidth },
+  candidateRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.sm },
+  candidateAction: { minHeight: TOUCH_TARGET, justifyContent: 'center' },
+  matchNote: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingVertical: SPACING.xs },
+  historyToggle: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
+  timeline: { marginLeft: SPACING.sm + 2, paddingLeft: SPACING.lg, gap: SPACING.md, borderLeftWidth: 1 },
+  actions: { marginTop: SPACING.md, borderTopWidth: StyleSheet.hairlineWidth },
+  actionRow: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   providerChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
-  proofCard: { borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' }, proofHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: SPACING.lg }, proof: { width: '100%', height: 320, borderRadius: 0 },
-  history: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.lg, gap: SPACING.md }, historyRow: { flexDirection: 'row', alignItems: 'flex-start', gap: SPACING.sm }, historyDot: { width: 7, height: 7, borderRadius: 4, marginTop: 5 },
 });

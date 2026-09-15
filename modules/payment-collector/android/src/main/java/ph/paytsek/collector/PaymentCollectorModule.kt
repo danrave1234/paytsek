@@ -1,8 +1,13 @@
 package ph.paytsek.collector
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Intent
+import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
+import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -169,6 +174,40 @@ class PaymentCollectorModule : Module() {
         .post(body.toString().toRequestBody("application/json".toMediaType()))
         .build()
       try { okhttp3.OkHttpClient().newCall(req).execute().use { it.isSuccessful } } catch (_: Throwable) { false }
+    }
+
+    /**
+     * Posts a local notification that mimics a real GCash incoming-money push so
+     * the owner can verify the listener end-to-end. The payer is pre-masked and
+     * there is deliberately no Ref No., so a test can only ever produce a
+     * Possible match — never an automatic Strong match.
+     */
+    AsyncFunction("postTestNotification") {
+      val manager = NotificationManagerCompat.from(context)
+      // Covers both the Android 13+ POST_NOTIFICATIONS runtime permission and
+      // notifications being blocked app-wide on older versions.
+      if (!manager.areNotificationsEnabled()) {
+        return@AsyncFunction mapOf("posted" to false, "reason" to "PERMISSION", "amountCentavos" to null, "text" to null)
+      }
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        manager.createNotificationChannel(NotificationChannel("paytsek_test", "Listener test", NotificationManager.IMPORTANCE_DEFAULT))
+      }
+      val amountCentavos = (5_000L..99_999L).random()
+      val text = String.format(
+        java.util.Locale.US,
+        "You have received PHP %d.%02d of GCash from JU\u2022N D. 0917\u2022\u2022\u2022\u2022123.",
+        amountCentavos / 100,
+        amountCentavos % 100,
+      )
+      val icon = context.applicationInfo.icon.takeIf { it != 0 } ?: android.R.drawable.stat_notify_chat
+      val notification = NotificationCompat.Builder(context, "paytsek_test")
+        .setSmallIcon(icon)
+        .setContentTitle("You have received money in GCash!")
+        .setContentText(text)
+        .addExtras(Bundle().apply { putBoolean(PayTsekNotificationListener.EXTRA_TEST_GCASH, true) })
+        .build()
+      manager.notify((System.currentTimeMillis() and 0x7FFFFFFF).toInt(), notification)
+      mapOf("posted" to true, "reason" to null, "amountCentavos" to amountCentavos.toInt(), "text" to text)
     }
 
     AsyncFunction("recoverActiveNotifications") {
