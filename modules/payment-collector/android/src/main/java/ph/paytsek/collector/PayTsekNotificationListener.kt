@@ -22,6 +22,14 @@ import java.util.UUID
  */
 class PayTsekNotificationListener : NotificationListenerService() {
 
+  companion object {
+    /** Private extra set by PaymentCollectorModule.postTestNotification on our own package. */
+    const val EXTRA_TEST_GCASH = "ph.paytsek.collector.TEST_GCASH"
+
+    /** A listener test rides the normal GCash path end-to-end. */
+    const val TEST_SOURCE_PACKAGE = "com.globe.gcash.android"
+  }
+
   // Lazily constructed in the handling path: EncryptedSharedPreferences creation
   // can throw (AEADBadTagException after backup restore, keystore corruption,
   // direct-boot) and a construction failure in onCreate would crash-loop the
@@ -67,7 +75,14 @@ class PayTsekNotificationListener : NotificationListenerService() {
   override fun onNotificationRemoved(sbn: StatusBarNotification) { /* removal is not evidence of anything */ }
 
   private fun handle(sbn: StatusBarNotification, recovery: Boolean) {
-    val provider = ProviderApps.providerFor(sbn.packageName) ?: return
+    // A flagged own-package test notification takes the GCash path so every
+    // downstream step (gates, parse, dedupe, outbox, upload) runs exactly like
+    // a real notification. All other own-package notifications stay ignored
+    // because our package is not in the ProviderApps allowlist.
+    val isTest = sbn.packageName == packageName &&
+      sbn.notification?.extras?.getBoolean(EXTRA_TEST_GCASH, false) == true
+    val sourcePackage = if (isTest) TEST_SOURCE_PACKAGE else sbn.packageName
+    val provider = ProviderApps.providerFor(sourcePackage) ?: return
     val prefs = prefsOrNull() ?: return
     val outbox = outboxOrNull() ?: return
     if (!prefs.isConfigured) {
@@ -82,8 +97,10 @@ class PayTsekNotificationListener : NotificationListenerService() {
       Log.d("PayTsekCollector", "Ignored $provider notification: provider is not enabled")
       return
     }
-    val appInfo = ProviderApps.inspect(this, sbn.packageName, provider)
-    if (!appInfo.installed || !ProviderApps.signerAcceptable(appInfo)) return
+    // Installed/signature checks verify the wallet app that posted the
+    // notification; a test comes from our own signed package, so they are skipped.
+    val appInfo = ProviderApps.inspect(this, sourcePackage, provider)
+    if (!isTest && (!appInfo.installed || !ProviderApps.signerAcceptable(appInfo))) return
 
     val n = sbn.notification ?: return
     val isSummary = (n.flags and Notification.FLAG_GROUP_SUMMARY) != 0
@@ -93,7 +110,7 @@ class PayTsekNotificationListener : NotificationListenerService() {
     val bigText = extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
     val lines = extras?.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.map { it.toString() } ?: emptyList()
 
-    val result = NotificationParser.parse(NotificationParser.Input(sbn.packageName, title, text, bigText, lines, isSummary))
+    val result = NotificationParser.parse(NotificationParser.Input(sourcePackage, title, text, bigText, lines, isSummary))
     val parsed = when (result) {
       is NotificationParser.Result.Rejected -> {
         Log.d("PayTsekCollector", "Rejected $provider notification: ${result.reason}")
@@ -104,7 +121,7 @@ class PayTsekNotificationListener : NotificationListenerService() {
           runCatching {
             TemplateSamples.insert(
               context = this,
-              packageName = sbn.packageName,
+              packageName = sourcePackage,
               provider = provider,
               title = title,
               text = text,
@@ -122,13 +139,13 @@ class PayTsekNotificationListener : NotificationListenerService() {
 
     // Lifecycle dedup key: stable across reposts/updates of the same notification.
     val lifecycleKey = ProviderApps.sha256Hex(
-      "${sbn.packageName}|${sbn.key}|${sbn.tag ?: ""}|${sbn.id}|${parsed.amountCentavos}|${parsed.referenceValue ?: ""}".toByteArray(),
+      "$sourcePackage|${sbn.key}|${sbn.tag ?: ""}|${sbn.id}|${parsed.amountCentavos}|${parsed.referenceValue ?: ""}".toByteArray(),
     )
     val nowMs = System.currentTimeMillis()
     val payload = JSONObject().apply {
       put("clientEventId", UUID.randomUUID().toString())
       put("provider", parsed.provider)
-      put("sourcePackage", sbn.packageName)
+      put("sourcePackage", sourcePackage)
       put("sourceAppVersionName", appInfo.versionName ?: JSONObject.NULL)
       put("sourceAppVersionCode", appInfo.versionCode?.toInt() ?: JSONObject.NULL)
       put("parserId", parsed.parserId)

@@ -76,6 +76,7 @@ export default function Records() {
   const [text, setText] = useState('');
   const [search, setSearch] = useState('');
   const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
   const [evidenceFilter, setEvidenceFilter] = useState<EvidenceFilter>('ALL');
   const [provider, setProvider] = useState<Provider | undefined>();
 
@@ -135,9 +136,16 @@ export default function Records() {
     setEvidenceFilter('ALL');
   };
 
-  const refresh = () => {
-    refreshLocal();
-    void query.refetch();
+  // Only a user-initiated pull shows the top spinner; the background poll must
+  // silently replace stale content without any visible loading indicator.
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      refreshLocal();
+      await query.refetch();
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   return (
@@ -147,8 +155,8 @@ export default function Records() {
         keyExtractor={(item) => `${item.kind}.${item.id}`}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
-        refreshing={query.isRefetching && !query.isFetchingNextPage}
-        onRefresh={refresh}
+        refreshing={refreshing}
+        onRefresh={() => void refresh()}
         onEndReachedThreshold={0.3}
         onEndReached={() => {
           if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
@@ -200,7 +208,7 @@ export default function Records() {
           : !workspace
             ? <EmptyState icon="folder-outline" title="Choose a workspace" action={{ label: 'Choose workspace', onPress: () => router.push('/workspaces') }} />
           : query.error
-            ? <ErrorState error={query.error} retry={refresh} />
+            ? <ErrorState error={query.error} retry={() => void refresh()} />
             : hasFilters
               ? <EmptyState icon="filter-outline" title="No matching records" action={{ label: 'Clear filters', onPress: clearFilters }} />
               : <EmptyState icon="receipt-text-outline" title="No records yet" body="Saved payment proofs will appear here." />}

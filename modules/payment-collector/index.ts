@@ -62,6 +62,19 @@ export interface TemplateSample {
   capturedAt: string;
 }
 
+/**
+ * Result of posting a listener-test notification. The test mimics a GCash
+ * incoming-money push with a pre-masked payer and no Ref No., so matching can
+ * only ever produce a Possible match.
+ */
+export interface TestNotificationResult {
+  posted: boolean;
+  /** Why nothing was posted: POST_NOTIFICATIONS denied/blocked, or not Android. */
+  reason: 'PERMISSION' | 'UNSUPPORTED' | null;
+  amountCentavos: number | null;
+  text: string | null;
+}
+
 interface NativeModule {
   isSupported(): boolean;
   isNotificationAccessGranted(): boolean;
@@ -77,6 +90,8 @@ interface NativeModule {
   reportHealth(): Promise<boolean>;
   /** Deduplicated recovery: enumerate currently active notifications after reconnect. Not history. */
   recoverActiveNotifications(): Promise<number>;
+  /** Post a GCash-style test notification on this phone to verify the listener end-to-end. */
+  postTestNotification(): Promise<TestNotificationResult>;
   setCaptureUnknownTemplates(enabled: boolean): Promise<void>;
   isCaptureUnknownTemplates(): Promise<boolean>;
   listTemplateSamples(): Promise<TemplateSample[]>;
@@ -118,6 +133,8 @@ export const PaymentCollector = {
   flushNow: (): Promise<{ attempted: number; acknowledged: number }> => native?.flushNow() ?? Promise.resolve({ attempted: 0, acknowledged: 0 }),
   reportHealth: (): Promise<boolean> => native?.reportHealth() ?? Promise.resolve(false),
   recoverActiveNotifications: (): Promise<number> => native?.recoverActiveNotifications() ?? Promise.resolve(0),
+  postTestNotification: (): Promise<TestNotificationResult> =>
+    native?.postTestNotification() ?? Promise.resolve({ posted: false, reason: 'UNSUPPORTED', amountCentavos: null, text: null }),
 
   /** Unknown-format capture. Android only; a no-op elsewhere. */
   setCaptureUnknownTemplates: (enabled: boolean): Promise<void> =>
