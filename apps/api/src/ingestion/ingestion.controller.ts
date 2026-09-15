@@ -40,6 +40,18 @@ export class IngestionService {
       acks.push(await this.ingestOne(col, col.status, sources.rows, ev));
     }
 
+    // Serverless deployments have no resident worker loop: reconcile the
+    // accepted events inline so an earlier scan matches as soon as its
+    // notification arrives. The queued jobs remain the retry safety net.
+    for (const ack of acks) {
+      if (ack.outcome !== 'ACCEPTED' || !ack.eventId) continue;
+      try {
+        await this.reconcile.reconcileEvent(ack.eventId);
+      } catch {
+        // next cron drain retries the queued RECONCILE_EVENT job
+      }
+    }
+
     // Store acks for replay (best effort; a concurrent duplicate batch simply recomputes the same idempotent result).
     await this.db.query(`insert into ingest_batches (id, device_id, acks) values ($1,$2,$3) on conflict (id) do nothing`, [batch.batchId, col.deviceId, JSON.stringify(acks)]);
     await this.db.query(`update devices set last_observed_event_at = greatest(coalesce(last_observed_event_at, 'epoch'), $2) where id = $1`, [

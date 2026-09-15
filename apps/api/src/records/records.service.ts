@@ -45,7 +45,13 @@ export class RecordsService {
     const edited = computeEdited(input.extracted as unknown as Record<string, unknown>, c as unknown as Record<string, unknown>);
 
     try {
-      return await this.insertRecord(orgId, userId, input, c, edited);
+      const created = await this.insertRecord(orgId, userId, input, c, edited);
+      // Serverless deployments have no resident worker loop, so reconcile
+      // inline: a proof scanned minutes after its notification arrived must
+      // match immediately, not on the next cron drain. The queued job stays
+      // as the retry safety net.
+      const settled = await this.reconcileInline(created.record.id);
+      return settled ? { ...created, record: settled } : created;
     } catch (e) {
       if (!(e instanceof ApiException) || e.code !== 'IDEMPOTENCY_CONFLICT') throw e;
       // Two clients raced the same clientRecordId: the loser returns the winner's record idempotently.
@@ -92,6 +98,17 @@ export class RecordsService {
       const row = await tx.query<RecordRow>(`${RECORD_SELECT} where r.id = $1`, [id]);
       return { record: toSummary(row.rows[0]!), deduplicated: false, quotaConsumed: !this.env.BETA_MODE };
     });
+  }
+
+  /** Run reconciliation now (best effort) and return the refreshed summary. */
+  private async reconcileInline(recordId: string): Promise<RecordSummary | null> {
+    try {
+      await this.reconcile.reconcileRecord(recordId);
+      const row = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.id = $1`, [recordId]);
+      return row ? toSummary(row) : null;
+    } catch {
+      return null; // the queued RECONCILE_RECORD job retries on the next drain
+    }
   }
 
   private async flagDuplicates(tx: { query: DbService['pool']['query'] }, orgId: string, id: string, ns: string | null, ref: string | null, proofId: string | null): Promise<void> {
@@ -154,6 +171,15 @@ export class RecordsService {
   }
 
   async detail(orgId: string, id: string): Promise<RecordDetail> {
+    // Self-heal: records created while the job queue was not being drained
+    // were never reconciled. Opening one reconciles it inline, once.
+    const pre = await this.db.one<{ evidence_state: string; last_reconciled_at: Date | null }>(
+      `select evidence_state, last_reconciled_at from payment_records where organization_id = $1 and id = $2`,
+      [orgId, id],
+    );
+    if (pre && pre.last_reconciled_at === null && (pre.evidence_state === 'UNVERIFIED' || pre.evidence_state === 'REVIEW_REQUIRED')) {
+      try { await this.reconcile.reconcileRecord(id); } catch { /* next drain retries */ }
+    }
     const row = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.organization_id = $1 and r.id = $2`, [orgId, id]);
     if (!row) throw new ApiException('RECORD_NOT_FOUND', 'Record not found');
     const versions = await this.db.query<{ kind: string; fields: RecordDetail['extracted'] }>(`select kind, fields from proof_versions where record_id = $1 order by version`, [id]);

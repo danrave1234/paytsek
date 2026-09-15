@@ -75,6 +75,7 @@ export default function Today() {
   const draftsSignal = useDraftsSignal();
   const update = useAppUpdate();
   const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
   const [showUpdate, setShowUpdate] = useState(false);
   const [savedToast, setSavedToast] = useState<string | null>(null);
 
@@ -141,15 +142,22 @@ export default function Today() {
     router.setParams({ savedAmount: '', savedProvider: '' });
   }, [params.savedAmount, params.savedProvider, router]);
   const offline = home.error instanceof OfflineError;
-  const refresh = () => {
-    refreshLocal();
-    void home.refetch();
+  // Only a user-initiated pull shows the top spinner; the 30s background poll
+  // must silently replace stale content without any visible loading indicator.
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      refreshLocal();
+      await home.refetch();
+    } finally {
+      setRefreshing(false);
+    }
   };
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
       <ScrollView
         contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + TAB_BAR_CLEARANCE }]}
-        refreshControl={<RefreshControl refreshing={home.isRefetching} onRefresh={refresh} tintColor={theme.colors.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>

@@ -44,12 +44,15 @@ export class CronController {
     return this.worker.drain(Number.isFinite(parsed) ? { maxJobs: parsed } : {});
   }
 
-  /** Enqueue retention purge. Scheduled hourly. */
+  /** Enqueue retention purge, then drain the queue. Scheduled daily on Vercel. */
   @Get('maintenance')
   async maintenance(@Headers('authorization') authorization: string | undefined): Promise<{ ok: true }> {
     this.authorize(authorization);
     await this.billing.expireEndedAccess();
     await this.worker.enqueueMaintenance();
+    // Reconciliation runs inline at record-create/ingest time; this drain is
+    // the safety net that retries anything the inline pass could not finish.
+    await this.worker.drain({});
     return { ok: true };
   }
 }

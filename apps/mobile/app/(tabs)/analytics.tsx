@@ -32,17 +32,29 @@ export default function Analytics() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const [range, setRange] = useState<AnalyticsRange>('7D');
+  const [refreshing, setRefreshing] = useState(false);
   const query = useAnalytics(range);
   const buckets = useMemo(() => chartBuckets(query.data?.daily ?? [], range), [query.data?.daily, range]);
   const max = Math.max(1, ...buckets.map((bucket) => bucket.amount));
   const average = query.data?.daily.length ? Math.round(query.data.recordedCentavos / query.data.daily.length) : 0;
   const strongest = query.data?.byProvider[0] ?? null;
 
+  // Only a user-initiated pull shows the top spinner; the background poll must
+  // silently replace stale content without any visible loading indicator.
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      await query.refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
       <ScrollView
         contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + TAB_BAR_CLEARANCE }]}
-        refreshControl={<RefreshControl refreshing={query.isRefetching} onRefresh={() => void query.refetch()} tintColor={theme.colors.primary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} tintColor={theme.colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
         <Text variant="headlineSmall" style={styles.title}>Analytics</Text>
