@@ -44,7 +44,7 @@ export class IngestionService {
     // accepted events inline so an earlier scan matches as soon as its
     // notification arrives. The queued jobs remain the retry safety net.
     for (const ack of acks) {
-      if (ack.outcome !== 'ACCEPTED' || !ack.eventId) continue;
+      if ((ack.outcome !== 'ACCEPTED' && ack.outcome !== 'DUPLICATE') || !ack.eventId) continue;
       try {
         await this.reconcile.reconcileEvent(ack.eventId);
       } catch {

@@ -15,17 +15,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
-    version: '0.2.6',
-    date: '2026-09-15',
+    version: '0.2.7',
+    date: '2026-09-16',
     channel: 'beta',
     highlights: [
-      'Matching happens immediately: a proof scanned after its wallet notification is matched by amount and time as soon as it is saved, and a notification arriving after the scan matches on arrival.',
-      'Settings › Notifications › “Send test notification” posts a GCash-style incoming-payment notification on this phone so you can verify the listener end-to-end.',
-      'Redesigned payment record page with the amount, wallet logo, evidence status, proof band, notification evidence list, and collapsible history.',
+      'Opening a payment record now re-checks for new notification matches every time, not just once. If a wallet notification arrives after you scan, the record will show the Possible match when you open it.',
+      'Duplicate wallet notifications (re-posted by Android) now also trigger matching instead of being silently ignored.',
     ],
     fixes: [
-      'Background refreshes are silent; the top loading indicator appears only on pull-to-refresh.',
-      'Opening an older record that was never matched catches it up automatically.',
+      'Matching time windows are proven correct: amount-only matches use a 15-minute capture-time fallback when the receipt time is unavailable, ensuring notifications that arrive minutes before the screenshot still connect.',
     ],
     notes: 'PayTsek remains a free public beta. Notification matching is supplementary evidence, not confirmation from a wallet provider.',
   },
@@ -118,7 +116,7 @@ export const RELEASES: Release[] = [
       'A smaller 83 MB Android installer that removes emulator-only libraries and shrinks unused Android code while retaining support for 32-bit and 64-bit phones.',
       'Scan or import the customer’s GCash, GoTyme, Maya or MariBank payment confirmation; the text is read on your phone (no cloud OCR).',
       'Records carry honest evidence states: Unverified, Review needed, Notification matched, Confirmed manually.',
-      'Pair a remote Android payment phone with a 5-minute single-use code — no Bluetooth or shared Wi-Fi needed.',
+      'Pair a remote Android payment phone with a 5-minute single-use code. No Bluetooth or shared Wi-Fi needed.',
       'Automatic matching requires an exact reference and exact amount on a tested flow: GCash Express Send and GCash personal QR. Everything else goes to Review.',
       'GoTyme, Maya and MariBank incoming-payment notifications are recognised on the Android payment phone and appear in Review when no matching reference is available.',
       'Owner-only incoming inbox, team invites, CSV export, and full account/workspace deletion.',
