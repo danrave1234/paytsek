@@ -4,6 +4,28 @@ import { Directory, File, Paths } from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
 import { ApiError, OfflineError, api } from './api';
 import { sha256Hex } from './device';
+import { PaymentCollector, type PendingNotificationEvent } from 'payment-collector';
+
+/** A cached notification event from the native collector (matching fields only). */
+export interface CachedNotification {
+  clientEventId: string;
+  provider: string;
+  amountCentavos: number;
+  postedAt: string;
+  providerDescribedAt: string | null;
+  capturedAt: string;
+  matchedAt: string | null;
+}
+
+/** A local match between a proof and a cached notification. */
+export interface LocalMatch {
+  clientEventId: string;
+  provider: string;
+  amountCentavos: number;
+  eventAt: string;
+  /** Time delta in seconds between proof capture and notification. */
+  deltaSeconds: number;
+}
 
 /**
  * Durable scanner-side draft queue. A scan is written here BEFORE any upload.
@@ -44,6 +66,16 @@ const SCHEMA = `
     server_record_id text
   );
   create index if not exists drafts_ws_idx on drafts(workspace_id, sync_status);
+  create table if not exists cached_notifications (
+    client_event_id text primary key,
+    provider text not null,
+    amount_centavos integer not null,
+    posted_at text not null,
+    provider_described_at text,
+    captured_at text not null,
+    matched_at text
+  );
+  create index if not exists cached_notifs_amount_idx on cached_notifications(amount_centavos) where matched_at is null;
 `;
 
 /** Ordered, append-only migrations; `pragma user_version` records the last one applied. */
@@ -269,4 +301,115 @@ export async function pruneSynced(workspaceId: string): Promise<void> {
     }
   }
   await d.runAsync(`delete from drafts where workspace_id = ? and sync_status = 'SYNCED'`, [workspaceId]);
+}
+
+/** Pull pending notifications from the native collector and cache them locally. */
+export async function syncCachedNotifications(): Promise<number> {
+  if (!PaymentCollector.isSupported()) return 0;
+  const pending = await PaymentCollector.getPendingNotifications();
+  if (pending.length === 0) return 0;
+  const d = await open();
+  let inserted = 0;
+  for (const ev of pending) {
+    const result = await d.runAsync(
+      `insert or ignore into cached_notifications (client_event_id, provider, amount_centavos, posted_at, provider_described_at, captured_at)
+       values (?, ?, ?, ?, ?, ?)`,
+      [ev.clientEventId, ev.provider, ev.amountCentavos, ev.postedAt, ev.providerDescribedAt ?? null, ev.capturedAt],
+    );
+    if (result.changes > 0) inserted += 1;
+  }
+  return inserted;
+}
+
+/**
+ * Find local notification candidates that match a proof by amount and time.
+ * Uses the same windows as the server matcher: 5 min on receipt time,
+ * 15 min on capture time fallback.
+ */
+export async function findLocalMatches(amountCentavos: number, provider: string | null, capturedAt: string, receiptTransactionAt: string | null): Promise<LocalMatch[]> {
+  const d = await open();
+  // Get unmatched notifications with the same amount
+  const rows = await d.getAllAsync<{
+    client_event_id: string;
+    provider: string;
+    amount_centavos: number;
+    posted_at: string;
+    provider_described_at: string | null;
+    captured_at: string;
+  }>(`select client_event_id, provider, amount_centavos, posted_at, provider_described_at, captured_at
+       from cached_notifications
+       where amount_centavos = ? and matched_at is null
+       order by captured_at`,
+    [amountCentavos],
+  );
+
+  if (rows.length === 0) return [];
+
+  // Use receipt time if available, otherwise capture time
+  const proofTime = receiptTransactionAt ? new Date(receiptTransactionAt).getTime() : new Date(capturedAt).getTime();
+  const windowMs = receiptTransactionAt ? 5 * 60 * 1000 : 15 * 60 * 1000; // 5 min or 15 min
+
+  const matches: LocalMatch[] = [];
+  for (const row of rows) {
+    // Use provider-described time if available, else captured_at
+    const eventTime = row.provider_described_at
+      ? new Date(row.provider_described_at).getTime()
+      : new Date(row.captured_at).getTime();
+    const deltaMs = Math.abs(eventTime - proofTime);
+    if (deltaMs <= windowMs) {
+      matches.push({
+        clientEventId: row.client_event_id,
+        provider: row.provider,
+        amountCentavos: row.amount_centavos,
+        eventAt: row.provider_described_at ?? row.captured_at,
+        deltaSeconds: Math.round(deltaMs / 1000),
+      });
+    }
+  }
+
+  // Mark the best match (smallest delta) as matched
+  if (matches.length > 0) {
+    matches.sort((a, b) => a.deltaSeconds - b.deltaSeconds);
+    const best = matches[0]!;
+    await d.runAsync(
+      `update cached_notifications set matched_at = ? where client_event_id = ?`,
+      [new Date().toISOString(), best.clientEventId],
+    );
+  }
+
+  return matches;
+}
+
+/** Get cached notifications that haven't been matched yet (for diagnostics). */
+export async function listUnmatchedNotifications(): Promise<CachedNotification[]> {
+  const d = await open();
+  const rows = await d.getAllAsync<{
+    client_event_id: string;
+    provider: string;
+    amount_centavos: number;
+    posted_at: string;
+    provider_described_at: string | null;
+    captured_at: string;
+    matched_at: string | null;
+  }>(`select client_event_id, provider, amount_centavos, posted_at, provider_described_at, captured_at, matched_at
+       from cached_notifications
+       where matched_at is null
+       order by captured_at desc
+       limit 50`);
+  return rows.map((r) => ({
+    clientEventId: r.client_event_id,
+    provider: r.provider,
+    amountCentavos: r.amount_centavos,
+    postedAt: r.posted_at,
+    providerDescribedAt: r.provider_described_at,
+    capturedAt: r.captured_at,
+    matchedAt: r.matched_at,
+  }));
+}
+
+/** Clean up old cached notifications older than 3 days. */
+export async function pruneCachedNotifications(): Promise<void> {
+  const d = await open();
+  const cutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  await d.runAsync(`delete from cached_notifications where captured_at < ?`, [cutoff]);
 }

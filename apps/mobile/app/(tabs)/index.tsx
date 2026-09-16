@@ -1,12 +1,12 @@
-import { PROVIDER_LABELS, type EvidenceState, type Provider, type RecordSummary } from '@paytsek/contracts';
+import { EVIDENCE_STATE_LABELS, PROVIDER_LABELS, type EvidenceState, type Provider, type RecordSummary } from '@paytsek/contracts';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { Icon, Snackbar, Text, TouchableRipple, useTheme } from 'react-native-paper';
+import { Image, Platform, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Button, Dialog, Icon, Portal, Snackbar, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppUpdateDialog } from '@/components/app-update-dialog';
 import { PaymentRecordRow } from '@/components/payment-record-row';
-import { Loading } from '@/components/ui';
+import { Loading, Notice } from '@/components/ui';
 import { OfflineError } from '@/lib/api';
 import { listDrafts, type Draft } from '@/lib/drafts';
 import { draftOccurredAt, providerLabel, recordOccurredAt } from '@/lib/feed';
@@ -14,7 +14,7 @@ import { getFormatter, peso, workspaceDate } from '@/lib/format';
 import { prefetchRecord, useDraftsSignal, useHome } from '@/lib/queries';
 import { useAppUpdate } from '@/lib/release-update';
 import { useSession } from '@/lib/session';
-import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET } from '@/theme';
+import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET, successColorFor } from '@/theme';
 
 type FeedItem =
   | { kind: 'local'; id: string; draft: Draft; at: string; source: string; state: EvidenceState; amount: number; onPress: () => void; onPressIn?: () => void }
@@ -78,6 +78,22 @@ export default function Today() {
   const [refreshing, setRefreshing] = useState(false);
   const [showUpdate, setShowUpdate] = useState(false);
   const [savedToast, setSavedToast] = useState<string | null>(null);
+  const [showCloseDay, setShowCloseDay] = useState(false);
+  const [healthDismissed, setHealthDismissed] = useState(false);
+
+  // Listening health: show a warning banner on Android when the collector is
+  // configured but something is broken (no access, listener dead, or stale).
+  const healthWarning = useMemo(() => {
+    if (Platform.OS !== 'android') return null;
+    const collectors = home.data?.collectors ?? [];
+    const hasConfigured = collectors.some((c) => c.notificationAccessGranted !== null);
+    if (!hasConfigured) return null;
+    const hasAccess = collectors.some((c) => c.notificationAccessGranted);
+    const isConnected = collectors.some((c) => !c.stale && c.lastSeenAt);
+    if (!hasAccess) return 'Grant notification access in Settings to enable payment matching.';
+    if (!isConnected) return 'Wallet listening stopped. Check permissions and battery settings.';
+    return null;
+  }, [home.data?.collectors]);
 
   const refreshLocal = useCallback(() => {
     if (!workspace) return;
@@ -129,6 +145,18 @@ export default function Today() {
     };
   }, [drafts, home.data, timezone]);
 
+  // Day-close summary: evidence breakdown from server today counts + drafts
+  const closeDaySummary = useMemo(() => {
+    const today = home.data?.today;
+    if (!today) return null;
+    const evidence: Array<{ label: string; count: number; cents: number }> = [
+      { label: 'Recorded', count: today.unverifiedCount, cents: today.unverifiedCentavos },
+      { label: 'Possible match', count: today.notificationMatchedCount, cents: today.notificationMatchedCentavos },
+      { label: 'Owner confirmed', count: today.confirmedManuallyCount, cents: today.confirmedManuallyCentavos },
+    ];
+    return { evidence, totalCents: totalCentavos, totalCount: recordCount };
+  }, [home.data?.today, totalCentavos, recordCount]);
+
   useEffect(() => {
     const savedAmount = Number(params.savedAmount);
     if (!Number.isFinite(savedAmount) || savedAmount <= 0) return;
@@ -176,6 +204,20 @@ export default function Today() {
           </TouchableRipple>
         ) : null}
 
+        {healthWarning && !healthDismissed ? (
+          <View style={[styles.inlineNotice, { backgroundColor: theme.colors.errorContainer }]}>
+            <Icon source="alert-circle" size={19} color={theme.colors.onErrorContainer} />
+            <Text variant="labelLarge" style={{ color: theme.colors.onErrorContainer, flex: 1 }}>
+              {healthWarning}
+            </Text>
+            <TouchableRipple onPress={() => setHealthDismissed(true)} accessibilityRole="button">
+              <View style={{ padding: 4 }}>
+                <Icon source="close" size={18} color={theme.colors.onErrorContainer} />
+              </View>
+            </TouchableRipple>
+          </View>
+        ) : null}
+
         <View style={styles.hero}>
           <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant }}>
             {workspaceDate(new Date(), timezone)}
@@ -202,6 +244,17 @@ export default function Today() {
             ) : null}
           </View>
           <HourlyRhythm values={hourly} />
+          <TouchableRipple
+            onPress={() => setShowCloseDay(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Close day summary"
+            style={[styles.closeDayBtn, { backgroundColor: theme.colors.surfaceVariant }]}
+          >
+            <View style={{ minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.md }}>
+              <Icon source="clipboard-list-outline" size={18} color={theme.colors.onSurfaceVariant} />
+              <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant }}>Close day</Text>
+            </View>
+          </TouchableRipple>
         </View>
 
         <View style={[styles.sectionHeader, { borderBottomColor: theme.colors.outlineVariant }]}>
@@ -247,6 +300,38 @@ export default function Today() {
         {savedToast}
       </Snackbar>
       <AppUpdateDialog update={update.data} visible={showUpdate} onDismiss={() => setShowUpdate(false)} />
+      <Portal>
+        <Dialog visible={showCloseDay} onDismiss={() => setShowCloseDay(false)}>
+          <Dialog.Title>Today's summary</Dialog.Title>
+          <Dialog.Content>
+            {closeDaySummary ? (
+              <View style={{ gap: SPACING.md }}>
+                <View>
+                  <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Total recorded</Text>
+                  <Text variant="headlineSmall" style={{ fontWeight: '800' }}>
+                    {peso(closeDaySummary.totalCents)} · {closeDaySummary.totalCount} {closeDaySummary.totalCount === 1 ? 'record' : 'records'}
+                  </Text>
+                </View>
+                <View style={{ gap: SPACING.sm }}>
+                  {closeDaySummary.evidence.map((ev) => (
+                    <View key={ev.label} style={{ flexDirection: 'row', justifyContent: 'space-between', minHeight: 24, alignItems: 'center' }}>
+                      <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>{ev.label}</Text>
+                      <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
+                        {ev.count} · {peso(ev.cents)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : (
+              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>No data yet.</Text>
+            )}
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowCloseDay(false)}>Close</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </SafeAreaView>
   );
 }
@@ -270,4 +355,5 @@ const styles = StyleSheet.create({
   sectionTitle: { fontWeight: '800', letterSpacing: -0.2 },
   viewAll: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', gap: 4 },
   empty: { minHeight: 72, textAlignVertical: 'center' },
+  closeDayBtn: { marginTop: SPACING.md, borderRadius: RADIUS.md },
 });

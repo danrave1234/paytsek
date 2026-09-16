@@ -237,7 +237,7 @@ export default function WalletNotifications() {
               : status.pendingUploadCount > 0 ? 'cloud-upload-outline' : 'bell-check-outline'}
             title={!status.notificationAccessGranted || !status.listenerConnected
               ? 'Android access needs attention'
-              : status.pendingUploadCount > 0 ? 'Captured — waiting to sync' : 'Ready for incoming payments'}
+              : status.pendingUploadCount > 0 ? 'Captured. Waiting to sync' : 'Ready for incoming payments'}
             subtitle={status.pendingUploadCount > 0
               ? `${status.pendingUploadCount} recognized notification${status.pendingUploadCount === 1 ? '' : 's'} safely queued on this phone`
               : status.lastObservedEventAt

@@ -75,6 +75,16 @@ export interface TestNotificationResult {
   text: string | null;
 }
 
+/** A pending notification event from the native outbox (matching fields only). */
+export interface PendingNotificationEvent {
+  clientEventId: string;
+  provider: string;
+  amountCentavos: number;
+  postedAt: string;
+  providerDescribedAt: string | null;
+  capturedAt: string;
+}
+
 interface NativeModule {
   isSupported(): boolean;
   isNotificationAccessGranted(): boolean;
@@ -92,6 +102,8 @@ interface NativeModule {
   recoverActiveNotifications(): Promise<number>;
   /** Post a GCash-style test notification on this phone to verify the listener end-to-end. */
   postTestNotification(): Promise<TestNotificationResult>;
+  /** Get pending (unacknowledged) notification events for local matching. */
+  getPendingNotifications(): Promise<PendingNotificationEvent[]>;
   setCaptureUnknownTemplates(enabled: boolean): Promise<void>;
   isCaptureUnknownTemplates(): Promise<boolean>;
   listTemplateSamples(): Promise<TemplateSample[]>;
@@ -135,6 +147,8 @@ export const PaymentCollector = {
   recoverActiveNotifications: (): Promise<number> => native?.recoverActiveNotifications() ?? Promise.resolve(0),
   postTestNotification: (): Promise<TestNotificationResult> =>
     native?.postTestNotification() ?? Promise.resolve({ posted: false, reason: 'UNSUPPORTED', amountCentavos: null, text: null }),
+  getPendingNotifications: (): Promise<PendingNotificationEvent[]> =>
+    native?.getPendingNotifications() ?? Promise.resolve([]),
 
   /** Unknown-format capture. Android only; a no-op elsewhere. */
   setCaptureUnknownTemplates: (enabled: boolean): Promise<void> =>
