@@ -73,7 +73,7 @@ export default function Samples() {
         <ListRow
           icon="text-search"
           title="Capture unknown formats"
-          subtitle={enabled ? 'Recording redacted shapes on this phone' : 'Off — nothing is stored'}
+          subtitle={enabled ? 'Recording redacted shapes on this phone' : 'Off. Nothing is stored'}
           right={<Switch value={enabled} disabled={busy} onValueChange={(v) => void toggle(v)} />}
         />
       </Group>

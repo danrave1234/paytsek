@@ -11,7 +11,7 @@ const geist = Geist({ subsets: ['latin'], variable: '--font-geist-sans', display
 const geistMono = Geist_Mono({ subsets: ['latin'], variable: '--font-geist-mono', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: { default: 'PayTsek — QR payment records for Philippine sellers', template: '%s · PayTsek' },
+  title: { default: 'PayTsek - QR payment records for Philippine sellers', template: '%s · PayTsek' },
   description: 'Record GCash, GoTyme, Maya and MariBank QR payments, then check them against incoming-payment notifications on your Android phone.',
   applicationName: 'PayTsek',
   keywords: ['QR payment records', 'GCash payment tracker', 'Maya payment tracker', 'GoTyme payment records', 'Philippines seller payments'],
@@ -20,12 +20,12 @@ export const metadata: Metadata = {
   icons: { icon: '/brand/paytsek-icon.png', apple: '/brand/paytsek-icon.png' },
   openGraph: {
     title: 'PayTsek',
-    description: 'Trust the payment, not the screenshot.',
+    description: 'Record GCash, GoTyme, Maya and MariBank QR payments on your Android phone.',
     type: 'website',
     locale: 'en_PH',
     images: [{ url: '/brand/paytsek-social.png', width: 1254, height: 1254, alt: 'PayTsek' }],
   },
-  twitter: { card: 'summary_large_image', title: 'PayTsek', description: 'Trust the payment, not the screenshot.', images: ['/brand/paytsek-social.png'] },
+  twitter: { card: 'summary_large_image', title: 'PayTsek', description: 'Record GCash, GoTyme, Maya and MariBank QR payments on your Android phone.', images: ['/brand/paytsek-social.png'] },
   robots: { index: true, follow: true },
 };
 

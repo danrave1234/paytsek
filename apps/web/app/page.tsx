@@ -134,7 +134,7 @@ export default function Home() {
               <span className="text-xs font-semibold text-ink-2">Free Android beta · v{rel.version}</span>
             </div>
             <h1 className="h-display mt-7 max-w-2xl text-[clamp(2.65rem,13vw,6.4rem)] leading-[.92] sm:text-[clamp(3.2rem,8vw,6.4rem)] sm:leading-[.9]">
-              Every QR sale.<br /><span className="text-brand">Already counted.</span>
+              QR payment records<br /><span className="text-brand">for your sales.</span>
             </h1>
             <p className="mt-7 max-w-xl text-[17px] leading-8 text-ink-2 sm:text-lg">
               Scan a payment proof. PayTsek reads the amount, wallet and time, saves the record, and keeps today&apos;s total ready.
@@ -178,9 +178,9 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 sm:py-28">
         <div className="grid gap-12 lg:grid-cols-[.82fr_1.18fr] lg:gap-24">
           <div className="lg:sticky lg:top-28 lg:self-start">
-            <p className="eyebrow text-brand">One simple flow</p>
-            <h2 className="h-section mt-4 text-[clamp(2.25rem,5vw,4rem)] leading-[1.02]">Less typing.<br />More selling.</h2>
-            <p className="mt-5 max-w-md leading-7 text-ink-2">The proof is the input. Review only when PayTsek is unsure.</p>
+            <p className="eyebrow text-brand">How it works</p>
+            <h2 className="h-section mt-4 text-[clamp(2.25rem,5vw,4rem)] leading-[1.02]">Scan, save, done.</h2>
+            <p className="mt-5 max-w-md leading-7 text-ink-2">The proof is the input. PayTsek reads the amount and time from the screenshot.</p>
           </div>
           <ol className="border-t border-line">
             {[
@@ -202,9 +202,9 @@ export default function Home() {
         <div className="mx-auto max-w-7xl overflow-hidden rounded-[1.5rem] bg-night px-5 py-14 text-on-brand sm:rounded-[2rem] sm:px-10 sm:py-16 lg:px-16 lg:py-24">
           <div className="grid items-center gap-14 lg:grid-cols-[.92fr_1.08fr] lg:gap-24">
             <div>
-              <p className="eyebrow !text-white/45">Your day at a glance</p>
-              <h2 className="h-section mt-4 text-[clamp(2.4rem,5vw,4.6rem)] leading-[.98] text-white">The total is waiting when closing time comes.</h2>
-              <p className="mt-6 max-w-lg text-[16px] leading-8 text-white/60">No spreadsheet during the rush. Today updates as records are saved, even when a scan has to wait offline.</p>
+              <p className="eyebrow !text-white/45">Daily total</p>
+              <h2 className="h-section mt-4 text-[clamp(2.4rem,5vw,4.6rem)] leading-[.98] text-white">Today's total updates as you scan.</h2>
+              <p className="mt-6 max-w-lg text-[16px] leading-8 text-white/60">Today shows the running total and a breakdown by hour, so you can close the day without a spreadsheet.</p>
             </div>
             <div className="overflow-hidden rounded-[1.6rem] border border-white/10 bg-white/[.06] p-5 sm:p-7">
               <div className="flex items-end justify-between border-b border-white/10 pb-6">
@@ -236,8 +236,8 @@ export default function Home() {
           </div>
           <div>
             <p className="eyebrow text-brand">Optional wallet evidence</p>
-            <h2 className="h-section mt-4 text-[clamp(2.2rem,5vw,3.8rem)] leading-[1.02]">A second signal, without a false promise.</h2>
-            <p className="mt-6 text-[16px] leading-8 text-ink-2">On Android, PayTsek compares the receiving wallet, exact amount and nearby time with a recognized incoming notification. Because the customer screenshot and receiver notification may not share a reference number, it presents a possible match for review—not provider verification.</p>
+            <h2 className="h-section mt-4 text-[clamp(2.2rem,5vw,3.8rem)] leading-[1.02]">Notification evidence, not confirmation.</h2>
+            <p className="mt-6 text-[16px] leading-8 text-ink-2">On Android, PayTsek compares the receiving wallet, exact amount and nearby time with a recognized incoming notification. Because the customer screenshot and receiver notification may not share a reference number, it presents a possible match for review, not provider verification.</p>
             <div className="mt-8 border-l-2 border-brand pl-5">
               <p className="font-semibold">The record is saved either way.</p>
               <p className="mt-1 text-sm leading-6 text-ink-3">Missed notifications never erase a sale from your ledger.</p>
@@ -250,7 +250,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-9 sm:flex-row sm:items-end">
           <div className="max-w-2xl">
             <p className="eyebrow text-brand">Free public beta</p>
-            <h2 className="h-section mt-4 text-[clamp(2.2rem,5vw,4rem)] leading-[1.02]">Make the next payment the first clean record.</h2>
+            <h2 className="h-section mt-4 text-[clamp(2.2rem,5vw,4rem)] leading-[1.02]">Try the beta.</h2>
           </div>
           <Link href="/download" className="btn-primary w-full shrink-0 sm:w-auto">Download for Android <span aria-hidden>↓</span></Link>
         </div>

@@ -11,12 +11,12 @@ const installSteps: ReactNode[] = [
     Open this page <em>on the Android phone itself</em> and tap <strong className="font-semibold text-ink">Download the APK</strong>.
     The file saves to your Downloads folder.
   </>,
-  <>Open it from the notification or your Downloads folder. When Android asks, allow your browser to install unknown apps — a one-time prompt.</>,
+  <>Open it from the notification or your Downloads folder. When Android asks, allow your browser to install unknown apps. This is a one-time prompt.</>,
   <>
     Open PayTsek and sign in. On the phone that receives your payment notifications, also grant <em>Notification access</em>{' '}
     when the app asks.
   </>,
-  <>To update later, install the newer APK over the old one — your data is kept, because the signing key is the same.</>,
+  <>To update later, install the newer APK over the old one. Your data is kept because the signing key is the same.</>,
 ];
 
 /** Which phones a seller actually needs, by situation. */
@@ -135,9 +135,7 @@ export default function Download() {
           <span className="pill mt-4 self-start bg-bg-2 text-ink-3">Not yet available</span>
 
           <p className="mt-5 text-[14.5px] leading-7 text-ink-2">
-            The iPhone build scans confirmations, reviews matches and shows the dashboard. It cannot read other apps&apos;
-            notifications — iOS does not allow it — so it always needs an Android payment phone alongside it, or manual
-            confirmation.
+            The iPhone build scans confirmations, reviews matches and shows the dashboard. It cannot read other apps' notifications because iOS does not allow it, so it always needs an Android payment phone alongside it or manual confirmation.
           </p>
 
           <dl className="mt-7 space-y-3 border-t border-line pt-6 text-[13.5px]">

@@ -38,7 +38,7 @@ export function AppUpdateDialog({ update, visible, onDismiss }: Props) {
             Version {update?.version}{update?.sizeBytes ? ` · ${(update.sizeBytes / 1_048_576).toFixed(1)} MB` : ''}
           </Text>
           <Text variant="bodySmall" style={[styles.updateSafety, { color: theme.colors.onSurfaceVariant }]}>
-            Install over your current app. Don’t uninstall first—offline scans that have not synced yet live only on this phone.
+            Install over your current app. Don . t uninstall first—offline scans that have not synced yet live only on this phone.
           </Text>
           <ScrollView
             style={styles.notesScroll}

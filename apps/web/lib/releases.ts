@@ -15,6 +15,17 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.2.8',
+    date: '2026-09-16',
+    channel: 'beta',
+    highlights: [
+      'Wallet notifications are stored on the phone as soon as they arrive, then matched to a scan by amount and time. You can see a Possible match on the review screen even before the server finishes.',
+      'Permissions checklist in Settings shows whether camera, photo library, notification access, and wallet listening are ready.',
+      'Day-close summary on Today, a soft duplicate-proof warning when a similar scan was just recorded, and a privacy-safe Report a problem screen with diagnostics only.',
+    ],
+    notes: 'PayTsek remains a free public beta. Notification matching is supplementary evidence, not confirmation from a wallet provider.',
+  },
+  {
     version: '0.2.7',
     date: '2026-09-16',
     channel: 'beta',

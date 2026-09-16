@@ -22,7 +22,7 @@ export default function Updates() {
         lead={
           <>
             What changed in each release. Wallet support is listed per version because it depends on verified notification
-            samples, not on app updates alone —{' '}
+            samples, not on app updates alone.{' '}
             <Link href="/download" className="ul">
               get the latest build
             </Link>

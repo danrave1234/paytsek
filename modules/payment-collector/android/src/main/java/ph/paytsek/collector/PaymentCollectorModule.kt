@@ -210,6 +210,32 @@ class PaymentCollectorModule : Module() {
       mapOf("posted" to true, "reason" to null, "amountCentavos" to amountCentavos.toInt(), "text" to text)
     }
 
+    /**
+     * Returns pending (unacknowledged) notification events for local matching.
+     * Only matching-relevant fields are exposed; raw notification text and
+     * unmasked payer data are never included.
+     */
+    AsyncFunction("getPendingNotifications") {
+      val items = outbox.pending(limit = 200)
+      val out = java.util.ArrayList<Map<String, Any>>()
+      for (item in items) {
+        try {
+          val payload = org.json.JSONObject(item.payloadJson)
+          out.add(mapOf(
+            "clientEventId" to payload.getString("clientEventId"),
+            "provider" to payload.getString("provider"),
+            "amountCentavos" to payload.optInt("amountCentavos", 0),
+            "postedAt" to payload.getString("postedAt"),
+            "providerDescribedAt" to (if (payload.isNull("providerDescribedAt")) org.json.JSONObject.NULL else payload.getString("providerDescribedAt")),
+            "capturedAt" to payload.getString("capturedAt"),
+          ))
+        } catch (_: Throwable) {
+          // Skip corrupted payloads
+        }
+      }
+      out
+    }
+
     AsyncFunction("recoverActiveNotifications") {
       try {
         android.service.notification.NotificationListenerService.requestRebind(ComponentName(context, PayTsekNotificationListener::class.java))

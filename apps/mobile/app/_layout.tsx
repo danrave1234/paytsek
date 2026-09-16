@@ -7,7 +7,7 @@ import { useTheme } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { invalidateDrafts, queryClient } from '@/lib/queries';
 import { SessionProvider, useSession } from '@/lib/session';
-import { syncAll, pruneSynced } from '@/lib/drafts';
+import { pruneCachedNotifications, pruneSynced, syncAll, syncCachedNotifications } from '@/lib/drafts';
 import { reportHealth, restoreCollectorFilters } from '@/lib/collector';
 import { SPACING } from '@/theme';
 import { ErrorState, Loading } from '@/components/ui';
@@ -72,6 +72,13 @@ function Gate({ children }: { children: React.ReactNode }) {
     const runSync = () => {
       if (!workspace || syncing) return;
       syncing = true;
+      // Cache pending notifications from the native collector so local matching
+      // can work even before the server has them.
+      if (Platform.OS === 'android') {
+        void syncCachedNotifications().then(() => {
+          void pruneCachedNotifications();
+        }).catch(() => { /* Non-critical: native collector unavailable. */ });
+      }
       void syncAll(workspace.id).then(async ({ synced }) => {
         if (synced > 0) {
           await Promise.all(['records', 'home', 'inbox'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
@@ -154,6 +161,8 @@ function AppNavigator() {
                   <Stack.Screen name="settings/privacy" options={{ headerShown: true, title: 'Privacy & data' }} />
                   <Stack.Screen name="settings/account" options={{ headerShown: true, title: 'Account' }} />
                   <Stack.Screen name="settings/notifications" options={{ headerShown: true, title: 'Notifications' }} />
+                  <Stack.Screen name="settings/permissions" options={{ headerShown: true, title: 'Permissions' }} />
+                  <Stack.Screen name="settings/report-problem" options={{ headerShown: true, title: 'Report a problem' }} />
                   <Stack.Screen name="settings/inbox" options={{ headerShown: true, title: 'Incoming payments' }} />
                   <Stack.Screen name="settings/exports" options={{ headerShown: true, title: 'Export records' }} />
                   <Stack.Screen name="settings/samples" options={{ headerShown: true, title: 'Unknown formats' }} />
