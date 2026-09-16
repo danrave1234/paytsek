@@ -4,17 +4,19 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Image, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, AppState, Image, Platform, StyleSheet, View } from 'react-native';
 import { Button, IconButton, Text, TextInput, useTheme } from 'react-native-paper';
 import { ReceiptOcr } from 'receipt-ocr';
 import { CaptureSurface } from '@/components/capture-surface';
 import { Notice, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
 import { newId } from '@/lib/device';
-import { pruneSynced, saveDraft, stageImage, syncDraft, type Draft } from '@/lib/drafts';
+import { findLocalMatches, pruneSynced, saveDraft, stageImage, syncCachedNotifications, syncDraft, type Draft, type LocalMatch } from '@/lib/drafts';
+import { peso } from '@/lib/format';
 import { invalidateDrafts, useHomeSnapshot, useInvalidateRecord } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TOUCH_TARGET, successColorFor } from '@/theme';
+import { PaymentCollector } from 'payment-collector';
 
 type Stage = 'capture' | 'processing' | 'review' | 'saved';
 
@@ -42,6 +44,8 @@ export default function Scan() {
   const [torch, setTorch] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [localMatch, setLocalMatch] = useState<LocalMatch | null>(null);
   const saveLock = useRef(false);
   const operation = useRef(false);
   const generation = useRef(0);
@@ -67,6 +71,8 @@ export default function Scan() {
     setAmountText('');
     setSaved(null);
     setError(null);
+    setDuplicateWarning(null);
+    setLocalMatch(null);
     saveLock.current = false;
     // Allow the next share-sheet intent (including another inbox drain) to be
     // handled after the previous scan flow has fully completed.
@@ -188,6 +194,43 @@ export default function Scan() {
       setFields(receipt.fields);
       setAmountText(receipt.fields.amountCentavos ? (receipt.fields.amountCentavos / 100).toFixed(2) : '');
 
+      // Duplicate-proof soft warning: check if a similar proof (same amount +
+      // provider within ~15 minutes) was already recorded locally or on server.
+      if (receipt.fields.amountCentavos) {
+        const now = Date.now();
+        const windowMs = 15 * 60 * 1000;
+        const provider = receipt.fields.receiptProvider ?? null;
+        const cents = receipt.fields.amountCentavos;
+        const recentRecords = home.data?.recentRecords ?? [];
+        const match = recentRecords.find((r) => {
+          if (r.amountCentavos !== cents) return false;
+          if (provider && r.sourceLabel !== provider) return false;
+          return (now - Date.parse(r.createdAt)) < windowMs;
+        });
+        if (match) {
+          setDuplicateWarning(`Similar proof (${peso(cents)}) recorded recently. If this is a different payment, save it.`);
+        }
+      }
+
+      // Check for local notification matches: sync pending notifications from
+      // the native collector, then find matches by amount and time.
+      if (receipt.fields.amountCentavos) {
+        try {
+          await syncCachedNotifications();
+          const matches = await findLocalMatches(
+            receipt.fields.amountCentavos,
+            receipt.fields.receiptProvider ?? null,
+            new Date().toISOString(),
+            receipt.fields.receiptTransactionAt ?? null,
+          );
+          if (matches.length > 0) {
+            setLocalMatch(matches[0]!);
+          }
+        } catch {
+          // Non-critical: local matching is a convenience, not required.
+        }
+      }
+
       // A receipt proof is valuable on its own. As soon as OCR finds an amount,
       // keep it locally and let matching happen later in the background.
       if (receipt.fields.amountCentavos && await persist(receipt, clean.uri, from, receipt.fields, ocr.fullText, ocr.blocks)) return;
@@ -279,6 +322,12 @@ export default function Scan() {
         {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="contain" accessibilityLabel="Captured payment proof" /> : null}
         <Notice kind="info">We’ll save the proof now. You can edit details later.</Notice>
         <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} right={<TextInput.Affix text="₱" />} />
+        {duplicateWarning ? <Notice kind="warning">{duplicateWarning}</Notice> : null}
+        {localMatch ? (
+          <Notice kind="info">
+            Possible match: {localMatch.provider} notification for {peso(localMatch.amountCentavos)} ({localMatch.deltaSeconds}s ago)
+          </Notice>
+        ) : null}
         {error ? <Notice kind="error">{error}</Notice> : null}
         <Button mode="contained" onPress={() => void saveReview()} disabled={busy} loading={busy} style={{ minHeight: TOUCH_TARGET }}>Save proof</Button>
         <Button onPress={reset}>Retake</Button>

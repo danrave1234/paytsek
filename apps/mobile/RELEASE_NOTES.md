@@ -1,7 +1,7 @@
-## PayTsek V2 beta — 0.2.7
+## PayTsek V2 beta — 0.2.8
 
-- Opening a payment record now re-checks for new notification matches every time, not just once. If a wallet notification arrives after you scan, the record will show the Possible match when you open it.
-- Duplicate wallet notifications (re-posted by Android) now also trigger matching instead of being silently ignored.
-- Matching time windows are proven correct: amount-only matches use a 15-minute capture-time fallback when the receipt time is unavailable, ensuring notifications that arrive minutes before the screenshot still connect.
+- Wallet notifications are stored on the phone as soon as they arrive, then matched to a scan by amount and time. You can see a Possible match on the review screen even before the server finishes.
+- Permissions checklist in Settings shows whether camera, photo library, notification access, and wallet listening are ready.
+- Day-close summary on Today, a soft duplicate-proof warning when a similar scan was just recorded, and a privacy-safe Report a problem screen with diagnostics only.
 
 Wallet detection and notification matching are supporting evidence, not confirmation from a bank or wallet provider.

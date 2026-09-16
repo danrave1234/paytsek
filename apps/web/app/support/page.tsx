@@ -29,7 +29,7 @@ const groups = [
     faq: [
       {
         q: 'Can my iPhone read GCash notifications?',
-        a: 'No. iOS does not allow apps to read other apps’ notifications, and PayTsek does not claim otherwise. Use the iPhone to scan and review, and pair an Android phone that receives your payment notifications — or use manual confirmation.',
+        a: 'No. iOS does not allow apps to read other apps notifications, and PayTsek does not claim otherwise. Use the iPhone to scan and review, and pair an Android phone that receives your payment notifications, or use manual confirmation.',
       },
       {
         q: 'Which wallets auto-match?',
@@ -76,7 +76,7 @@ export default function Support() {
               support@paytsek.online
             </a>{' '}
             with your workspace name and app version (Settings → bottom of the screen).{' '}
-            <span className="text-ink">Never send your MPIN, OTP or wallet password</span> — we will never ask for them.
+            <span className="text-ink">Never send your MPIN, OTP or wallet password</span>. We will never ask for them.
           </>
         }
       />

@@ -77,6 +77,7 @@ export default function Settings() {
       ) : null}
 
       <Group title="Preferences">
+        <ListRow icon="shield-check-outline" title="Permissions checklist" subtitle="Verify camera, notifications, and listener access" onPress={() => router.push('/settings/permissions' as any)} />
         <ListRow icon="bell-outline" title="Notifications" onPress={() => router.push('/settings/notifications')} />
         <ListRow icon="shield-lock-outline" title="Privacy & data" onPress={() => router.push('/settings/privacy')} />
         <ListRow icon="account-cog-outline" title="Account & password" onPress={() => router.push('/settings/account')} />
@@ -88,9 +89,9 @@ export default function Settings() {
       <Group title="Help">
         <ListRow
           icon="help-circle-outline"
-          title="Help & support"
-          subtitle="Ask a question or send feedback"
-          onPress={() => void Linking.openURL('mailto:support@paytsek.online?subject=PayTsek%20support')}
+          title="Report a problem"
+          subtitle="Send privacy-safe diagnostics to help us fix issues"
+          onPress={() => router.push('/settings/report-problem' as any)}
         />
       </Group>
 
