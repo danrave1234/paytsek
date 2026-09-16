@@ -171,13 +171,14 @@ export class RecordsService {
   }
 
   async detail(orgId: string, id: string): Promise<RecordDetail> {
-    // Self-heal: records created while the job queue was not being drained
-    // were never reconciled. Opening one reconciles it inline, once.
-    const pre = await this.db.one<{ evidence_state: string; last_reconciled_at: Date | null }>(
-      `select evidence_state, last_reconciled_at from payment_records where organization_id = $1 and id = $2`,
+    // Self-heal: if the record is still open and evidence may have changed
+    // (e.g. a notification arrived after the record was created), reconcile
+    // again so the user sees the current candidate state.
+    const pre = await this.db.one<{ evidence_state: string }>(
+      `select evidence_state from payment_records where organization_id = $1 and id = $2`,
       [orgId, id],
     );
-    if (pre && pre.last_reconciled_at === null && (pre.evidence_state === 'UNVERIFIED' || pre.evidence_state === 'REVIEW_REQUIRED')) {
+    if (pre && (pre.evidence_state === 'UNVERIFIED' || pre.evidence_state === 'REVIEW_REQUIRED')) {
       try { await this.reconcile.reconcileRecord(id); } catch { /* next drain retries */ }
     }
     const row = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.organization_id = $1 and r.id = $2`, [orgId, id]);

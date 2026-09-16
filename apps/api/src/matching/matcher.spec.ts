@@ -168,4 +168,61 @@ describe('matcher v1 — never auto-confirm on weak evidence', () => {
   it('no events -> NONE (shown as "No matching notification yet", never "failed")', () => {
     expect(decide(record(), [], cfg).kind).toBe('NONE');
   });
+
+  it('notification arrives first, screenshot scanned minutes later — amount-only REVIEW', () => {
+    // Notification posted at T0+20s, screenshot captured at T0+300s (5 min later)
+    // Receipt time is trustworthy (OCR read it), event is within the 5-min receipt window.
+    const d = decide(
+      record({
+        referenceValue: null,
+        referenceNamespace: null,
+        receiptTransactionAt: plus(300), // OCR read receipt time as T0+300s
+        receiptTransactionPrecision: 'MINUTE',
+        capturedAt: plus(300),
+      }),
+      [event({ referenceValue: null, referenceNamespace: 'UNKNOWN', eventAt: plus(20) })],
+      cfg,
+    );
+    // Receipt time basis: |20 - 300| = 280s < 300s window → REVIEW
+    expect(d.kind).toBe('REVIEW');
+    if (d.kind === 'REVIEW') {
+      expect(d.timeBasis).toBe('RECEIPT_TRANSACTION_TIME');
+      expect(d.candidates).toHaveLength(1);
+      expect(d.candidates[0]!.event.id).toBe('ev-1');
+    }
+
+    // If receipt time is untrustworthy, capture time fallback applies:
+    const d2 = decide(
+      record({
+        referenceValue: null,
+        referenceNamespace: null,
+        receiptTransactionAt: null, // No receipt time
+        receiptTransactionPrecision: 'UNKNOWN',
+        capturedAt: plus(300),
+      }),
+      [event({ referenceValue: null, referenceNamespace: 'UNKNOWN', eventAt: plus(20) })],
+      cfg,
+    );
+    // Capture time basis: |20 - 300| = 280s < 900s window → REVIEW
+    expect(d2.kind).toBe('REVIEW');
+    if (d2.kind === 'REVIEW') {
+      expect(d2.timeBasis).toBe('CAPTURE_TIME');
+      expect(d2.candidates).toHaveLength(1);
+      expect(d2.candidates[0]!.event.id).toBe('ev-1');
+    }
+
+    // Far outside both windows → NONE
+    const far = decide(
+      record({
+        referenceValue: null,
+        referenceNamespace: null,
+        receiptTransactionAt: null,
+        receiptTransactionPrecision: 'UNKNOWN',
+        capturedAt: plus(3600), // 1 hour later
+      }),
+      [event({ referenceValue: null, referenceNamespace: 'UNKNOWN', eventAt: plus(20) })],
+      cfg,
+    );
+    expect(far.kind).toBe('NONE');
+  });
 });
