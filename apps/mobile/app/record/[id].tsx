@@ -5,6 +5,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { BackHandler, Image, Pressable, StyleSheet, View } from 'react-native';
 import { Button, Chip, Dialog, Icon, IconButton, Portal, Snackbar, Text, TextInput, TouchableRipple, useTheme } from 'react-native-paper';
 import { ProviderLogo } from '@/components/provider-logo';
+import { AppearMotion, FadeIn, ScreenEnter, ValueChangeMotion } from '@/components/motion';
 import { ErrorState, Loading, Notice, Screen, StateChip } from '@/components/ui';
 import { isApiError } from '@/lib/api';
 import { lastSeenWithTime, manilaTime, peso } from '@/lib/format';
@@ -146,106 +147,114 @@ export default function RecordDetail() {
   const occurredAt = manilaTime(r.corrected.receiptTransactionAt ?? r.capturedAt, r.corrected.receiptTransactionPrecision, workspace?.timezone);
 
   return <Screen>
-    <View style={styles.topBar}><IconButton icon="arrow-left" accessibilityLabel="Back to records" onPress={goBack} /><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment record</Text><View style={{ width: 48 }} /></View>
+    <ScreenEnter>
+      <View style={styles.topBar}><IconButton icon="arrow-left" accessibilityLabel="Back to records" onPress={goBack} /><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment record</Text><View style={{ width: 48 }} /></View>
 
-    <View style={styles.hero}>
-      <View style={styles.heroTop}>
-        <ProviderLogo provider={r.corrected.receiptProvider} label={r.sourceLabel} size={44} />
-        <StateChip state={r.evidenceState} compact />
-      </View>
-      <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={styles.amount}>{peso(r.amountCentavos)}</Text>
-      <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-        {occurredAt} · Sent from {receiptWallet}{receivingWallet ? ` · Received in ${receivingWallet}` : ''}
-      </Text>
-      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{STATUS_COPY[r.evidenceState].detail}</Text>
-    </View>
-
-    {r.flags.length ? <Notice kind="warning">Review note: {r.flags.map((f) => f.replace(/_/g, ' ').toLowerCase()).join(', ')}.</Notice> : null}
-    {r.voidReason ? <Notice kind="error">Voided: {r.voidReason}</Notice> : null}
-    {msg && msg.kind !== 'info' ? <Notice kind={msg.kind}>{msg.text}</Notice> : null}
-
-    {pinnedProofUrl.current ? (
-      <Pressable
-        onPress={() => setProofExpanded((current) => !current)}
-        accessibilityRole="button"
-        accessibilityLabel={proofExpanded ? 'Collapse payment proof' : 'Expand payment proof'}
-        style={[styles.proofBand, { borderTopColor: theme.colors.outlineVariant, borderBottomColor: theme.colors.outlineVariant }]}
-      >
-        <View style={styles.proofHeader}>
-          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 0.6 }}>PAYMENT PROOF</Text>
-          <Icon source={proofExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={theme.colors.onSurfaceVariant} />
+      <View style={styles.hero}>
+        <View style={styles.heroTop}>
+          <ProviderLogo provider={r.corrected.receiptProvider} label={r.sourceLabel} size={44} />
+          <StateChip state={r.evidenceState} compact />
         </View>
-        <Image
-          source={{ uri: pinnedProofUrl.current }}
-          resizeMode={proofExpanded ? 'contain' : 'cover'}
-          accessibilityLabel="Saved payment proof"
-          style={[styles.proof, { height: proofExpanded ? 420 : 116, backgroundColor: theme.colors.surfaceVariant }]}
-        />
-      </Pressable>
-    ) : r.hasProofImage ? <Notice kind="info">The proof image is no longer available.</Notice> : null}
-
-    <SectionTitle>Evidence</SectionTitle>
-    {open && cands?.candidates.length ? (
-      <View>
-        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-          {cands.candidates.length} nearby notification{cands.candidates.length === 1 ? '' : 's'} on the payment phone. Linking one is notification evidence, not a provider confirmation.
+        <ValueChangeMotion value={r.amountCentavos}>
+          <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={styles.amount}>{peso(r.amountCentavos)}</Text>
+        </ValueChangeMotion>
+        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+          {occurredAt} · Sent from {receiptWallet}{receivingWallet ? ` · Received in ${receivingWallet}` : ''}
         </Text>
-        {cands.collectorStale ? <Notice kind="warning">Payment phone {lastSeenWithTime(cands.collectorLastSeenAt).toLowerCase()}.</Notice> : null}
-        {cands.candidates.map((c, index) => {
-          const payer = c.payerMaskedName ?? c.payerMaskedPhone;
-          const meta = [PROVIDER_LABELS[c.provider], deltaLabel(c.deltaSeconds), payer].filter(Boolean).join(' · ');
-          return (
-            <View key={c.eventId} style={[styles.candidateRow, index > 0 && { borderTopColor: theme.colors.outlineVariant, borderTopWidth: StyleSheet.hairlineWidth }]}>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text variant="titleSmall" style={{ fontVariant: ['tabular-nums'] }}>{peso(c.amountCentavos)}</Text>
-                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{meta}</Text>
-                <Text variant="labelSmall" style={{ color: c.alreadyLinkedToOtherRecord ? theme.colors.error : theme.colors.onSurfaceVariant }}>
-                  {c.alreadyLinkedToOtherRecord ? 'Already linked to another record' : manilaTime(c.eventAt, 'SECOND', workspace?.timezone)}
-                </Text>
-              </View>
-              <Button mode="text" compact style={styles.candidateAction} disabled={c.alreadyLinkedToOtherRecord || confirm.isPending || !canConfirm} onPress={() => void onConfirm(c.eventId)}>Use match</Button>
-            </View>
-          );
-        })}
+        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{STATUS_COPY[r.evidenceState].detail}</Text>
       </View>
-    ) : null}
-    {r.matchExplanation.kind ? (
-      <View style={styles.matchNote}>
-        <Icon source="information-outline" size={18} color={theme.colors.onSurfaceVariant} />
-        <Text variant="bodySmall" style={{ flex: 1, color: theme.colors.onSurfaceVariant }}>{r.matchExplanation.disclosure ?? (r.matchExplanation.supportingFields.length ? `Matched using ${r.matchExplanation.supportingFields.join(' and ')}.` : 'Confirmation evidence recorded.')}</Text>
-      </View>
-    ) : null}
-    {!r.matchExplanation.kind && !(open && cands?.candidates.length) ? (
-      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>No wallet notification evidence is linked to this record.</Text>
-    ) : null}
 
-    <SectionTitle>History</SectionTitle>
-    <TouchableRipple onPress={() => setHistoryOpen((current) => !current)} accessibilityRole="button" accessibilityState={{ expanded: historyOpen }}>
-      <View style={styles.historyToggle}>
-        <Icon source="history" size={20} color={theme.colors.onSurfaceVariant} />
-        <Text variant="bodyMedium" style={{ flex: 1 }}>{r.history.length} recorded event{r.history.length === 1 ? '' : 's'}</Text>
-        <Icon source={historyOpen ? 'chevron-up' : 'chevron-down'} size={20} color={theme.colors.onSurfaceVariant} />
-      </View>
-    </TouchableRipple>
-    {historyOpen ? (
-      <View style={[styles.timeline, { borderLeftColor: theme.colors.outlineVariant }]}>
-        {r.history.map((h, i) => (
-          <View key={i} style={{ gap: 2 }}>
-            <Text variant="bodySmall" style={{ fontWeight: '600' }}>{h.action.replace(/_/g, ' ').toLowerCase()}</Text>
-            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(h.at, 'SECOND', workspace?.timezone)}{h.actorDisplayName ? ` · ${h.actorDisplayName}` : ''}</Text>
+      {r.flags.length ? <Notice kind="warning">Review note: {r.flags.map((f) => f.replace(/_/g, ' ').toLowerCase()).join(', ')}.</Notice> : null}
+      {r.voidReason ? <Notice kind="error">Voided: {r.voidReason}</Notice> : null}
+      {msg && msg.kind !== 'info' ? <Notice kind={msg.kind}>{msg.text}</Notice> : null}
+
+      {pinnedProofUrl.current ? (
+        <Pressable
+          onPress={() => setProofExpanded((current) => !current)}
+          accessibilityRole="button"
+          accessibilityLabel={proofExpanded ? 'Collapse payment proof' : 'Expand payment proof'}
+          style={[styles.proofBand, { borderTopColor: theme.colors.outlineVariant, borderBottomColor: theme.colors.outlineVariant }]}
+        >
+          <View style={styles.proofHeader}>
+            <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant, letterSpacing: 0.6 }}>PAYMENT PROOF</Text>
+            <Icon source={proofExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={theme.colors.onSurfaceVariant} />
           </View>
-        ))}
-      </View>
-    ) : null}
+          <Image
+            source={{ uri: pinnedProofUrl.current }}
+            resizeMode={proofExpanded ? 'contain' : 'cover'}
+            accessibilityLabel="Saved payment proof"
+            style={[styles.proof, { height: proofExpanded ? 420 : 116, backgroundColor: theme.colors.surfaceVariant }]}
+          />
+        </Pressable>
+      ) : r.hasProofImage ? <Notice kind="info">The proof image is no longer available.</Notice> : null}
 
-    {r.evidenceState !== 'VOIDED' ? (
-      <View style={[styles.actions, { borderTopColor: theme.colors.outlineVariant }]}>
-        {canEdit ? <ActionRow icon="pencil-outline" label="Correct record" onPress={openEdit} /> : null}
-        {isOwner && open ? <ActionRow icon="check-circle-outline" label="I checked the wallet" onPress={() => setDialog('manual')} divider={canEdit} /> : null}
-        {isOwner && r.matchExplanation.kind ? <ActionRow icon="link-off" label="Unlink evidence" onPress={() => setDialog('unlink')} divider /> : null}
-        {isOwner ? <ActionRow icon="delete-outline" label="Void record" onPress={() => setDialog('void')} divider destructive /> : null}
-      </View>
-    ) : null}
+      <SectionTitle>Evidence</SectionTitle>
+      {open && cands?.candidates.length ? (
+        <View>
+          <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
+            {cands.candidates.length} nearby notification{cands.candidates.length === 1 ? '' : 's'} on the payment phone. Linking one is notification evidence, not a provider confirmation.
+          </Text>
+          {cands.collectorStale ? <Notice kind="warning">Payment phone {lastSeenWithTime(cands.collectorLastSeenAt).toLowerCase()}.</Notice> : null}
+          {cands.candidates.map((c, index) => {
+            const payer = c.payerMaskedName ?? c.payerMaskedPhone;
+            const meta = [PROVIDER_LABELS[c.provider], deltaLabel(c.deltaSeconds), payer].filter(Boolean).join(' · ');
+            return (
+              <AppearMotion key={c.eventId} itemKey={`candidate.${c.eventId}`}>
+                <View style={[styles.candidateRow, index > 0 && { borderTopColor: theme.colors.outlineVariant, borderTopWidth: StyleSheet.hairlineWidth }]}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text variant="titleSmall" style={{ fontVariant: ['tabular-nums'] }}>{peso(c.amountCentavos)}</Text>
+                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{meta}</Text>
+                    <Text variant="labelSmall" style={{ color: c.alreadyLinkedToOtherRecord ? theme.colors.error : theme.colors.onSurfaceVariant }}>
+                      {c.alreadyLinkedToOtherRecord ? 'Already linked to another record' : manilaTime(c.eventAt, 'SECOND', workspace?.timezone)}
+                    </Text>
+                  </View>
+                  <Button mode="text" compact style={styles.candidateAction} disabled={c.alreadyLinkedToOtherRecord || confirm.isPending || !canConfirm} onPress={() => void onConfirm(c.eventId)}>Use match</Button>
+                </View>
+              </AppearMotion>
+            );
+          })}
+        </View>
+      ) : null}
+      {r.matchExplanation.kind ? (
+        <View style={styles.matchNote}>
+          <Icon source="information-outline" size={18} color={theme.colors.onSurfaceVariant} />
+          <Text variant="bodySmall" style={{ flex: 1, color: theme.colors.onSurfaceVariant }}>{r.matchExplanation.disclosure ?? (r.matchExplanation.supportingFields.length ? `Matched using ${r.matchExplanation.supportingFields.join(' and ')}.` : 'Confirmation evidence recorded.')}</Text>
+        </View>
+      ) : null}
+      {!r.matchExplanation.kind && !(open && cands?.candidates.length) ? (
+        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>No wallet notification evidence is linked to this record.</Text>
+      ) : null}
+
+      <SectionTitle>History</SectionTitle>
+      <TouchableRipple onPress={() => setHistoryOpen((current) => !current)} accessibilityRole="button" accessibilityState={{ expanded: historyOpen }}>
+        <View style={styles.historyToggle}>
+          <Icon source="history" size={20} color={theme.colors.onSurfaceVariant} />
+          <Text variant="bodyMedium" style={{ flex: 1 }}>{r.history.length} recorded event{r.history.length === 1 ? '' : 's'}</Text>
+          <Icon source={historyOpen ? 'chevron-up' : 'chevron-down'} size={20} color={theme.colors.onSurfaceVariant} />
+        </View>
+      </TouchableRipple>
+      {historyOpen ? (
+        <FadeIn>
+          <View style={[styles.timeline, { borderLeftColor: theme.colors.outlineVariant }]}>
+            {r.history.map((h, i) => (
+              <View key={i} style={{ gap: 2 }}>
+                <Text variant="bodySmall" style={{ fontWeight: '600' }}>{h.action.replace(/_/g, ' ').toLowerCase()}</Text>
+                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{manilaTime(h.at, 'SECOND', workspace?.timezone)}{h.actorDisplayName ? ` · ${h.actorDisplayName}` : ''}</Text>
+              </View>
+            ))}
+          </View>
+        </FadeIn>
+      ) : null}
+
+      {r.evidenceState !== 'VOIDED' ? (
+        <View style={[styles.actions, { borderTopColor: theme.colors.outlineVariant }]}>
+          {canEdit ? <ActionRow icon="pencil-outline" label="Correct record" onPress={openEdit} /> : null}
+          {isOwner && open ? <ActionRow icon="check-circle-outline" label="I checked the wallet" onPress={() => setDialog('manual')} divider={canEdit} /> : null}
+          {isOwner && r.matchExplanation.kind ? <ActionRow icon="link-off" label="Unlink evidence" onPress={() => setDialog('unlink')} divider /> : null}
+          {isOwner ? <ActionRow icon="delete-outline" label="Void record" onPress={() => setDialog('void')} divider destructive /> : null}
+        </View>
+      ) : null}
+    </ScreenEnter>
 
     <Portal>
       <Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}><Dialog.Title>{dialog === 'edit' ? 'Correct record' : dialog === 'unlink' ? 'Unlink association' : dialog === 'void' ? 'Void record' : 'Confirm after wallet check'}</Dialog.Title><Dialog.Content style={{ gap: 8 }}>{dialog === 'edit' ? <><Text variant="bodySmall">The proof and correction stay in History.</Text><TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} /><Text variant="labelMedium">Sent from</Text><View style={styles.providerChoices}>{PROVIDERS.map((item) => <Chip key={item.value} selected={providerValue === item.value} onPress={() => setProviderValue(item.value)}>{item.label}</Chip>)}</View></> : <><Text variant="bodySmall">{dialog === 'manual' ? 'Use this only after checking the receiving wallet. It is recorded as an owner confirmation, not a provider verification.' : dialog === 'void' ? 'This removes the record from active totals while preserving the proof and History.' : 'The previous state remains in History.'}</Text><TextInput label={dialog === 'void' ? 'Reason' : dialog === 'manual' ? 'Note (optional)' : 'Reason (optional)'} mode="outlined" value={reason} onChangeText={setReason} /></>}</Dialog.Content><Dialog.Actions><Button onPress={() => setDialog(null)}>Cancel</Button><Button onPress={() => void runDialog()} disabled={dialog === 'void' && reason.trim().length < 3}>{dialog === 'edit' ? 'Save' : 'Confirm'}</Button></Dialog.Actions></Dialog>

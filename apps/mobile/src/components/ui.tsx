@@ -4,7 +4,7 @@ import { Animated, ScrollView, StyleSheet, View, type DimensionValue, type ViewS
 import { ActivityIndicator, Button, Icon, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { stateLabel } from '@/lib/format';
-import { useReducedMotion } from './motion';
+import { useReducedMotion, FadeIn, PressScale } from './motion';
 import { RADIUS, SHADOW_COLOR, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET, stateColorsFor } from '@/theme';
 
 /** True when Paper is running the dark scheme; drives the state palette. */
@@ -145,9 +145,11 @@ export function ListRow({
   if (!onPress) return <View accessibilityRole="text">{content}</View>;
 
   return (
-    <TouchableRipple onPress={onPress} accessibilityRole="button">
-      {content}
-    </TouchableRipple>
+    <PressScale style={{ flex: 1 }}>
+      <TouchableRipple onPress={onPress} accessibilityRole="button">
+        {content}
+      </TouchableRipple>
+    </PressScale>
   );
 }
 
@@ -242,22 +244,24 @@ export function Loading({ label = 'Loading…', variant = 'list' }: { label?: st
 export function EmptyState({ icon, title, body, action }: { icon: string; title: string; body?: string; action?: { label: string; onPress: () => void } }) {
   const theme = useTheme();
   return (
-    <View style={styles.center}>
-      <View style={styles.emptyIcon}>
-        <Icon source={icon} size={32} color={theme.colors.onSurfaceVariant} />
+    <FadeIn>
+      <View style={styles.center}>
+        <View style={styles.emptyIcon}>
+          <Icon source={icon} size={32} color={theme.colors.onSurfaceVariant} />
+        </View>
+        <Text variant="titleMedium" style={{ marginTop: SPACING.lg, textAlign: 'center', fontWeight: '600' }}>{title}</Text>
+        {body ? (
+          <Text variant="bodyMedium" style={{ marginTop: SPACING.xs + 2, textAlign: 'center', color: theme.colors.onSurfaceVariant, maxWidth: 320 }}>
+            {body}
+          </Text>
+        ) : null}
+        {action ? (
+          <Button mode="contained-tonal" style={{ marginTop: SPACING.lg, minHeight: TOUCH_TARGET }} onPress={action.onPress}>
+            {action.label}
+          </Button>
+        ) : null}
       </View>
-      <Text variant="titleMedium" style={{ marginTop: SPACING.lg, textAlign: 'center', fontWeight: '600' }}>{title}</Text>
-      {body ? (
-        <Text variant="bodyMedium" style={{ marginTop: SPACING.xs + 2, textAlign: 'center', color: theme.colors.onSurfaceVariant, maxWidth: 320 }}>
-          {body}
-        </Text>
-      ) : null}
-      {action ? (
-        <Button mode="contained-tonal" style={{ marginTop: SPACING.lg, minHeight: TOUCH_TARGET }} onPress={action.onPress}>
-          {action.label}
-        </Button>
-      ) : null}
-    </View>
+    </FadeIn>
   );
 }
 
@@ -273,10 +277,12 @@ export function Notice({ kind, children }: { kind: 'info' | 'warning' | 'error';
   const fg = kind === 'error' ? theme.colors.onErrorContainer : kind === 'warning' ? theme.colors.onTertiaryContainer : theme.colors.onSecondaryContainer;
   const icon = kind === 'error' ? 'alert-octagon-outline' : kind === 'warning' ? 'alert-outline' : 'information-outline';
   return (
-    <View style={[styles.notice, { backgroundColor: bg }]} accessibilityRole="alert">
-      <Icon source={icon} size={18} color={fg} />
-      <Text variant="bodySmall" style={{ color: fg, flex: 1, lineHeight: 18 }}>{children}</Text>
-    </View>
+    <FadeIn>
+      <View style={[styles.notice, { backgroundColor: bg }]} accessibilityRole="alert">
+        <Icon source={icon} size={18} color={fg} />
+        <Text variant="bodySmall" style={{ color: fg, flex: 1, lineHeight: 18 }}>{children}</Text>
+      </View>
+    </FadeIn>
   );
 }
 
