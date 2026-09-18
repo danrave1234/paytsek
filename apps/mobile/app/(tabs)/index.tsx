@@ -5,6 +5,7 @@ import { Image, Platform, RefreshControl, ScrollView, StyleSheet, View } from 'r
 import { Button, Dialog, Icon, Portal, Snackbar, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppUpdateDialog } from '@/components/app-update-dialog';
+import { AppearMotion, GrowBar, ValueChangeMotion } from '@/components/motion';
 import { PaymentRecordRow } from '@/components/payment-record-row';
 import { Loading, Notice } from '@/components/ui';
 import { OfflineError } from '@/lib/api';
@@ -38,20 +39,14 @@ function HourlyRhythm({ values }: { values: number[] }) {
   return (
     <View accessible accessibilityLabel="Recorded amount by time of day" style={styles.rhythm}>
       <View style={styles.bars} importantForAccessibility="no-hide-descendants">
-        {grouped.map((value, index) => (
-          <View key={index} style={styles.barSlot}>
-            <View
-              style={[
-                styles.bar,
-                {
-                  height: value > 0 ? Math.max(7, Math.round((value / max) * 58)) : 3,
-                  backgroundColor: value > 0 ? theme.colors.primary : theme.colors.outlineVariant,
-                  opacity: value > 0 ? 0.82 : 0.7,
-                },
-              ]}
-            />
-          </View>
-        ))}
+        {grouped.map((value, index) => {
+          const barHeight = value > 0 ? Math.max(7, Math.round((value / max) * 58)) : 3;
+          return (
+            <View key={index} style={styles.barSlot}>
+              <GrowBar height={barHeight} color={value > 0 ? theme.colors.primary : theme.colors.outlineVariant} />
+            </View>
+          );
+        })}
       </View>
       <View style={styles.axis} importantForAccessibility="no-hide-descendants">
         <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>12 AM</Text>
@@ -223,15 +218,17 @@ export default function Today() {
             {workspaceDate(new Date(), timezone)}
           </Text>
           <Text variant="headlineSmall" style={styles.heroTitle}>Recorded today</Text>
-          <Text
-            variant="displayMedium"
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.72}
-            style={styles.total}
-          >
-            {peso(totalCentavos)}
-          </Text>
+          <ValueChangeMotion value={totalCentavos}>
+            <Text
+              variant="displayMedium"
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.72}
+              style={styles.total}
+            >
+              {peso(totalCentavos)}
+            </Text>
+          </ValueChangeMotion>
           <View style={styles.countRow}>
             <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant }}>
               {recordCount} {recordCount === 1 ? 'record' : 'records'}
@@ -274,17 +271,18 @@ export default function Today() {
 
         <View>
           {feed.map((item, index) => (
-            <PaymentRecordRow
-              key={`${item.kind}.${item.id}`}
-              amountCentavos={item.amount}
-              occurredAt={item.at}
-              sourceLabel={item.source}
-              state={item.state}
-              timezone={timezone}
-              divider={index > 0}
-              onPress={item.onPress}
-              onPressIn={item.onPressIn}
-            />
+            <AppearMotion itemKey={`${item.kind}.${item.id}`}>
+              <PaymentRecordRow
+                amountCentavos={item.amount}
+                occurredAt={item.at}
+                sourceLabel={item.source}
+                state={item.state}
+                timezone={timezone}
+                divider={index > 0}
+                onPress={item.onPress}
+                onPressIn={item.onPressIn}
+              />
+            </AppearMotion>
           ))}
         </View>
       </ScrollView>
@@ -349,7 +347,6 @@ const styles = StyleSheet.create({
   rhythm: { marginTop: SPACING.lg },
   bars: { height: 62, flexDirection: 'row', alignItems: 'flex-end', gap: 5 },
   barSlot: { flex: 1, height: 62, justifyContent: 'flex-end' },
-  bar: { width: '100%', borderRadius: 3 },
   axis: { marginTop: 7, flexDirection: 'row', justifyContent: 'space-between' },
   sectionHeader: { minHeight: 58, marginTop: SPACING.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth },
   sectionTitle: { fontWeight: '800', letterSpacing: -0.2 },

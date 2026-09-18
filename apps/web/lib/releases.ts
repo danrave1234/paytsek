@@ -21,6 +21,7 @@ export const RELEASES: Release[] = [
     highlights: [
       'Payment records now automatically connect to a wallet notification when the amount and time match, instead of requiring a manual tap. Multiple candidates still need your choice.',
       'The receiving wallet source is now adopted onto the record when a match is found, so the record shows which wallet received the payment.',
+      'Restrained animations on new records, dashboard totals, and interactive elements. Honors the system reduced-motion setting.',
     ],
     notes: 'PayTsek remains a free public beta. Notification matching is supplementary evidence, not confirmation from a wallet provider.',
   },

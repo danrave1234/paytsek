@@ -3,6 +3,7 @@
 - Payment records now automatically connect to a wallet notification when the amount and time match, instead of requiring a manual tap. Multiple candidates still need your choice.
 - Wallet notifications are stored on the phone as soon as they arrive, then matched to a scan by amount and time. You can see a Possible match on the review screen even before the server finishes.
 - The receiving wallet source is now adopted onto the record when a match is found, so the record shows which wallet received the payment.
+- Restrained animations on new records appearing, dashboard totals updating, and interactive elements (press feedback, fade-in, chart bars). Honors the system reduced-motion setting.
 
 Wallet detection and notification matching are supporting evidence, not confirmation from a bank or wallet provider.
 

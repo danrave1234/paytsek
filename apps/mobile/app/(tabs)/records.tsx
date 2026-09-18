@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Searchbar, Text, useTheme } from 'react-native-paper';
 import { ProviderLogo } from '@/components/provider-logo';
+import { AppearMotion } from '@/components/motion';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PaymentRecordRow } from '@/components/payment-record-row';
 import { EmptyState, ErrorState, Loading } from '@/components/ui';
@@ -223,16 +224,18 @@ export default function Records() {
                   {dayLabel(item.at, timezone)}
                 </Text>
               ) : null}
-              <PaymentRecordRow
-                amountCentavos={item.amount}
-                occurredAt={item.at}
-                sourceLabel={item.source}
-                state={item.state}
-                timezone={timezone}
-                divider={previousSameDay}
-                onPress={item.onPress}
-                onPressIn={item.onPressIn}
-              />
+              <AppearMotion itemKey={`${item.kind}.${item.id}`}>
+                <PaymentRecordRow
+                  amountCentavos={item.amount}
+                  occurredAt={item.at}
+                  sourceLabel={item.source}
+                  state={item.state}
+                  timezone={timezone}
+                  divider={previousSameDay}
+                  onPress={item.onPress}
+                  onPressIn={item.onPressIn}
+                />
+              </AppearMotion>
             </View>
           );
         }}
