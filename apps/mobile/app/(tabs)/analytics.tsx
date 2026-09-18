@@ -4,6 +4,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-n
 import { Text, useTheme } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ProviderLogo } from '@/components/provider-logo';
+import { AppearMotion, ScreenEnter, ValueChangeMotion, GrowBar } from '@/components/motion';
 import { ErrorState, Loading } from '@/components/ui';
 import { peso } from '@/lib/format';
 import { useAnalytics } from '@/lib/queries';
@@ -78,10 +79,12 @@ export default function Analytics() {
         {query.isLoading ? <Loading variant="dashboard" label="Loading analytics" /> : null}
         {query.error ? <ErrorState error={query.error} retry={() => void query.refetch()} /> : null}
         {query.data ? (
-          <>
+          <ScreenEnter>
             <View style={styles.hero}>
               <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>Recorded in this period</Text>
-              <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit style={styles.total}>{peso(query.data.recordedCentavos)}</Text>
+              <ValueChangeMotion value={query.data.recordedCentavos}>
+                <Text variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit style={styles.total}>{peso(query.data.recordedCentavos)}</Text>
+              </ValueChangeMotion>
             </View>
 
             <View style={[styles.metrics, { borderColor: theme.colors.outlineVariant }]}>
@@ -102,11 +105,14 @@ export default function Analytics() {
             <View style={styles.section}>
               <Text variant="titleMedium" style={styles.sectionTitle}>{range === '90D' ? 'Weekly rhythm' : 'Daily rhythm'}</Text>
               <View style={styles.chart} accessibilityRole="image" accessibilityLabel={`Recorded amount trend for ${RANGES.find((item) => item.value === range)?.label}`}>
-                {buckets.map((bucket, index) => (
-                  <View key={index} style={styles.barSlot}>
-                    <View style={[styles.bar, { height: Math.max(4, Math.round((bucket.amount / max) * 92)), backgroundColor: bucket.amount ? theme.colors.primary : theme.colors.outlineVariant }]} />
-                  </View>
-                ))}
+                {buckets.map((bucket, index) => {
+                  const barHeight = Math.max(4, Math.round((bucket.amount / max) * 92));
+                  return (
+                    <View key={index} style={styles.barSlot}>
+                      <GrowBar height={barHeight} color={bucket.amount ? theme.colors.primary : theme.colors.outlineVariant} />
+                    </View>
+                  );
+                })}
               </View>
               <View style={styles.axis}>
                 <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{query.data.from}</Text>
@@ -119,14 +125,16 @@ export default function Analytics() {
               {query.data.byProvider.length === 0 ? (
                 <Text variant="bodyMedium" style={[styles.empty, { color: theme.colors.onSurfaceVariant }]}>No recorded payments in this period.</Text>
               ) : query.data.byProvider.map((item, index) => (
-                <View key={item.provider} style={[styles.row, index > 0 && { borderTopColor: theme.colors.outlineVariant, borderTopWidth: StyleSheet.hairlineWidth }]}>
-                  <ProviderLogo provider={item.provider} size={40} />
-                  <View style={{ flex: 1 }}>
-                    <Text variant="titleSmall">{PROVIDER_LABELS[item.provider]}</Text>
-                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{item.recordedCount} {item.recordedCount === 1 ? 'record' : 'records'}</Text>
+                <AppearMotion key={item.provider} itemKey={`provider.${item.provider}`}>
+                  <View style={[styles.row, index > 0 && { borderTopColor: theme.colors.outlineVariant, borderTopWidth: StyleSheet.hairlineWidth }]}>
+                    <ProviderLogo provider={item.provider} size={40} />
+                    <View style={{ flex: 1 }}>
+                      <Text variant="titleSmall">{PROVIDER_LABELS[item.provider]}</Text>
+                      <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{item.recordedCount} {item.recordedCount === 1 ? 'record' : 'records'}</Text>
+                    </View>
+                    <Text variant="titleMedium" style={styles.rowAmount}>{peso(item.recordedCentavos)}</Text>
                   </View>
-                  <Text variant="titleMedium" style={styles.rowAmount}>{peso(item.recordedCentavos)}</Text>
-                </View>
+                </AppearMotion>
               ))}
             </View>
 
@@ -137,19 +145,21 @@ export default function Analytics() {
                 const share = query.data.recordedCentavos ? item.recordedCentavos / query.data.recordedCentavos * 100 : 0;
                 const width = item.recordedCount > 0 ? Math.max(3, share) : 0;
                 return (
-                  <View key={item.state} style={styles.evidenceRow}>
-                    <View style={styles.evidenceLabels}>
-                      <Text variant="bodyMedium">{EVIDENCE_STATE_LABELS[item.state]}</Text>
-                      <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>{item.recordedCount}</Text>
+                  <AppearMotion key={item.state} itemKey={`evidence.${item.state}`}>
+                    <View style={styles.evidenceRow}>
+                      <View style={styles.evidenceLabels}>
+                        <Text variant="bodyMedium">{EVIDENCE_STATE_LABELS[item.state]}</Text>
+                        <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>{item.recordedCount}</Text>
+                      </View>
+                      <View style={[styles.track, { backgroundColor: theme.colors.surfaceVariant }]}>
+                        <View style={[styles.fill, { width: `${width}%`, backgroundColor: colors.fg }]} />
+                      </View>
                     </View>
-                    <View style={[styles.track, { backgroundColor: theme.colors.surfaceVariant }]}>
-                      <View style={[styles.fill, { width: `${width}%`, backgroundColor: colors.fg }]} />
-                    </View>
-                  </View>
+                  </AppearMotion>
                 );
               })}
             </View>
-          </>
+          </ScreenEnter>
         ) : null}
       </ScrollView>
     </SafeAreaView>
@@ -171,7 +181,6 @@ const styles = StyleSheet.create({
   sectionTitle: { fontWeight: '800', letterSpacing: -0.2, marginBottom: SPACING.sm },
   chart: { height: 104, flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
   barSlot: { flex: 1, height: 96, justifyContent: 'flex-end' },
-  bar: { width: '100%', minWidth: 2, borderRadius: 3 },
   axis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
   row: { minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
   rowAmount: { fontWeight: '800', fontVariant: ['tabular-nums'] },

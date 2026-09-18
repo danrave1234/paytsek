@@ -8,6 +8,7 @@ import { ActivityIndicator, AppState, Image, Platform, StyleSheet, View } from '
 import { Button, IconButton, Text, TextInput, useTheme } from 'react-native-paper';
 import { ReceiptOcr } from 'receipt-ocr';
 import { CaptureSurface } from '@/components/capture-surface';
+import { FadeIn } from '@/components/motion';
 import { Notice, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
 import { newId } from '@/lib/device';
@@ -318,19 +319,21 @@ export default function Scan() {
   if (stage === 'review' && fields && extraction) {
     return (
       <Screen tabbed>
-        <ScreenTitle title="Confirm amount" />
-        {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="contain" accessibilityLabel="Captured payment proof" /> : null}
-        <Notice kind="info">We’ll save the proof now. You can edit details later.</Notice>
-        <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} right={<TextInput.Affix text="₱" />} />
-        {duplicateWarning ? <Notice kind="warning">{duplicateWarning}</Notice> : null}
-        {localMatch ? (
-          <Notice kind="info">
-            Matched: {localMatch.provider} notification for {peso(localMatch.amountCentavos)} ({localMatch.deltaSeconds}s ago). This will be linked automatically.
-          </Notice>
-        ) : null}
-        {error ? <Notice kind="error">{error}</Notice> : null}
-        <Button mode="contained" onPress={() => void saveReview()} disabled={busy} loading={busy} style={{ minHeight: TOUCH_TARGET }}>Save proof</Button>
-        <Button onPress={reset}>Retake</Button>
+        <FadeIn>
+          <ScreenTitle title="Confirm amount" />
+          {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="contain" accessibilityLabel="Captured payment proof" /> : null}
+          <Notice kind="info">We'll save the proof now. You can edit details later.</Notice>
+          <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} right={<TextInput.Affix text="₱" />} />
+          {duplicateWarning ? <Notice kind="warning">{duplicateWarning}</Notice> : null}
+          {localMatch ? (
+            <Notice kind="info">
+              Matched: {localMatch.provider} notification for {peso(localMatch.amountCentavos)} ({localMatch.deltaSeconds}s ago). This will be linked automatically.
+            </Notice>
+          ) : null}
+          {error ? <Notice kind="error">{error}</Notice> : null}
+          <Button mode="contained" onPress={() => void saveReview()} disabled={busy} loading={busy} style={{ minHeight: TOUCH_TARGET }}>Save proof</Button>
+          <Button onPress={reset}>Retake</Button>
+        </FadeIn>
       </Screen>
     );
   }
