@@ -1,0 +1,227 @@
+Command finished with exit code 1.
+Command output:
+$ vitest run
+
+ RUN  v2.1.9 C:/Users/Danrave/Desktop/Project/pay_record/apps/api
+
+ ❯ src/matching/unscoped-matcher.spec.ts (2 tests | 1 failed) 8ms
+   × proof-first unscoped matching > offers a nearby GCash notification without auto-confirming it 6ms
+     → expected 'AUTO' to be 'REVIEW' // Object.is equality
+ ❯ src/matching/matcher.spec.ts (27 tests | 11 failed) 18ms
+   × matcher v1 — current GCash receiving-notification safety > keeps an exact-looking GCash reference in review because current pushes do not expose it 8ms
+     → expected 'AUTO' to be 'REVIEW' // Object.is equality
+   × matcher v1 — current GCash receiving-notification safety > never lets OCR normalization bypass the disabled flow 1ms
+     → expected 'AUTO' to be 'REVIEW' // Object.is equality
+   × matcher v2 — auto-confirm on single amount + time candidate > single candidate with contradictory ref -> REVIEW 1ms
+     → expected 'AUTO' to be 'REVIEW' // Object.is equality
+   × matcher v1 — never auto-confirm on weak evidence > reference on receipt only (notification has none) -> REVIEW 0ms
+     → expected 'AUTO' to be 'REVIEW' // Object.is equality
+   × matcher v1 — never auto-confirm on weak evidence > cross-provider references never map (GoTyme receipt -> GCash notification) 1ms
+     → expected 'AUTO' not to be 'AUTO' // Object.is equality
+   × matcher v1 — never auto-confirm on weak evidence > user-edited matching-critical field -> REVIEW 1ms
+     → expected 'AUTO' to be 'REVIEW' // Object.is equality
+   × matcher v1 — never auto-confirm on weak evidence > falls back to capture time with a wider window when receipt time is missing/imprecise 0ms
+     → expected 'AUTO' to be 'REVIEW' // Object.is equality
+   × matcher v1 — never auto-confirm on weak evidence > resolves the flow by the receipt rail, not by namespace alone 0ms
+     → expected 'AUTO' to be 'REVIEW' // Object.is equality
+   × matcher v1 — never auto-confirm on weak evidence > never auto-matches when the confirmation did not name a rail 0ms
+     → expected 'AUTO' to be 'REVIEW' // Object.is equality
+   × matcher v1 — never auto-confirm on weak evidence > never auto-matches a cross-provider flow 0ms
+     → expected 'AUTO' to be 'REVIEW' // Object.is equality
+   × matcher v1 — never auto-confirm on weak evidence > notification arrives first, screenshot scanned minutes later — amount-only REVIEW 0ms
+     → expected 'AUTO' to be 'REVIEW' // Object.is equality
+ ✓ src/jobs/csv-escape.spec.ts (4 tests) 2ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 12 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/matching/matcher.spec.ts > matcher v1 — current GCash receiving-notification safety > keeps an exact-looking GCash reference in review because current pushes do not expose it
+AssertionError: expected 'AUTO' to be 'REVIEW' // Object.is equality
+
+Expected: "REVIEW"
+Received: "AUTO"
+
+ ❯ src/matching/matcher.spec.ts:45:20
+     43|   it('keeps an exact-looking GCash reference in review because current…
+     44|     const d = decide(record(), [event()], cfg);
+     45|     expect(d.kind).toBe('REVIEW');
+       |                    ^
+     46|     if (d.kind === 'REVIEW') {
+     47|       expect(d.reasonCodes).toContain('NO_COMPARABLE_NAMESPACE');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/12]⎯
+
+ FAIL  src/matching/matcher.spec.ts > matcher v1 — current GCash receiving-notification safety > never lets OCR normalization bypass the disabled flow
+AssertionError: expected 'AUTO' to be 'REVIEW' // Object.is equality
+
+Expected: "REVIEW"
+Received: "AUTO"
+
+ ❯ src/matching/matcher.spec.ts:54:88
+     52| 
+     53|   it('never lets OCR normalization bypass the disabled flow', () => {
+     54|     expect(decide(record({ referenceValue: '1234 567 890123' }), [even…
+       |                                                                                        ^
+     55|     expect(decide(record({ referenceValue: '12345O7890123' }), [event(…
+     56|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/12]⎯
+
+ FAIL  src/matching/matcher.spec.ts > matcher v2 — auto-confirm on single amount + time candidate > single candidate with contradictory ref -> REVIEW
+AssertionError: expected 'AUTO' to be 'REVIEW' // Object.is equality
+
+Expected: "REVIEW"
+Received: "AUTO"
+
+ ❯ src/matching/matcher.spec.ts:109:20
+    107|   it('single candidate with contradictory ref -> REVIEW', () => {
+    108|     const d = decide(record({ referenceNamespace: 'GCASH_REF_NO', refe…
+    109|     expect(d.kind).toBe('REVIEW');
+       |                    ^
+    110|   });
+    111| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/12]⎯
+
+ FAIL  src/matching/matcher.spec.ts > matcher v1 — never auto-confirm on weak evidence > reference on receipt only (notification has none) -> REVIEW
+AssertionError: expected 'AUTO' to be 'REVIEW' // Object.is equality
+
+Expected: "REVIEW"
+Received: "AUTO"
+
+ ❯ src/matching/matcher.spec.ts:136:20
+    134|   it('reference on receipt only (notification has none) -> REVIEW', ()…
+    135|     const d = decide(record(), [event({ referenceValue: null, referenc…
+    136|     expect(d.kind).toBe('REVIEW');
+       |                    ^
+    137|     if (d.kind === 'REVIEW') expect(d.candidates[0]!.missingFields).to…
+    138|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/12]⎯
+
+ FAIL  src/matching/matcher.spec.ts > matcher v1 — never auto-confirm on weak evidence > cross-provider references never map (GoTyme receipt -> GCash notification)
+AssertionError: expected 'AUTO' not to be 'AUTO' // Object.is equality
+ ❯ src/matching/matcher.spec.ts:143:24
+    141|     // Both sides carry a valid reference in their own namespace; the …
+    142|     const d = decide(record({ referenceNamespace: 'GOTYME_REF_NO', ref…
+    143|     expect(d.kind).not.toBe('AUTO');
+       |                        ^
+    144|     if (d.kind === 'REVIEW') expect(d.reasonCodes).toContain('NO_COMPA…
+    145|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/12]⎯
+
+ FAIL  src/matching/matcher.spec.ts > matcher v1 — never auto-confirm on weak evidence > user-edited matching-critical field -> REVIEW
+AssertionError: expected 'AUTO' to be 'REVIEW' // Object.is equality
+
+Expected: "REVIEW"
+Received: "AUTO"
+
+ ❯ src/matching/matcher.spec.ts:174:86
+    172|     if (d.kind === 'REVIEW') expect(d.reasonCodes).toContain('NO_COMPA…
+    173|     // A non-critical edit still cannot enable an unproven flow.
+    174|     expect(decide(record({ editedFields: ['customerLabel'] }), [event(…
+       |                                                                                      ^
+    175|   });
+    176| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/12]⎯
+
+ FAIL  src/matching/matcher.spec.ts > matcher v1 — never auto-confirm on weak evidence > falls back to capture time with a wider window when receipt time is missing/imprecise
+AssertionError: expected 'AUTO' to be 'REVIEW' // Object.is equality
+
+Expected: "REVIEW"
+Received: "AUTO"
+
+ ❯ src/matching/matcher.spec.ts:188:20
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/12]⎯
+
+ FAIL  src/matching/matcher.spec.ts > matcher v1 — never auto-confirm on weak evidence > resolves the flow by the receipt rail, not by namespace alone
+AssertionError: expected 'AUTO' to be 'REVIEW' // Object.is equality
+
+Expected: "REVIEW"
+Received: "AUTO"
+
+ ❯ src/matching/matcher.spec.ts:197:82
+    195|     // Current GCash receiving pushes do not expose the payer receipt …
+    196|     // so neither rail is eligible for automatic matching.
+    197|     expect(decide(record({ paymentRail: 'EXPRESS_SEND' }), [event()], …
+       |                                                                                  ^
+    198|     expect(decide(record({ paymentRail: 'QR_P2P' }), [event()], cfg).k…
+    199| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/12]⎯
+
+ FAIL  src/matching/matcher.spec.ts > matcher v1 — never auto-confirm on weak evidence > never auto-matches when the confirmation did not name a rail
+AssertionError: expected 'AUTO' to be 'REVIEW' // Object.is equality
+
+Expected: "REVIEW"
+Received: "AUTO"
+
+ ❯ src/matching/matcher.spec.ts:209:20
+    207|   it('never auto-matches when the confirmation did not name a rail', (…
+    208|     const d = decide(record({ paymentRail: null }), [event()], cfg);
+    209|     expect(d.kind).toBe('REVIEW');
+       |                    ^
+    210|   });
+    211| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/12]⎯
+
+ FAIL  src/matching/matcher.spec.ts > matcher v1 — never auto-confirm on weak evidence > never auto-matches a cross-provider flow
+AssertionError: expected 'AUTO' to be 'REVIEW' // Object.is equality
+
+Expected: "REVIEW"
+Received: "AUTO"
+
+ ❯ src/matching/matcher.spec.ts:214:20
+    212|   it('never auto-matches a cross-provider flow', () => {
+    213|     const d = decide(record({ receiptProvider: 'MAYA', paymentRail: 'I…
+    214|     expect(d.kind).toBe('REVIEW');
+       |                    ^
+    215|   });
+    216| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/12]⎯
+
+ FAIL  src/matching/matcher.spec.ts > matcher v1 — never auto-confirm on weak evidence > notification arrives first, screenshot scanned minutes later — amount-only REVIEW
+AssertionError: expected 'AUTO' to be 'REVIEW' // Object.is equality
+
+Expected: "REVIEW"
+Received: "AUTO"
+
+ ❯ src/matching/matcher.spec.ts:236:20
+    234|     );
+    235|     // Receipt time basis: |20 - 300| = 280s < 300s window → REVIEW
+    236|     expect(d.kind).toBe('REVIEW');
+       |                    ^
+    237|     if (d.kind === 'REVIEW') {
+    238|       expect(d.timeBasis).toBe('RECEIPT_TRANSACTION_TIME');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/12]⎯
+
+ FAIL  src/matching/unscoped-matcher.spec.ts > proof-first unscoped matching > offers a nearby GCash notification without auto-confirming it
+AssertionError: expected 'AUTO' to be 'REVIEW' // Object.is equality
+
+Expected: "REVIEW"
+Received: "AUTO"
+
+ ❯ src/matching/unscoped-matcher.spec.ts:37:27
+     35|       },
+     36|     }], config);
+ Test Files  2 failed | 1 passed (3)
+     37|     expect(decision.kind).toBe('REVIEW');
+       |                           ^
+      Tests  12 failed | 21 passed (33)
+     38|     if (decision.kind === 'REVIEW') expect(decision.candidates[0]?.eve…
+   Start at  21:47:51
+     39|   });
+   Duration  5.75s (transform 1.37s, setup 0ms, collect 6.73s, tests 29ms, environment 0ms, prepare 966ms)
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/12]⎯
+
+C:\Users\Danrave\Desktop\Project\pay_record\apps\api:
+[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @paytsek/api@0.1.0 test: `vitest run`
+Exit status 1

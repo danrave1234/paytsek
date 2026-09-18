@@ -260,6 +260,11 @@ export async function syncDraft(draft: Draft): Promise<SyncStatus> {
       // Persist the proofId but keep the UPLOADING claim until this attempt ends.
       await update(draft.clientRecordId, { proofId }, true);
     }
+    // Flush pending notifications from the native outbox so the server has
+    // them before we create the record, enabling instant inline matching.
+    if (PaymentCollector.isSupported()) {
+      try { await PaymentCollector.flushNow(); } catch { /* Non-critical. */ }
+    }
     const res = await api<CreateRecordResponse>('/v1/records', { method: 'POST', body: { ...draft.request, proofId } });
     await update(draft.clientRecordId, { syncStatus: 'SYNCED', serverRecordId: res.record.id, quotaBlocked: false });
     return 'SYNCED';

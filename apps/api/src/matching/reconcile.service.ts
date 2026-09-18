@@ -42,6 +42,7 @@ interface EventRow {
   provider: Provider;
   payment_rail: CandidateEvent['paymentRail'];
   linked_record_id: string | null;
+  source_id: string | null;
 }
 
 /** States that reconciliation may move between. Anything else needs an explicit human action. */
@@ -107,6 +108,22 @@ export class ReconcileService {
             [rec.organization_id, rec.id, decision.eventId, decision.reasonCodes, decision.supportingFields, decision.missingFields, decision.timeBasis, decision.windowSeconds, decision.deltaSeconds, decision.flowId, MATCHER_VERSION],
           );
           await c.query('RELEASE SAVEPOINT claim');
+
+          // Adopt the matched event's source onto the record if not already set.
+          const matchedEvent = events.find((e) => e.id === decision.eventId);
+          if (matchedEvent?.source_id && !rec.source_id) {
+            await c.query(
+              `update payment_records set source_id = $2 where id = $1`,
+              [rec.id, matchedEvent.source_id],
+            );
+          }
+
+          // Prevent the matched event from being purged while the match is active.
+          await c.query(
+            `update notification_events set purge_after = now() + interval '90 days' where id = $1`,
+            [decision.eventId],
+          );
+
           next = 'MATCHED_AUTO';
           await this.audit.record(
             { organizationId: rec.organization_id, action: 'MATCH_AUTO', subjectType: 'payment_record', subjectId: rec.id, after: { eventId: decision.eventId, reasonCodes: decision.reasonCodes, flowId: decision.flowId, deltaSeconds: decision.deltaSeconds, matcherVersion: MATCHER_VERSION } },
@@ -206,7 +223,7 @@ export class ReconcileService {
   private async loadCandidateEvents(q: Queryable, rec: RecordRow): Promise<EventRow[]> {
     const r = await q.query<EventRow>(
       `select e.id, e.currency, e.amount_centavos, e.reference_namespace, e.reference_value, e.provider_described_at, e.notification_when_at, e.posted_at,
-              e.payer_masked_name, e.payer_masked_phone, e.provider, e.payment_rail,
+              e.payer_masked_name, e.payer_masked_phone, e.provider, e.payment_rail, e.source_id,
               (select pm.record_id from payment_matches pm where pm.event_id = e.id and pm.active and pm.record_id <> $1 limit 1) as linked_record_id
          from notification_events e
         where e.organization_id = $2 and ($3::uuid is null or e.source_id = $3)
@@ -219,7 +236,7 @@ export class ReconcileService {
     if (rec.reference_value && rec.reference_namespace) {
       const extra = await q.query<EventRow>(
         `select e.id, e.currency, e.amount_centavos, e.reference_namespace, e.reference_value, e.provider_described_at, e.notification_when_at, e.posted_at,
-                e.payer_masked_name, e.payer_masked_phone, e.provider, e.payment_rail,
+                e.payer_masked_name, e.payer_masked_phone, e.provider, e.payment_rail, e.source_id,
                 (select pm.record_id from payment_matches pm where pm.event_id = e.id and pm.active and pm.record_id <> $1 limit 1) as linked_record_id
            from notification_events e
           where e.organization_id = $2 and ($3::uuid is null or e.source_id = $3)
