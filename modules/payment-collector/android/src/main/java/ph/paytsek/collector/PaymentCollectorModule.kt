@@ -211,12 +211,14 @@ class PaymentCollectorModule : Module() {
     }
 
     /**
-     * Returns pending (unacknowledged) notification events for local matching.
-     * Only matching-relevant fields are exposed; raw notification text and
-     * unmasked payer data are never included.
+     * Returns pending and recently acknowledged notification events for local
+     * matching. Includes events uploaded within the last 3 days so the local
+     * cache retains events already ingested by the server. Only matching-relevant
+     * fields are exposed; raw notification text and unmasked payer data are
+     * never included.
      */
     AsyncFunction("getPendingNotifications") {
-      val items = outbox.pending(limit = 200)
+      val items = outbox.recent(limit = 200, recentDays = 3)
       val out = java.util.ArrayList<Map<String, Any>>()
       for (item in items) {
         try {

@@ -122,6 +122,7 @@ export type MatchKind = z.infer<typeof MatchKind>;
 export const MatchReasonCode = z.enum([
   'EXACT_REFERENCE_AND_AMOUNT',
   'DELAYED_EXACT_REFERENCE',
+  'AMOUNT_AND_TIME',
   'USER_SELECTED_CANDIDATE',
   'OWNER_CONFIRMED_IN_WALLET',
   'AMOUNT_ONLY_CANDIDATES',

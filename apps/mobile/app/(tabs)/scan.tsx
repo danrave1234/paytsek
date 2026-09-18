@@ -325,7 +325,7 @@ export default function Scan() {
         {duplicateWarning ? <Notice kind="warning">{duplicateWarning}</Notice> : null}
         {localMatch ? (
           <Notice kind="info">
-            Possible match: {localMatch.provider} notification for {peso(localMatch.amountCentavos)} ({localMatch.deltaSeconds}s ago)
+            Matched: {localMatch.provider} notification for {peso(localMatch.amountCentavos)} ({localMatch.deltaSeconds}s ago). This will be linked automatically.
           </Notice>
         ) : null}
         {error ? <Notice kind="error">{error}</Notice> : null}

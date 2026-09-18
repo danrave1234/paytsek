@@ -61,3 +61,13 @@ export async function restoreCollectorFilters(): Promise<void> {
 export async function reportHealth(): Promise<boolean> {
   return PaymentCollector.reportHealth();
 }
+
+/** Flush pending notifications from the native outbox to the server. */
+export async function flushCollectorOutbox(): Promise<void> {
+  if (!PaymentCollector.isSupported()) return;
+  try {
+    await PaymentCollector.flushNow();
+  } catch {
+    // Non-critical: upload will retry via WorkManager.
+  }
+}

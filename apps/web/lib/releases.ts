@@ -15,6 +15,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.2.9',
+    date: '2026-09-18',
+    channel: 'beta',
+    highlights: [
+      'Payment records now automatically connect to a wallet notification when the amount and time match, instead of requiring a manual tap. Multiple candidates still need your choice.',
+      'The receiving wallet source is now adopted onto the record when a match is found, so the record shows which wallet received the payment.',
+    ],
+    notes: 'PayTsek remains a free public beta. Notification matching is supplementary evidence, not confirmation from a wallet provider.',
+  },
+  {
     version: '0.2.8',
     date: '2026-09-16',
     channel: 'beta',
