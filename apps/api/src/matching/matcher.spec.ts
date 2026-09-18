@@ -61,21 +61,32 @@ describe('matcher v1 — current GCash receiving-notification safety', () => {
   });
 });
 
-describe('matcher v1 — never auto-confirm on weak evidence', () => {
-  it('same amount + time only (single candidate) -> REVIEW, never AUTO', () => {
+describe('matcher v2 — auto-confirm on single amount + time candidate', () => {
+  it('same amount + time only (single candidate) -> AUTO with AMOUNT_AND_TIME', () => {
     const d = decide(record({ referenceValue: null, referenceNamespace: null }), [event({ referenceValue: null, referenceNamespace: 'UNKNOWN' })], cfg);
-    expect(d.kind).toBe('REVIEW');
-    if (d.kind === 'REVIEW') {
-      expect(d.reasonCodes).toContain('AMOUNT_ONLY_CANDIDATES');
-      expect(d.candidates).toHaveLength(1);
-      expect(d.candidates[0]!.blockers).toContain('AMOUNT_ONLY_CANDIDATES');
+    expect(d.kind).toBe('AUTO');
+    if (d.kind === 'AUTO') {
+      expect(d.reasonCodes).toContain('AMOUNT_AND_TIME');
+      expect(d.eventId).toBe('ev-1');
     }
   });
 
-  it('reference on receipt only (notification has none) -> REVIEW', () => {
-    const d = decide(record(), [event({ referenceValue: null, referenceNamespace: 'UNKNOWN' })], cfg);
-    expect(d.kind).toBe('REVIEW');
-    if (d.kind === 'REVIEW') expect(d.candidates[0]!.missingFields).toContain('notification.reference');
+  it('single candidate with receipt time -> AUTO', () => {
+    const d = decide(record({ referenceValue: null, referenceNamespace: null }), [event({ referenceValue: null, referenceNamespace: 'UNKNOWN', eventAt: plus(30) })], cfg);
+    expect(d.kind).toBe('AUTO');
+    if (d.kind === 'AUTO') {
+      expect(d.reasonCodes).toContain('AMOUNT_AND_TIME');
+      expect(d.deltaSeconds).toBe(30);
+    }
+  });
+
+  it('single candidate with capture time fallback -> AUTO', () => {
+    const d = decide(record({ referenceValue: null, referenceNamespace: null, receiptTransactionAt: null }), [event({ referenceValue: null, referenceNamespace: 'UNKNOWN', eventAt: plus(600) })], cfg);
+    expect(d.kind).toBe('AUTO');
+    if (d.kind === 'AUTO') {
+      expect(d.reasonCodes).toContain('AMOUNT_AND_TIME');
+      expect(d.timeBasis).toBe('CAPTURE_TIME');
+    }
   });
 
   it('three same-amount payments -> distinct candidates, no arbitrary assignment', () => {
@@ -86,6 +97,44 @@ describe('matcher v1 — never auto-confirm on weak evidence', () => {
       expect(d.candidates.map((c) => c.event.id)).toEqual(['a', 'c', 'b']); // sorted by |delta|
       expect(d.reasonCodes).toContain('MULTIPLE_CANDIDATES');
     }
+  });
+
+  it('single candidate outside window -> NONE', () => {
+    const d = decide(record({ referenceValue: null, referenceNamespace: null }), [event({ referenceValue: null, referenceNamespace: 'UNKNOWN', eventAt: plus(600) })], cfg);
+    expect(d.kind).toBe('NONE');
+  });
+
+  it('single candidate with contradictory ref -> REVIEW', () => {
+    const d = decide(record({ referenceNamespace: 'GCASH_REF_NO', referenceValue: '1111111111111' }), [event({ referenceNamespace: 'GCASH_REF_NO', referenceValue: '2222222222222' })], cfg);
+    expect(d.kind).toBe('REVIEW');
+  });
+
+  it('single candidate already linked -> REVIEW', () => {
+    const d = decide(record({ referenceValue: null, referenceNamespace: null }), [event({ referenceValue: null, referenceNamespace: 'UNKNOWN', linkedToOtherRecord: true })], cfg);
+    expect(d.kind).toBe('REVIEW');
+  });
+
+  it('single candidate with edited fields -> REVIEW', () => {
+    const d = decide(record({ referenceValue: null, referenceNamespace: null, editedFields: ['amountCentavos'] }), [event({ referenceValue: null, referenceNamespace: 'UNKNOWN' })], cfg);
+    expect(d.kind).toBe('REVIEW');
+  });
+
+  it('single candidate requires owner approval -> REVIEW', () => {
+    const d = decide(record({ referenceValue: null, referenceNamespace: null, requiresOwnerApproval: true }), [event({ referenceValue: null, referenceNamespace: 'UNKNOWN' })], cfg);
+    expect(d.kind).toBe('REVIEW');
+  });
+
+  it('single candidate with failed receipt -> REVIEW', () => {
+    const d = decide(record({ referenceValue: null, referenceNamespace: null, receiptStatus: 'FAILED' }), [event({ referenceValue: null, referenceNamespace: 'UNKNOWN' })], cfg);
+    expect(d.kind).toBe('REVIEW');
+  });
+});
+
+describe('matcher v1 — never auto-confirm on weak evidence', () => {
+  it('reference on receipt only (notification has none) -> REVIEW', () => {
+    const d = decide(record(), [event({ referenceValue: null, referenceNamespace: 'UNKNOWN' })], cfg);
+    expect(d.kind).toBe('REVIEW');
+    if (d.kind === 'REVIEW') expect(d.candidates[0]!.missingFields).toContain('notification.reference');
   });
 
   it('cross-provider references never map (GoTyme receipt -> GCash notification)', () => {
@@ -136,8 +185,8 @@ describe('matcher v1 — never auto-confirm on weak evidence', () => {
 
   it('falls back to capture time with a wider window when receipt time is missing/imprecise', () => {
     const d = decide(record({ receiptTransactionAt: null, receiptTransactionPrecision: 'UNKNOWN', referenceValue: null, referenceNamespace: null }), [event({ referenceValue: null, referenceNamespace: 'UNKNOWN', eventAt: plus(60 + 600) })], cfg);
-    expect(d.kind).toBe('REVIEW');
-    if (d.kind === 'REVIEW') expect(d.timeBasis).toBe('CAPTURE_TIME');
+    expect(d.kind).toBe('AUTO');
+    if (d.kind === 'AUTO') expect(d.timeBasis).toBe('CAPTURE_TIME');
     const far = decide(record({ receiptTransactionAt: null, receiptTransactionPrecision: 'DAY', referenceValue: null, referenceNamespace: null }), [event({ referenceValue: null, referenceNamespace: 'UNKNOWN', eventAt: plus(60 + 2000) })], cfg);
     expect(far.kind).toBe('NONE');
   });
@@ -169,7 +218,7 @@ describe('matcher v1 — never auto-confirm on weak evidence', () => {
     expect(decide(record(), [], cfg).kind).toBe('NONE');
   });
 
-  it('notification arrives first, screenshot scanned minutes later — amount-only REVIEW', () => {
+  it('notification arrives first, screenshot scanned minutes later — amount-only AUTO', () => {
     // Notification posted at T0+20s, screenshot captured at T0+300s (5 min later)
     // Receipt time is trustworthy (OCR read it), event is within the 5-min receipt window.
     const d = decide(
@@ -183,12 +232,11 @@ describe('matcher v1 — never auto-confirm on weak evidence', () => {
       [event({ referenceValue: null, referenceNamespace: 'UNKNOWN', eventAt: plus(20) })],
       cfg,
     );
-    // Receipt time basis: |20 - 300| = 280s < 300s window → REVIEW
-    expect(d.kind).toBe('REVIEW');
-    if (d.kind === 'REVIEW') {
+    // Receipt time basis: |20 - 300| = 280s < 300s window → AUTO (single candidate)
+    expect(d.kind).toBe('AUTO');
+    if (d.kind === 'AUTO') {
       expect(d.timeBasis).toBe('RECEIPT_TRANSACTION_TIME');
-      expect(d.candidates).toHaveLength(1);
-      expect(d.candidates[0]!.event.id).toBe('ev-1');
+      expect(d.eventId).toBe('ev-1');
     }
 
     // If receipt time is untrustworthy, capture time fallback applies:
@@ -203,12 +251,11 @@ describe('matcher v1 — never auto-confirm on weak evidence', () => {
       [event({ referenceValue: null, referenceNamespace: 'UNKNOWN', eventAt: plus(20) })],
       cfg,
     );
-    // Capture time basis: |20 - 300| = 280s < 900s window → REVIEW
-    expect(d2.kind).toBe('REVIEW');
-    if (d2.kind === 'REVIEW') {
+    // Capture time basis: |20 - 300| = 280s < 900s window → AUTO
+    expect(d2.kind).toBe('AUTO');
+    if (d2.kind === 'AUTO') {
       expect(d2.timeBasis).toBe('CAPTURE_TIME');
-      expect(d2.candidates).toHaveLength(1);
-      expect(d2.candidates[0]!.event.id).toBe('ev-1');
+      expect(d2.eventId).toBe('ev-1');
     }
 
     // Far outside both windows → NONE

@@ -3,18 +3,21 @@ import { MATCHING_CRITICAL_FIELDS } from '@paytsek/contracts';
 import { autoMatchFlow, normalizeReference, referencesEqual } from '@paytsek/receipt-parsers';
 
 /**
- * Matching policy v1 — correctness before automatic coverage.
+ * Matching policy v2 — correctness before automatic coverage.
  *
  * Automatic match requires ALL of:
  *   - same receiving source (guaranteed by the caller's query scope),
  *   - exact currency and amount received,
- *   - a reference on BOTH sides whose namespaces are registered as comparable
- *     for the receiving provider, with equal normalized values,
- *   - exactly one such event, not already linked to another record,
+ *   - exactly one candidate event within the time window,
+ *   - no contradictory reference data (unequal comparable refs),
+ *   - event not already linked to another record,
  *   - receipt status not FAILED/PENDING,
  *   - no matching-critical field edited by a user (edits go to review),
  *   - no owner-approval requirement for staff-created records.
- * Amount + time alone NEVER auto-confirms, even with a single candidate.
+ *
+ * An exact reference match is the strongest signal, but a single
+ * amount+time candidate is enough for AUTO when no other candidate
+ * competes. Multiple candidates always go to review.
  */
 export const MATCHER_VERSION = 'v1';
 
@@ -143,7 +146,7 @@ export function decide(record: MatchRecordInput, events: MatchEventInput[], cfg:
   const sameAmount = events.filter((e) => e.currency === record.currency && e.amountCentavos === record.amountCentavos);
   const assessed = sameAmount.map((e) => assessCandidate(record, e, at));
 
-  // Exact-ID rule.
+  // Exact-ID rule: strongest signal, auto if single and safe.
   const exact = assessed.filter((a) => a.supportingFields.includes('reference') && !a.event.linkedToOtherRecord);
   const receiptOk = record.receiptStatus !== 'FAILED' && record.receiptStatus !== 'PENDING';
   const edited = editedMatchingCriticalField(record.editedFields);
@@ -172,6 +175,36 @@ export function decide(record: MatchRecordInput, events: MatchEventInput[], cfg:
   inWindow.sort((x, y) => Math.abs(x.deltaSeconds ?? 0) - Math.abs(y.deltaSeconds ?? 0));
 
   if (inWindow.length === 0) return { kind: 'NONE', timeBasis: basis, windowSeconds: window };
+
+  // Single amount+time candidate: auto-match when safe.
+  // Still block on contradictory refs, incomparable namespaces, edited fields,
+  // owner approval, linked event, or when the record carries a reference
+  // that the notification cannot satisfy.
+  if (inWindow.length === 1 && receiptOk && !edited && !record.requiresOwnerApproval) {
+    const a = inWindow[0]!;
+    // Block if the candidate has blockers that prevent auto-match
+    if (
+      !a.event.linkedToOtherRecord &&
+      !a.blockers.includes('CONTRADICTORY_DATA') &&
+      !a.blockers.includes('NO_COMPARABLE_NAMESPACE') &&
+      // If the record has a reference, require the notification to have one too
+      (record.referenceNamespace === null || !a.blockers.includes('AMOUNT_ONLY_CANDIDATES'))
+    ) {
+      return {
+        kind: 'AUTO',
+        eventId: a.event.id,
+        flowId: 'amount_time',
+        reasonCodes: a.supportingFields.includes('reference')
+          ? ['EXACT_REFERENCE_AND_AMOUNT']
+          : ['AMOUNT_AND_TIME'],
+        supportingFields: a.supportingFields,
+        missingFields: a.missingFields,
+        timeBasis: basis,
+        windowSeconds: window,
+        deltaSeconds: a.deltaSeconds,
+      };
+    }
+  }
 
   const reasons = new Set<MatchReasonCode>();
   if (exact.length > 1) reasons.add('MULTIPLE_CANDIDATES');

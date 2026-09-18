@@ -96,6 +96,37 @@ class OutboxDb private constructor(context: Context) : SQLiteOpenHelper(context,
 
   fun pendingCount(): Int = readableDatabase.rawQuery("select count(*) from outbox where acknowledged = 0", null).use { it.moveToFirst(); it.getInt(0) }
 
+  /**
+   * Returns pending (unacknowledged) rows plus recently acknowledged rows
+   * (within [recentDays] days) so the local cache retains events that were
+   * already uploaded but not yet matched by the server.
+   */
+  fun recent(limit: Int = 200, recentDays: Int = 3): List<Item> {
+    val out = mutableListOf<Item>()
+    readableDatabase.rawQuery(
+      """select client_event_id, lifecycle_dedup_key, payload_enc, posted_at, attempts, acknowledged, outcome
+          from outbox
+          where acknowledged = 0
+             or (acknowledged = 1 and acked_at >= ?)
+          order by posted_at desc
+          limit ?""",
+      arrayOf(Iso.daysAgo(recentDays.toLong()), limit.toString()),
+    ).use { c ->
+      while (c.moveToNext()) {
+        out += Item(
+          clientEventId = c.getString(0),
+          lifecycleDedupKey = c.getString(1),
+          payloadJson = ColumnCrypto.decrypt(c.getString(2)),
+          postedAt = c.getString(3),
+          attempts = c.getInt(4),
+          acknowledged = c.getInt(5) == 1,
+          outcome = c.getString(6),
+        )
+      }
+    }
+    return out
+  }
+
   fun markAcknowledged(clientEventId: String, outcome: String) {
     writableDatabase.execSQL(
       "update outbox set acknowledged = 1, outcome = ?, acked_at = ? where client_event_id = ?",

@@ -6,13 +6,22 @@ type ProviderEvent = { provider: Provider; event: MatchEventInput };
 
 /**
  * Evaluate a proof captured before a receiving wallet was known. Candidates
- * may come from any listener in the workspace, but source ambiguity forces a
- * human choice and therefore can never return AUTO.
+ * may come from any listener in the workspace. When exactly one provider has
+ * exactly one safe candidate, auto-match is allowed. Multiple providers or
+ * multiple candidates force a human choice.
  */
 export function decideUnscoped(record: UnscopedRecord, events: ProviderEvent[], config: MatcherConfig): MatchDecision {
   const groups = new Map<Provider, MatchEventInput[]>();
   for (const item of events) groups.set(item.provider, [...(groups.get(item.provider) ?? []), item.event]);
 
+  // If exactly one provider has candidates, let the scoped matcher decide
+  // without the owner-approval gate, so a single safe candidate can AUTO.
+  if (groups.size === 1) {
+    const [receivingProvider, providerEvents] = groups.entries().next().value!;
+    return decide({ ...record, receivingProvider }, providerEvents, config);
+  }
+
+  // Multiple providers: force review so a human picks the right source.
   const candidates: CandidateAssessment[] = [];
   const reasons = new Set<MatchReasonCode>();
   let timeBasis: Extract<MatchDecision, { kind: 'NONE' }>['timeBasis'] = 'NONE';
