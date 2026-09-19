@@ -139,8 +139,12 @@ class PaymentCollectorModule : Module() {
 
     AsyncFunction("flushNow") {
       val attempted = outbox.pendingCount()
+      // Run the upload loop inline so the server has notifications before
+      // the record is created, enabling instant inline matching.
+      val acknowledged = UploadRunner.uploadPending(context, waitForAcks = true)
+      // Also enqueue WorkManager as a backup for any remaining pending rows.
       UploadWorker.enqueue(context, expedited = true)
-      mapOf("attempted" to attempted, "acknowledged" to 0)
+      mapOf("attempted" to attempted, "acknowledged" to acknowledged)
     }
 
     /** Content-free heartbeat to /v1/collector/health using the natively stored credential. */
