@@ -1,3 +1,12 @@
+## PayTsek V2 beta — 0.2.10
+
+- Auto-matching now works for real wallet notifications even when the receipt has a reference number the notification does not. A single clear amount and time match is linked automatically.
+- Proof uploads are more reliable — brief retries handle storage delays so scans no longer fail to sync immediately.
+- Multiple candidates still need your choice. Contradictory data or edited records stay in review.
+
+Wallet detection and notification matching are supporting evidence, not confirmation from a bank or wallet provider.
+
+
 ## PayTsek V2 beta — 0.2.9
 
 - Payment records now automatically connect to a wallet notification when the amount and time match, instead of requiring a manual tap. Multiple candidates still need your choice.
