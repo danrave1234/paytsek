@@ -8,6 +8,7 @@ import type {
   MemberSummary,
   OwnerInboxEvent,
   RecordDetail,
+  RecordSummary,
   SourceSummary,
   WorkspaceSummary,
 } from '@paytsek/contracts';
@@ -137,6 +138,49 @@ export function useInvalidateRecord() {
       void qc.invalidateQueries({ queryKey: keys.candidates(id) });
     }
   };
+}
+
+/**
+ * Optimistically insert a newly synced record into the home cache so the
+ * Today feed never goes blank while the server refetch catches up.
+ * This runs before pruning the local draft.
+ */
+export function applySyncedRecord(record: RecordSummary): void {
+  const current = queryClient.getQueryData<HomeSummary>(keys.home);
+  if (!current) return;
+  // Avoid double-inserting if the record is already in the cache.
+  if (current.recentRecords.some((r) => r.id === record.id)) return;
+  const cents = record.amountCentavos;
+  const today = current.today;
+  // Map evidence state to the corresponding today counters.
+  const state = record.evidenceState;
+  let countKey: string | null = null;
+  let centKey: string | null = null;
+  if (state === 'MATCHED_AUTO' || state === 'MATCHED_BY_USER') {
+    countKey = 'notificationMatchedCount';
+    centKey = 'notificationMatchedCentavos';
+  } else if (state === 'CONFIRMED_MANUALLY') {
+    countKey = 'confirmedManuallyCount';
+    centKey = 'confirmedManuallyCentavos';
+  } else if (state === 'REVIEW_REQUIRED') {
+    countKey = 'reviewRequiredCount';
+    centKey = null; // review has no separate centavos bucket
+  } else if (state === 'UNVERIFIED') {
+    countKey = 'unverifiedCount';
+    centKey = 'unverifiedCentavos';
+  }
+  const updated: HomeSummary = {
+    ...current,
+    recentRecords: [record, ...current.recentRecords].slice(0, 6),
+    today: {
+      ...today,
+      recordedCount: today.recordedCount + 1,
+      recordedCentavos: today.recordedCentavos + cents,
+      ...(countKey ? { [countKey]: (today as any)[countKey] + 1 } : {}),
+      ...(centKey ? { [centKey]: (today as any)[centKey] + cents } : {}),
+    },
+  };
+  queryClient.setQueryData(keys.home, updated);
 }
 
 export function useConfirmCandidate(recordId: string) {

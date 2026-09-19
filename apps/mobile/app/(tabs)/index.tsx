@@ -146,7 +146,8 @@ export default function Today() {
     if (!today) return null;
     const evidence: Array<{ label: string; count: number; cents: number }> = [
       { label: 'Recorded', count: today.unverifiedCount, cents: today.unverifiedCentavos },
-      { label: 'Possible match', count: today.notificationMatchedCount, cents: today.notificationMatchedCentavos },
+      { label: 'Possible match', count: today.reviewRequiredCount, cents: 0 },
+      { label: 'Strong match', count: today.notificationMatchedCount, cents: today.notificationMatchedCentavos },
       { label: 'Owner confirmed', count: today.confirmedManuallyCount, cents: today.confirmedManuallyCentavos },
     ];
     return { evidence, totalCents: totalCentavos, totalCount: recordCount };

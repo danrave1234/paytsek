@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { CandidateEvent, CandidatesResponse, EvidenceState, PaymentRail, Provider, ReferenceNamespace, TimePrecision } from '@paytsek/contracts';
 import { loadEnv } from '../config/env';
 import { AuditService } from '../db/audit.service';
-import { DbService, isUniqueViolation, type Queryable } from '../db/db.service';
+import { DbService, isMatchInsertFailure, isUniqueViolation, type Queryable } from '../db/db.service';
 import { JobsService } from '../jobs/jobs.service';
 import { MATCHER_VERSION, decide, type MatchDecision, type MatchEventInput, type MatchRecordInput, type MatcherConfig } from './matcher';
 import { decideUnscoped } from './unscoped-matcher';
@@ -79,22 +79,22 @@ export class ReconcileService {
    */
   async claimPreferredClientEvent(recordId: string, clientEventId: string): Promise<boolean> {
     return this.db.tx(async (c) => {
-      // Find the ingested event by client_event_id
+      // Load and lock the record first to know the organization
+      const rec = await this.loadRecord(c, recordId, true);
+      if (!rec || !OPEN_STATES.includes(rec.evidence_state)) return false;
+
+      // Find the ingested event by client_event_id, scoped to the same organization
       const ev = await c.query<{ id: string; currency: string; amount_centavos: string; source_id: string | null; linked_record_id: string | null }>(
         `select e.id, e.currency, e.amount_centavos, e.source_id,
                 (select pm.record_id from payment_matches pm where pm.event_id = e.id and pm.active and pm.record_id <> $2 limit 1) as linked_record_id
            from notification_events e
-          where e.client_event_id = $1 and e.purged_at is null
+          where e.client_event_id = $1 and e.organization_id = $3 and e.purged_at is null
           limit 1`,
-        [clientEventId, recordId],
+        [clientEventId, recordId, rec.organization_id],
       );
       if (ev.rows.length === 0) return false;
 
       const event = ev.rows[0]!;
-
-      // Load and lock the record
-      const rec = await this.loadRecord(c, recordId, true);
-      if (!rec || !OPEN_STATES.includes(rec.evidence_state)) return false;
 
       // Guard: amount must match
       if (event.amount_centavos !== rec.amount_centavos || event.currency !== rec.currency) return false;
@@ -117,7 +117,7 @@ export class ReconcileService {
         );
         await c.query('RELEASE SAVEPOINT claim');
       } catch (e) {
-        if (!isUniqueViolation(e)) throw e;
+        if (!isMatchInsertFailure(e)) throw e;
         await c.query('ROLLBACK TO SAVEPOINT claim');
         return false;
       }
@@ -200,7 +200,7 @@ export class ReconcileService {
             c,
           );
         } catch (e) {
-          if (!isUniqueViolation(e)) throw e;
+          if (!isMatchInsertFailure(e)) throw e;
           // Lost the race: the event (or this record) was claimed concurrently. Fall back to review.
           await c.query('ROLLBACK TO SAVEPOINT claim');
           next = 'REVIEW_REQUIRED';
