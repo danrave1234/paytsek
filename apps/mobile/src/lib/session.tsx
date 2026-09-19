@@ -53,10 +53,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
     const client = supabase();
     void client.auth.getSession()
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         setSession(data.session);
+        if (data.session) {
+          // Wait for workspaces to load before marking ready so the Gate
+          // does not flash the workspaces/setup screen for a signed-in user
+          // who already has a saved workspace.
+          await refreshWorkspaces();
+        }
         setReady(true);
-        if (data.session) void refreshWorkspaces();
       })
       .catch(() => setReady(true));
     const { data: sub } = client.auth.onAuthStateChange((_e, s) => {

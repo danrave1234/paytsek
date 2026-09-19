@@ -181,13 +181,17 @@ export class RecordsService {
   async detail(orgId: string, id: string): Promise<RecordDetail> {
     // Self-heal: if the record is still open and evidence may have changed
     // (e.g. a notification arrived after the record was created), reconcile
-    // again so the user sees the current candidate state.
-    const pre = await this.db.one<{ evidence_state: string }>(
-      `select evidence_state from payment_records where organization_id = $1 and id = $2`,
+    // again so the user sees the current candidate state. Throttle to ~20s
+    // so 15s visibility polls don't thrash the reconcile path.
+    const pre = await this.db.one<{ evidence_state: string; last_reconciled_at: Date | null }>(
+      `select evidence_state, last_reconciled_at from payment_records where organization_id = $1 and id = $2`,
       [orgId, id],
     );
     if (pre && (pre.evidence_state === 'UNVERIFIED' || pre.evidence_state === 'REVIEW_REQUIRED')) {
-      try { await this.reconcile.reconcileRecord(id); } catch { /* next drain retries */ }
+      const sinceLastReconcile = pre.last_reconciled_at ? Date.now() - pre.last_reconciled_at.getTime() : Infinity;
+      if (pre.last_reconciled_at === null || sinceLastReconcile > 20_000) {
+        try { await this.reconcile.reconcileRecord(id); } catch { /* next drain retries */ }
+      }
     }
     const row = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.organization_id = $1 and r.id = $2`, [orgId, id]);
     if (!row) throw new ApiException('RECORD_NOT_FOUND', 'Record not found');
@@ -270,5 +274,11 @@ export class RecordsService {
 }
 
 function computeEdited(extracted: Record<string, unknown>, corrected: Record<string, unknown>): string[] {
-  return Object.keys(corrected).filter((k) => JSON.stringify(corrected[k] ?? null) !== JSON.stringify(extracted[k] ?? null));
+  return Object.keys(corrected).filter((k) => {
+    // The server always stores currency as 'PHP'. If the client sends null
+    // (or omits it) and the corrected value is also null, that's just the
+    // client filling in the default, not a real edit.
+    if (k === 'currency' && (corrected[k] ?? null) === (extracted[k] ?? null)) return false;
+    return JSON.stringify(corrected[k] ?? null) !== JSON.stringify(extracted[k] ?? null);
+  });
 }

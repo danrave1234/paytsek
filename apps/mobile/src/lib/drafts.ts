@@ -1,4 +1,4 @@
-import type { CreateRecordRequest, CreateRecordResponse, InitProofUploadResponse, SyncStatus } from '@paytsek/contracts';
+import type { CreateRecordRequest, CreateRecordResponse, InitProofUploadResponse, RecordSummary, SyncStatus } from '@paytsek/contracts';
 import { LOCAL_DRAFT_CAP } from '@paytsek/contracts';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
@@ -233,14 +233,14 @@ async function claimForUpload(id: string): Promise<boolean> {
   return result.changes === 1;
 }
 
-/** Sync one draft. Returns the resulting sync status. Safe to call repeatedly. */
-export async function syncDraft(draft: Draft): Promise<SyncStatus> {
+/** Sync one draft. Returns the resulting sync status and the server record (if synced). Safe to call repeatedly. */
+export async function syncDraft(draft: Draft): Promise<{ status: SyncStatus; record?: RecordSummary | undefined }> {
   let proofId = draft.proofId;
   // Only one attempt may own the upload pipeline at a time; a concurrent call
   // returns the current status instead of double-running init/PUT/create.
   if (!(await claimForUpload(draft.clientRecordId))) {
     const current = await getDraft(draft.workspaceId, draft.clientRecordId);
-    return current?.syncStatus ?? draft.syncStatus;
+    return { status: current?.syncStatus ?? draft.syncStatus };
   }
   try {
     if (draft.imageUri && !proofId) {
@@ -255,7 +255,23 @@ export async function syncDraft(draft: Draft): Promise<SyncStatus> {
       if (!init.alreadyStored && init.uploadUrl) {
         const put = await fetch(init.uploadUrl, { method: 'PUT', headers: { 'Content-Type': draft.contentType, ...init.uploadHeaders }, body: bytes });
         if (!put.ok) throw new Error(`Image upload failed (${put.status})`);
-        await api('/v1/proofs/finalize', { method: 'POST', body: { proofId } });
+        // Finalize may fail due to Supabase storage eventual consistency;
+        // retry a few times before giving up.
+        let finalizeOk = false;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            await api('/v1/proofs/finalize', { method: 'POST', body: { proofId } });
+            finalizeOk = true;
+            break;
+          } catch (finalizeErr) {
+            if (attempt < 2) {
+              await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
+            } else {
+              throw finalizeErr;
+            }
+          }
+        }
+        if (!finalizeOk) throw new Error('Proof finalize failed after retries');
       }
       // Persist the proofId but keep the UPLOADING claim until this attempt ends.
       await update(draft.clientRecordId, { proofId }, true);
@@ -267,33 +283,46 @@ export async function syncDraft(draft: Draft): Promise<SyncStatus> {
     }
     const res = await api<CreateRecordResponse>('/v1/records', { method: 'POST', body: { ...draft.request, proofId } });
     await update(draft.clientRecordId, { syncStatus: 'SYNCED', serverRecordId: res.record.id, quotaBlocked: false });
-    return 'SYNCED';
+    return { status: 'SYNCED', record: res.record };
   } catch (e) {
     if (e instanceof ApiError && e.code === 'QUOTA_EXHAUSTED') {
       await update(draft.clientRecordId, { syncStatus: 'LOCAL_DRAFT', quotaBlocked: true, lastError: e.message });
-      return 'LOCAL_DRAFT';
+      return { status: 'LOCAL_DRAFT' };
     }
     if (e instanceof OfflineError) {
       // Use the freshest proofId: the image may have uploaded successfully in
       // this very attempt before the record call went offline.
-      await update(draft.clientRecordId, { syncStatus: proofId ? 'PARTIAL_UPLOAD' : 'LOCAL_DRAFT', lastError: e.message }, true);
-      return proofId ? 'PARTIAL_UPLOAD' : 'LOCAL_DRAFT';
+      const status: SyncStatus = proofId ? 'PARTIAL_UPLOAD' : 'LOCAL_DRAFT';
+      await update(draft.clientRecordId, { syncStatus: status, lastError: e.message }, true);
+      return { status };
+    }
+    // Transient server errors (5xx, finalize failures) are retryable if the
+    // proof image already uploaded — keep as PARTIAL_UPLOAD, not FAILED.
+    const isTransient = e instanceof ApiError && e.status >= 500;
+    const isFinalizeError = (e as Error)?.message?.includes('finalize') ?? false;
+    if ((isTransient || isFinalizeError) && proofId) {
+      await update(draft.clientRecordId, { syncStatus: 'PARTIAL_UPLOAD', lastError: (e as Error).message }, true);
+      return { status: 'PARTIAL_UPLOAD' };
     }
     await update(draft.clientRecordId, { syncStatus: 'FAILED', lastError: (e as Error).message }, true);
-    return 'FAILED';
+    return { status: 'FAILED' };
   }
 }
 
-/** Sync everything pending for a workspace (called on resume/reconnect and after quota changes). */
-export async function syncAll(workspaceId: string): Promise<{ synced: number; pending: number }> {
+/** Sync everything pending for a workspace (called on resume/reconnect and after quota changes). Returns the synced server records. */
+export async function syncAll(workspaceId: string): Promise<{ synced: number; pending: number; records: RecordSummary[] }> {
   const drafts = await listDrafts(workspaceId, true);
   let synced = 0;
+  const records: RecordSummary[] = [];
   for (const d of drafts) {
-    const s = await syncDraft(d);
-    if (s === 'SYNCED') synced += 1;
-    if (s === 'LOCAL_DRAFT' && d.quotaBlocked) break; // Legacy server state; beta UI never exposes quotas.
+    const result = await syncDraft(d);
+    if (result.status === 'SYNCED') {
+      synced += 1;
+      if (result.record) records.push(result.record);
+    }
+    if (result.status === 'LOCAL_DRAFT' && d.quotaBlocked) break; // Legacy server state; beta UI never exposes quotas.
   }
-  return { synced, pending: drafts.length - synced };
+  return { synced, pending: drafts.length - synced, records };
 }
 
 /** Remove synced drafts and their staged images (evidence now lives on the server). */
