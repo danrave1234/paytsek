@@ -13,6 +13,7 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.records.Field
 import expo.modules.kotlin.records.Record
+import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 
@@ -141,7 +142,7 @@ class PaymentCollectorModule : Module() {
       val attempted = outbox.pendingCount()
       // Run the upload loop inline so the server has notifications before
       // the record is created, enabling instant inline matching.
-      val acknowledged = UploadRunner.uploadPending(context, waitForAcks = true)
+      val acknowledged = runBlocking { UploadRunner.uploadPending(context, waitForAcks = true) }
       // Also enqueue WorkManager as a backup for any remaining pending rows.
       UploadWorker.enqueue(context, expedited = true)
       mapOf("attempted" to attempted, "acknowledged" to acknowledged)
