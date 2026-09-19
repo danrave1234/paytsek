@@ -66,7 +66,14 @@ export class ProofsService {
     if (!p) throw new ApiException('NOT_FOUND', 'Proof not found');
     if (p.upload_finalized_at) return { proofId, finalized: true };
     if (!p.storage_path) throw new ApiException('PROOF_UPLOAD_NOT_FINALIZED', 'Upload was never initialized');
-    const stat = await this.storage.stat(this.storage.proofsBucket, p.storage_path);
+    // Supabase storage has eventual consistency after a signed PUT. Retry briefly
+    // so a fast finalize call doesn't fail the user's sync permanently.
+    let stat: { size: number; contentType: string | null } | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      stat = await this.storage.stat(this.storage.proofsBucket, p.storage_path);
+      if (stat && stat.size === p.byte_length) break;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 500));
+    }
     if (!stat || stat.size !== p.byte_length) {
       throw new ApiException('PROOF_UPLOAD_NOT_FINALIZED', 'Uploaded bytes not found or size mismatch; retry the upload');
     }

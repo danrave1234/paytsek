@@ -19,7 +19,7 @@ import { autoMatchFlow, normalizeReference, referencesEqual } from '@paytsek/rec
  * amount+time candidate is enough for AUTO when no other candidate
  * competes. Multiple candidates always go to review.
  */
-export const MATCHER_VERSION = 'v1';
+export const MATCHER_VERSION = 'v2';
 
 /**
  * Resolve the capability-registry flow for this record. The rail comes from
@@ -177,18 +177,15 @@ export function decide(record: MatchRecordInput, events: MatchEventInput[], cfg:
   if (inWindow.length === 0) return { kind: 'NONE', timeBasis: basis, windowSeconds: window };
 
   // Single amount+time candidate: auto-match when safe.
-  // Still block on contradictory refs, incomparable namespaces, edited fields,
-  // owner approval, linked event, or when the record carries a reference
-  // that the notification cannot satisfy.
+  // Still block on contradictory refs (unequal comparable refs), edited fields,
+  // owner approval, or linked event. A missing notification reference is NOT a
+  // blocker — wallet notifications often lack the ref the receipt carries.
   if (inWindow.length === 1 && receiptOk && !edited && !record.requiresOwnerApproval) {
     const a = inWindow[0]!;
-    // Block if the candidate has blockers that prevent auto-match
+    // Block only on truly contradictory data or a linked event
     if (
       !a.event.linkedToOtherRecord &&
-      !a.blockers.includes('CONTRADICTORY_DATA') &&
-      !a.blockers.includes('NO_COMPARABLE_NAMESPACE') &&
-      // If the record has a reference, require the notification to have one too
-      (record.referenceNamespace === null || !a.blockers.includes('AMOUNT_ONLY_CANDIDATES'))
+      !a.blockers.includes('CONTRADICTORY_DATA')
     ) {
       return {
         kind: 'AUTO',
