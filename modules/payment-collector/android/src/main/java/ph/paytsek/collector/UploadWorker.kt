@@ -15,6 +15,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -57,9 +58,10 @@ object UploadRunner {
     var acknowledged = 0
     val skippedIds = mutableSetOf<String>()
     var loops = 0
+    var done = false
     val maxLoops = if (waitForAcks) 30 else 10
 
-    while (loops++ < maxLoops) {
+    while (loops++ < maxLoops && !done) {
       val pending = outbox.pending(limit = 50).filter { it.clientEventId !in skippedIds }
       if (pending.isEmpty()) break
       val batchId = UUID.randomUUID().toString()
@@ -116,7 +118,7 @@ object UploadRunner {
           prefs.lastUploadError = null
           if (!progressed) {
             outbox.bumpAttempts(pending.filter { it.clientEventId !in skippedIds }.map { it.clientEventId })
-            break
+            done = true
           }
         }
       } catch (e: Exception) {
