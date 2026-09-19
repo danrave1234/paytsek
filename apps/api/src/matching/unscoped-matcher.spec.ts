@@ -20,7 +20,9 @@ const record: Omit<MatchRecordInput, 'receivingProvider'> = {
 };
 
 describe('proof-first unscoped matching', () => {
-  it('offers a nearby GCash notification without auto-confirming it', () => {
+  it('auto-confirms a nearby GCash notification when it is the only candidate', () => {
+    // Single provider (GCash) with matching amount+time → AUTO via scoped decide().
+    // The receipt has a ref but the notification does not — that no longer blocks AUTO.
     const decision = decideUnscoped(record, [{
       provider: 'GCASH',
       event: {
@@ -34,8 +36,11 @@ describe('proof-first unscoped matching', () => {
         linkedToOtherRecord: false,
       },
     }], config);
-    expect(decision.kind).toBe('REVIEW');
-    if (decision.kind === 'REVIEW') expect(decision.candidates[0]?.event.id).toBe('notification');
+    expect(decision.kind).toBe('AUTO');
+    if (decision.kind === 'AUTO') {
+      expect(decision.eventId).toBe('notification');
+      expect(decision.reasonCodes).toContain('AMOUNT_AND_TIME');
+    }
   });
 
   it('keeps equal amounts from two wallet listeners as separate choices', () => {
