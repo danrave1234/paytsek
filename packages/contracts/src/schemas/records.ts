@@ -146,6 +146,9 @@ export const CreateRecordRequest = z.object({
   note: z.string().max(500).nullable().optional(),
   /** Set when saving an incoming event directly as a record (owner action). */
   fromEventId: uuid.nullable().optional(),
+  /** Client-side local cache found this notification event matches by amount+time.
+   * The server will prefer linking this event if it is already ingested and still open. */
+  matchClientEventId: z.string().max(80).nullable().optional(),
 });
 export type CreateRecordRequest = z.infer<typeof CreateRecordRequest>;
 

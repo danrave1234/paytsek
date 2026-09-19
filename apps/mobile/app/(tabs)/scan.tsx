@@ -142,6 +142,7 @@ export default function Scan() {
           editedFields: [],
           customerLabel: null,
           note: null,
+          matchClientEventId: localMatch?.clientEventId ?? null,
         },
       });
 
@@ -172,7 +173,7 @@ export default function Scan() {
       setError('Could not save the proof on this phone. Keep this screen open and try again.');
       return false;
     }
-  }, [invalidate, ocrBlocks, ocrText, router, workspace]);
+  }, [invalidate, localMatch, ocrBlocks, ocrText, router, workspace]);
 
   const processImage = useCallback(async (uri: string, from: CaptureOrigin, fileName?: string | null) => {
     // A late OCR completion from an abandoned flow must never clobber a newer
