@@ -72,6 +72,73 @@ export class ReconcileService {
     await this.jobs.enqueue('RECONCILE_EVENT', { eventId }, `event:${eventId}`, q);
   }
 
+  /**
+   * If the client passed a preferred clientEventId from local cache matching,
+   * claim it immediately: find the ingested event, adopt its source, and
+   * insert an AUTO match. Returns true if claimed.
+   */
+  async claimPreferredClientEvent(recordId: string, clientEventId: string): Promise<boolean> {
+    return this.db.tx(async (c) => {
+      // Find the ingested event by client_event_id
+      const ev = await c.query<{ id: string; currency: string; amount_centavos: string; source_id: string | null; linked_record_id: string | null }>(
+        `select e.id, e.currency, e.amount_centavos, e.source_id,
+                (select pm.record_id from payment_matches pm where pm.event_id = e.id and pm.active and pm.record_id <> $2 limit 1) as linked_record_id
+           from notification_events e
+          where e.client_event_id = $1 and e.purged_at is null
+          limit 1`,
+        [clientEventId, recordId],
+      );
+      if (ev.rows.length === 0) return false;
+
+      const event = ev.rows[0]!;
+
+      // Load and lock the record
+      const rec = await this.loadRecord(c, recordId, true);
+      if (!rec || !OPEN_STATES.includes(rec.evidence_state)) return false;
+
+      // Guard: amount must match
+      if (event.amount_centavos !== rec.amount_centavos || event.currency !== rec.currency) return false;
+
+      // Guard: event not already linked to another record
+      if (event.linked_record_id && event.linked_record_id !== recordId) return false;
+
+      // Adopt source if needed
+      if (event.source_id && !rec.source_id) {
+        await c.query(`update payment_records set source_id = $2 where id = $1`, [rec.id, event.source_id]);
+      }
+
+      // Insert the match
+      try {
+        await c.query('SAVEPOINT claim');
+        await c.query(
+          `insert into payment_matches (organization_id, record_id, event_id, kind, reason_codes, supporting_fields, missing_fields, time_basis, window_seconds, delta_seconds, flow_id, matcher_version)
+           values ($1,$2,$3,'AUTO',$4,$5,$6,$7,$8,$9,$10,$11)`,
+          [rec.organization_id, rec.id, event.id, ['CLIENT_LOCAL_MATCH'], ['amount'], [], 'CAPTURE_TIME', 0, null, 'local_cache', MATCHER_VERSION],
+        );
+        await c.query('RELEASE SAVEPOINT claim');
+      } catch (e) {
+        if (!isUniqueViolation(e)) throw e;
+        await c.query('ROLLBACK TO SAVEPOINT claim');
+        return false;
+      }
+
+      // Protect event from purge
+      await c.query(`update notification_events set purge_after = now() + interval '90 days' where id = $1`, [event.id]);
+
+      // Update evidence state
+      await c.query(
+        `update payment_records set evidence_state = 'MATCHED_AUTO', matcher_version = $2, last_reconciled_at = now() where id = $1`,
+        [rec.id, MATCHER_VERSION],
+      );
+
+      await this.audit.record(
+        { organizationId: rec.organization_id, action: 'MATCH_AUTO', subjectType: 'payment_record', subjectId: rec.id, after: { eventId: event.id, reasonCodes: ['CLIENT_LOCAL_MATCH'], flowId: 'local_cache', deltaSeconds: null, matcherVersion: MATCHER_VERSION } },
+        c,
+      );
+      return true;
+    });
+  }
+
   async reconcileEvent(eventId: string): Promise<void> {
     const recs = await this.db.query<{ id: string }>(
       `select r.id from payment_records r
@@ -100,6 +167,18 @@ export class ReconcileService {
 
       let next: EvidenceState = 'UNVERIFIED';
       if (decision.kind === 'AUTO') {
+        const matchedEvent = events.find((e) => e.id === decision.eventId);
+
+        // Adopt the matched event's source onto the record before inserting
+        // the match. The check_match_scope trigger requires a non-null
+        // record source_id that matches the event's source_id.
+        if (matchedEvent?.source_id && !rec.source_id) {
+          await c.query(
+            `update payment_records set source_id = $2 where id = $1`,
+            [rec.id, matchedEvent.source_id],
+          );
+        }
+
         try {
           await c.query('SAVEPOINT claim');
           await c.query(
@@ -108,15 +187,6 @@ export class ReconcileService {
             [rec.organization_id, rec.id, decision.eventId, decision.reasonCodes, decision.supportingFields, decision.missingFields, decision.timeBasis, decision.windowSeconds, decision.deltaSeconds, decision.flowId, MATCHER_VERSION],
           );
           await c.query('RELEASE SAVEPOINT claim');
-
-          // Adopt the matched event's source onto the record if not already set.
-          const matchedEvent = events.find((e) => e.id === decision.eventId);
-          if (matchedEvent?.source_id && !rec.source_id) {
-            await c.query(
-              `update payment_records set source_id = $2 where id = $1`,
-              [rec.id, matchedEvent.source_id],
-            );
-          }
 
           // Prevent the matched event from being purged while the match is active.
           await c.query(
