@@ -31,19 +31,35 @@ import java.util.concurrent.TimeUnit
  * constraints and exponential backoff. Expedited execution is best-effort and
  * quota-limited by the OS; it is never treated as a guarantee.
  */
-class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
+/**
+ * Shared upload loop: POSTs pending outbox items in bounded batches with per-item
+ * acknowledgement. Used by both the WorkManager worker (background) and flushNow
+ * (inline, before record create) so the server has notifications before matching.
+ */
+object UploadRunner {
+  private val client = OkHttpClient.Builder()
+    .connectTimeout(15, TimeUnit.SECONDS)
+    .readTimeout(30, TimeUnit.SECONDS)
+    .build()
 
-  override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-    val prefs = CollectorPrefs(applicationContext)
-    val outbox = OutboxDb.getInstance(applicationContext)
-    if (!prefs.isConfigured) return@withContext Result.success()
-    val base = prefs.apiBaseUrl?.trimEnd('/') ?: return@withContext Result.success()
-    val credential = prefs.credential ?: return@withContext Result.success()
+  /**
+   * Upload all pending events. Returns the number of events acknowledged.
+   * When [waitForAcks] is true, runs until all pending rows are acknowledged
+   * or a server error stops the loop (used by flushNow for inline matching).
+   */
+  suspend fun uploadPending(context: Context, waitForAcks: Boolean = false): Int = withContext(Dispatchers.IO) {
+    val prefs = CollectorPrefs(context)
+    val outbox = OutboxDb.getInstance(context)
+    if (!prefs.isConfigured) return@withContext 0
+    val base = prefs.apiBaseUrl?.trimEnd('/') ?: return@withContext 0
+    val credential = prefs.credential ?: return@withContext 0
 
-    // Rows rejected as DEVICE_PAUSED in this run: never re-POST them within the same run.
+    var acknowledged = 0
     val skippedIds = mutableSetOf<String>()
     var loops = 0
-    while (loops++ < 10) {
+    val maxLoops = if (waitForAcks) 30 else 10
+
+    while (loops++ < maxLoops) {
       val pending = outbox.pending(limit = 50).filter { it.clientEventId !in skippedIds }
       if (pending.isEmpty()) break
       val batchId = UUID.randomUUID().toString()
@@ -61,19 +77,18 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
         client.newCall(req).execute().use { res ->
           when {
             res.code == 401 -> {
-              // Credential revoked/unknown: stop uploading, keep events, surface truthfully.
               prefs.lastUploadError = "COLLECTOR_CREDENTIAL_REVOKED"
-              return@withContext Result.failure()
+              return@withContext acknowledged
             }
             res.code == 429 || res.code >= 500 -> {
               prefs.lastUploadError = "HTTP_${res.code}"
               outbox.bumpAttempts(pending.map { it.clientEventId })
-              return@withContext Result.retry()
+              return@withContext acknowledged
             }
             !res.isSuccessful -> {
               prefs.lastUploadError = "HTTP_${res.code}"
               outbox.bumpAttempts(pending.map { it.clientEventId })
-              return@withContext Result.retry()
+              return@withContext acknowledged
             }
           }
           val acks = JSONObject(res.body?.string() ?: "{}").optJSONArray("acks") ?: JSONArray()
@@ -83,16 +98,16 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             val outcome = a.optString("outcome")
             val id = a.optString("clientEventId")
             when (outcome) {
-              "ACCEPTED", "DUPLICATE" -> { outbox.markAcknowledged(id, outcome); progressed = true }
+              "ACCEPTED", "DUPLICATE" -> { outbox.markAcknowledged(id, outcome); progressed = true; acknowledged++ }
               "REJECTED" -> {
                 val reason = a.optString("reason")
-                // Permanent rejections are acknowledged (kept for diagnostics); transient device states retry.
                 if (reason == "DEVICE_PAUSED") {
                   outbox.markRejectedPending(id, "REJECTED:DEVICE_PAUSED")
                   skippedIds += id
                 } else {
                   outbox.markAcknowledged(id, "REJECTED:$reason")
                   progressed = true
+                  acknowledged++
                 }
               }
             }
@@ -100,24 +115,37 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
           prefs.lastUploadAt = Iso.now()
           prefs.lastUploadError = null
           if (!progressed) {
-            // No row was acknowledged: bump the remaining rows and let WorkManager
-            // backoff reschedule instead of re-POSTing them in a tight loop.
             outbox.bumpAttempts(pending.filter { it.clientEventId !in skippedIds }.map { it.clientEventId })
-            return@withContext Result.retry()
+            break
           }
         }
       } catch (e: Exception) {
         prefs.lastUploadError = e.javaClass.simpleName
         outbox.bumpAttempts(pending.map { it.clientEventId })
-        return@withContext Result.retry()
+        return@withContext acknowledged
       }
     }
+    acknowledged
+  }
+}
+
+/**
+ * Uploads pending outbox items in bounded batches with per-item acknowledgement.
+ * WorkManager provides persistence across process death/reboot, network
+ * constraints and exponential backoff. Expedited execution is best-effort and
+ * quota-limited by the OS; it is never treated as a guarantee.
+ */
+class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {
+
+  override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+    val prefs = CollectorPrefs(applicationContext)
+    if (!prefs.isConfigured) return@withContext Result.success()
+    UploadRunner.uploadPending(applicationContext, waitForAcks = false)
     Result.success()
   }
 
   companion object {
     private const val UNIQUE = "paytsek-upload"
-    private val client = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
 
     fun enqueue(context: Context, expedited: Boolean) {
       val builder = OneTimeWorkRequestBuilder<UploadWorker>()

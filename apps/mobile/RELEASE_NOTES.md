@@ -1,3 +1,12 @@
+## PayTsek V2 beta — 0.2.11
+
+- Payment records now sync instantly: pending wallet notifications are uploaded before the record is created, so the server can match them immediately.
+- Auto-matching works for real wallet notifications even when the receipt has a reference number the notification does not.
+- Multiple candidates still need your choice. Contradictory data or edited records stay in review.
+
+Wallet detection and notification matching are supporting evidence, not confirmation from a bank or wallet provider.
+
+
 ## PayTsek V2 beta — 0.2.10
 
 - Auto-matching now works for real wallet notifications even when the receipt has a reference number the notification does not. A single clear amount and time match is linked automatically.
