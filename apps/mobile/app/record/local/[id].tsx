@@ -84,10 +84,10 @@ export default function LocalRecordDetail() {
     setBusy(true);
     setError(null);
     try {
-      const status = await syncDraft(draft);
+      const result = await syncDraft(draft);
       const next = await getDraft(workspace.id, draft.clientRecordId);
       invalidate(next?.serverRecordId ?? undefined);
-      if (status === 'SYNCED' && next?.serverRecordId) {
+      if (result.status === 'SYNCED' && next?.serverRecordId) {
         // The server owns the record now; remove the redundant staged copy.
         await pruneSynced(workspace.id);
         router.replace(`/record/${next.serverRecordId}`);

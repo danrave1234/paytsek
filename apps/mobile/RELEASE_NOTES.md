@@ -1,7 +1,10 @@
-## PayTsek V2 beta — 0.2.12
+## PayTsek V2 beta — 0.2.13
 
-- Auto-matching now works correctly: payment records are linked to wallet notifications automatically when the amount and time match.
-- When the phone finds a matching notification locally, it passes the match to the server for instant linking.
+- Auto-matching is more reliable: payment records are linked to wallet notifications automatically when the amount and time match, even when the notification arrives before the scan.
+- The phone now passes locally matched notifications to the server for instant linking.
+- Proof uploads retry automatically on transient failures instead of failing permanently.
+- Opening a record no longer re-checks for matches on every refresh, reducing unnecessary sync activity.
+- Day-close summary now shows the correct breakdown: Recorded, Possible match, Strong match, and Owner confirmed.
 - Multiple candidates or contradictory data still need your choice.
 
 Wallet detection and notification matching are supporting evidence, not confirmation from a bank or wallet provider.

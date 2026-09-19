@@ -14,7 +14,7 @@ import { APP_VERSION } from '@/lib/env';
 import { newId } from '@/lib/device';
 import { findLocalMatches, pruneSynced, saveDraft, stageImage, syncCachedNotifications, syncDraft, type Draft, type LocalMatch } from '@/lib/drafts';
 import { peso } from '@/lib/format';
-import { invalidateDrafts, useHomeSnapshot, useInvalidateRecord } from '@/lib/queries';
+import { applySyncedRecord, invalidateDrafts, useHomeSnapshot, useInvalidateRecord } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TOUCH_TARGET, successColorFor } from '@/theme';
 import { PaymentCollector } from 'payment-collector';
@@ -158,11 +158,16 @@ export default function Scan() {
           savedProvider: finalFields.receiptProvider ?? '',
         },
       });
-      void syncDraft(draft).then(async (status) => {
+      void syncDraft(draft).then(async (result) => {
+        // Insert the server record into the home cache before pruning the
+        // local draft so the Today feed never goes blank.
+        if (result.status === 'SYNCED' && result.record) {
+          applySyncedRecord(result.record);
+        }
         invalidate();
         // The server has acknowledged the durable record; the staged copy is
         // now redundant and can be pruned without waiting for the next resume.
-        if (status === 'SYNCED') await pruneSynced(workspace.id);
+        if (result.status === 'SYNCED') await pruneSynced(workspace.id);
         void invalidateDrafts();
       }).catch(() => undefined);
       return true;

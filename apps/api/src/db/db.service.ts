@@ -84,3 +84,15 @@ export function isUniqueViolation(err: unknown, constraint?: string): boolean {
   if (e?.code !== '23505') return false;
   return constraint ? e.constraint === constraint : true;
 }
+
+/**
+ * Check or unique constraint violation from a match insert. The
+ * `check_match_scope` trigger throws 23514 (check violation) when the
+ * record's source_id doesn't match the event's source_id, while the partial
+ * unique index on active matches throws 23505. Both mean the match couldn't
+ * be claimed and should fall back to REVIEW.
+ */
+export function isMatchInsertFailure(err: unknown): boolean {
+  const code = (err as { code?: string })?.code;
+  return code === '23505' || code === '23514';
+}

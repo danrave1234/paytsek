@@ -5,7 +5,7 @@ import { AppState, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useTheme } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { invalidateDrafts, queryClient } from '@/lib/queries';
+import { applySyncedRecord, invalidateDrafts, queryClient } from '@/lib/queries';
 import { SessionProvider, useSession } from '@/lib/session';
 import { pruneCachedNotifications, pruneSynced, syncAll, syncCachedNotifications } from '@/lib/drafts';
 import { reportHealth, restoreCollectorFilters } from '@/lib/collector';
@@ -79,8 +79,13 @@ function Gate({ children }: { children: React.ReactNode }) {
           void pruneCachedNotifications();
         }).catch(() => { /* Non-critical: native collector unavailable. */ });
       }
-      void syncAll(workspace.id).then(async ({ synced }) => {
-        if (synced > 0) {
+      void syncAll(workspace.id).then(async (result) => {
+        if (result.synced > 0) {
+          // Insert synced server records into the home cache before pruning
+          // local drafts so the Today feed never goes blank.
+          for (const record of result.records) {
+            applySyncedRecord(record);
+          }
           await Promise.all(['records', 'home', 'inbox'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
         }
         await pruneSynced(workspace.id);
