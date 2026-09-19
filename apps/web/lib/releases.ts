@@ -15,6 +15,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.2.12',
+    date: '2026-09-19',
+    channel: 'beta',
+    highlights: [
+      'Auto-matching now works correctly: payment records are linked to wallet notifications automatically when the amount and time match.',
+      'When the phone finds a matching notification locally, it passes the match to the server for instant linking.',
+    ],
+    notes: 'PayTsek remains a free public beta. Notification matching is supplementary evidence, not confirmation from a wallet provider.',
+  },
+  {
     version: '0.2.11',
     date: '2026-09-19',
     channel: 'beta',

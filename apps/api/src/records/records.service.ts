@@ -50,7 +50,7 @@ export class RecordsService {
       // inline: a proof scanned minutes after its notification arrived must
       // match immediately, not on the next cron drain. The queued job stays
       // as the retry safety net.
-      const settled = await this.reconcileInline(created.record.id);
+      const settled = await this.reconcileInline(created.record.id, input.matchClientEventId ?? null);
       return settled ? { ...created, record: settled } : created;
     } catch (e) {
       if (!(e instanceof ApiException) || e.code !== 'IDEMPOTENCY_CONFLICT') throw e;
@@ -101,8 +101,16 @@ export class RecordsService {
   }
 
   /** Run reconciliation now (best effort) and return the refreshed summary. */
-  private async reconcileInline(recordId: string): Promise<RecordSummary | null> {
+  private async reconcileInline(recordId: string, matchClientEventId?: string | null): Promise<RecordSummary | null> {
     try {
+      // If the client found a local cache match, claim it first.
+      if (matchClientEventId) {
+        const claimed = await this.reconcile.claimPreferredClientEvent(recordId, matchClientEventId);
+        if (claimed) {
+          const row = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.id = $1`, [recordId]);
+          return row ? toSummary(row) : null;
+        }
+      }
       await this.reconcile.reconcileRecord(recordId);
       const row = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.id = $1`, [recordId]);
       return row ? toSummary(row) : null;
