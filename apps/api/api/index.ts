@@ -23,8 +23,8 @@ let cached: Promise<(req: IncomingMessage, res: ServerResponse) => void> | null 
 
 async function bootstrap(): Promise<(req: IncomingMessage, res: ServerResponse) => void> {
   const env = loadEnv();
-  // PayMongo signatures are calculated over unmodified bytes. Keep rawBody
-  // available to that one route while retaining normal JSON parsing elsewhere.
+  // Webhook signatures are calculated over unmodified bytes. Keep rawBody
+  // available on those routes while retaining normal JSON parsing elsewhere.
   const app = await NestFactory.create(AppModule, { logger: ['warn', 'error'], rawBody: true });
   app.useGlobalFilters(new ApiExceptionFilter());
 

@@ -27,7 +27,7 @@ export const EVIDENCE_STATE_LABELS: Record<EvidenceState, string> = {
 
 /** Required disclosure shown on any automatic-match detail view. */
 export const AUTO_MATCH_DISCLOSURE =
-  'Matched to an incoming notification; not confirmed directly with the payment provider.';
+  'Matched to incoming payment evidence; not a bank or wallet balance confirmation.';
 
 /** Flags are not mutually exclusive and are separate from the evidence state. */
 export const RecordFlag = z.enum([
@@ -56,6 +56,10 @@ export type DevicePlatform = z.infer<typeof DevicePlatform>;
 /** Launch providers. Recording is supported for all of them; automatic matching is per tested flow. */
 export const Provider = z.enum(['GCASH', 'GOTYME', 'MAYA', 'MARIBANK']);
 export type Provider = z.infer<typeof Provider>;
+
+/** How structured incoming-payment evidence reached PayTsek. */
+export const EvidenceOrigin = z.enum(['ANDROID_NOTIFICATION', 'SIGNED_WEBHOOK']);
+export type EvidenceOrigin = z.infer<typeof EvidenceOrigin>;
 
 /** Brand spelling as the providers write it. Use everywhere users can see it. */
 export const PROVIDER_LABELS: Record<Provider, string> = {
@@ -182,7 +186,11 @@ export const AuditAction = z.enum([
   'MATCH_UNLINKED',
   'MATCH_REOPENED',
   'EVENT_INGESTED',
+  'EVENT_REVERSED',
   'EVENT_SAVED_AS_RECORD',
+  'EVIDENCE_CONNECTOR_CREATED',
+  'EVIDENCE_CONNECTOR_ROTATED',
+  'EVIDENCE_CONNECTOR_REVOKED',
   'DEVICE_PAIRED',
   'DEVICE_APPROVED',
   'DEVICE_PAUSED',

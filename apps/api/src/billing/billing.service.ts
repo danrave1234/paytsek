@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import type { BillingProduct, LedgerEntry, PlanCode, SubscriptionStatus, UsageSummary } from '@paytsek/contracts';
 import { ApiException } from '../common/errors';
 import { loadEnv } from '../config/env';
 import { AuditService } from '../db/audit.service';
 import { DbService, isUniqueViolation } from '../db/db.service';
+import { verifyTimestampedWebhookSignature } from '../common/webhook-signature';
 
 type ProductKey = 'STARTER_30_DAYS' | 'BUSINESS_30_DAYS';
 type CheckoutRow = { checkout_url: string; expires_at: Date };
@@ -142,7 +143,7 @@ export class BillingService {
     // Beta is a hard server-side kill switch: do not validate, persist or
     // fulfill legacy billing events while payments are disabled.
     if (this.env.BETA_MODE) return { ok: true };
-    if (!rawBody || !this.verifySignature(rawBody, signature)) throw new ApiException('WEBHOOK_UNAUTHORIZED', 'Invalid PayMongo webhook signature');
+    if (!rawBody || !verifyTimestampedWebhookSignature(rawBody, signature, this.env.PAYMONGO_WEBHOOK_SECRET)) throw new ApiException('WEBHOOK_UNAUTHORIZED', 'Invalid PayMongo webhook signature');
     const body = JSON.parse(rawBody.toString('utf8')) as Record<string, unknown>;
     const eventType = containsString(body, 'checkout_session.payment.paid') ? 'checkout_session.payment.paid' : containsString(body, 'link.payment.paid') ? 'link.payment.paid' : null;
     if (!eventType) return { ok: true };
@@ -184,15 +185,6 @@ export class BillingService {
     return { ok: true };
   }
 
-  private verifySignature(rawBody: Buffer, signature: string | undefined): boolean {
-    if (!this.env.PAYMONGO_WEBHOOK_SECRET || !signature) return false;
-    const fields = Object.fromEntries(signature.split(',').map((p) => p.trim().split('=', 2)).filter(([k, v]) => Boolean(k && v)));
-    const timestamp = fields.t; const received = fields.li || fields.te;
-    if (!timestamp || !received || !/^\d+$/.test(timestamp) || Math.abs(Date.now() - Number(timestamp) * 1000) > 5 * 60_000) return false;
-    const expected = createHmac('sha256', this.env.PAYMONGO_WEBHOOK_SECRET).update(`${timestamp}.${rawBody.toString('utf8')}`).digest('hex');
-    const a = Buffer.from(expected, 'hex'); const b = Buffer.from(received, 'hex');
-    return a.length === b.length && timingSafeEqual(a, b);
-  }
 }
 
 function containsString(value: unknown, target: string): boolean { return value === target || (Array.isArray(value) ? value.some((v) => containsString(v, target)) : !!value && typeof value === 'object' && Object.values(value as Record<string, unknown>).some((v) => containsString(v, target))); }

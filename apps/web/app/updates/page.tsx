@@ -32,13 +32,13 @@ export default function Updates() {
       />
 
       {/* ── Current capability, straight from the registry ────────────────── */}
-      <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-3">
+      <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
         {PROVIDER_SUPPORT.map((p) => (
           <div key={p.name} className="bg-bg px-5 py-5">
             <div className="flex items-center justify-between gap-3">
               <p className="text-[15px] font-semibold tracking-[-0.02em]">{p.name}</p>
               <span className={`pill ${p.autoMatch ? 'bg-ok-soft text-ok' : 'bg-warn-soft text-warn'}`}>
-                {p.autoMatch ? 'Auto-match' : 'Manual'}
+                {p.autoMatch ? 'Automatic when unique' : 'Recorded only'}
               </span>
             </div>
             <p className="mt-2.5 text-[13px] leading-6 text-ink-3">{p.short}</p>

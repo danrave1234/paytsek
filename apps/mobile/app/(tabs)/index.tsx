@@ -145,10 +145,10 @@ export default function Today() {
     const today = home.data?.today;
     if (!today) return null;
     const evidence: Array<{ label: string; count: number; cents: number }> = [
-      { label: 'Recorded', count: today.unverifiedCount, cents: today.unverifiedCentavos },
-      { label: 'Possible match', count: today.reviewRequiredCount, cents: 0 },
-      { label: 'Strong match', count: today.notificationMatchedCount, cents: today.notificationMatchedCentavos },
-      { label: 'Owner confirmed', count: today.confirmedManuallyCount, cents: today.confirmedManuallyCentavos },
+      { label: EVIDENCE_STATE_LABELS.UNVERIFIED, count: today.unverifiedCount, cents: today.unverifiedCentavos },
+      { label: EVIDENCE_STATE_LABELS.REVIEW_REQUIRED, count: today.reviewRequiredCount, cents: 0 },
+      { label: EVIDENCE_STATE_LABELS.MATCHED_AUTO, count: today.notificationMatchedCount, cents: today.notificationMatchedCentavos },
+      { label: EVIDENCE_STATE_LABELS.CONFIRMED_MANUALLY, count: today.confirmedManuallyCount, cents: today.confirmedManuallyCentavos },
     ];
     return { evidence, totalCents: totalCentavos, totalCount: recordCount };
   }, [home.data?.today, totalCentavos, recordCount]);
@@ -160,7 +160,7 @@ export default function Today() {
     const providerLabel = savedProvider && Object.hasOwn(PROVIDER_LABELS, savedProvider)
       ? PROVIDER_LABELS[savedProvider]
       : null;
-    setSavedToast(`${peso(savedAmount)}${providerLabel ? ` · ${providerLabel}` : ''} recorded`);
+    setSavedToast(`${peso(savedAmount)}${providerLabel ? ` · ${providerLabel}` : ''} recorded · checking wallet evidence`);
     // Route parameters outlive a render. Clear this one immediately so the
     // confirmation cannot stick around or replay after later navigation.
     router.setParams({ savedAmount: '', savedProvider: '' });

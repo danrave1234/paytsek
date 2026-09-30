@@ -53,12 +53,14 @@ export default function Privacy() {
 
   return (
     <Screen>
-      <Notice kind="info">PayTsek reads payment evidence you choose and incoming-payment notifications from a connected Android phone. It never reads OTPs, passwords, contacts, or your wallet balance.</Notice>
+      <Notice kind="info">PayTsek reads payment evidence you choose, supported wallet notifications, and signed payment events from connectors an owner enables. It never reads OTPs, passwords, contacts, or wallet balances.</Notice>
       <Group title="Privacy">
         <List.Accordion title="Data PayTsek uses" description="Receipts and payment notifications">
           <View style={{ gap: 8, paddingHorizontal: 24, paddingBottom: 16 }}>
             <Text variant="bodySmall">Receipt images you capture or import, with location metadata removed.</Text>
+            <Text variant="bodySmall">Auto-capture checks temporary camera frames on this phone. Rejected frames are deleted and are never uploaded.</Text>
             <Text variant="bodySmall">Incoming amount, masked sender, reference and time from supported wallet notifications.</Text>
+            <Text variant="bodySmall">Signed connectors accept only payment ID, status, amount, time, rail and reference. They do not accept payer names, phone numbers, raw messages or balances.</Text>
             <Text variant="bodySmall">Security prompts, outgoing payments, promotions and unknown messages are discarded on the phone.</Text>
           </View>
         </List.Accordion>

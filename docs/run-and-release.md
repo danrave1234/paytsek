@@ -37,11 +37,21 @@ variables `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_SUPABASE_URL`, and
 ## Production deployment
 
 - API: Vercel project `paytsek-api`, domain `https://api.paytsek.online`.
-  From the repository root, link that project and deploy with
-  `vercel --prod --yes --scope danrave1234s-projects`.
+  Every push to `main` runs `.github/workflows/deploy-api.yml`. It verifies the
+  monorepo, applies pending database migrations, builds a production artifact,
+  deploys that exact artifact to `paytsek-api`, and checks `/v1/health`.
 - Web: Vercel project `paytsek-web`, Root Directory `apps/web`, domains
   `https://www.paytsek.online` and `https://paytsek.online`. Pushes to `main`
   deploy it automatically. Its configuration is `apps/web/vercel.json`.
+
+The API workflow requires GitHub environment `production-api` with environment
+secrets `DATABASE_URL`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and
+`VERCEL_API_PROJECT_ID`. The project ID must belong to `paytsek-api`, never
+`paytsek-web`. Runtime API values remain configured in Vercel and are pulled by
+the workflow; do not duplicate them in the workflow file.
+
+For manual recovery only, link the repository root to `paytsek-api` and run
+`vercel --prod --yes --scope danrave1234s-projects` after applying migrations.
 
 Do not deploy the repository root while it is linked to `paytsek-web`; the
 root `vercel.json` belongs to the API. Confirm a deployment is **Ready** and

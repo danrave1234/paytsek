@@ -8,8 +8,8 @@ import { loadEnv } from './config/env';
 
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
-  // Retain raw request bytes for PayMongo HMAC verification. JSON is still
-  // parsed normally for every other route.
+  // Retain raw request bytes for HMAC-verified billing and evidence webhooks.
+  // JSON is still parsed normally for every other route.
   const app = await NestFactory.create(AppModule, { logger: ['log', 'warn', 'error'], rawBody: true });
   app.useGlobalFilters(new ApiExceptionFilter());
   const origins = env.API_CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean);

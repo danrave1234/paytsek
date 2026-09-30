@@ -11,6 +11,7 @@ import {
   ReceiptFields,
   ReceiptProviderDetection,
   UpdateWorkspaceRequest,
+  IncomingEvidenceWebhook,
 } from './index';
 
 describe('contracts', () => {
@@ -23,7 +24,7 @@ describe('contracts', () => {
       expect(label).not.toMatch(/\d+%/);
     }
     expect(EvidenceState.options).not.toContain('PROVIDER_VERIFIED');
-    expect(AUTO_MATCH_DISCLOSURE).toContain('not confirmed directly with the payment provider');
+    expect(AUTO_MATCH_DISCLOSURE).toContain('not a bank or wallet balance confirmation');
   });
 
   it('free plan supports the remote-owner/cashier workflow (pairing is not paid-only)', () => {
@@ -125,5 +126,16 @@ describe('contracts', () => {
     expect(IncomingPaymentEventInput.safeParse({ ...base, amountCentavos: 150.5 }).success).toBe(false);
     expect(IncomingPaymentEventInput.safeParse({ ...base, amountCentavos: 0 }).success).toBe(false);
     expect(IncomingPaymentEventInput.safeParse({ ...base, amountCentavos: 15050 }).success).toBe(true);
+  });
+
+  it('keeps signed webhook evidence minimal and PHP-only', () => {
+    const event = {
+      eventId: 'delivery-1', paymentId: 'payment-1', status: 'SUCCEEDED',
+      amountCentavos: 15050, currency: 'PHP', occurredAt: '2026-10-01T01:00:00.000Z',
+      paymentRail: 'QR_MERCHANT', referenceNamespace: 'UNKNOWN', referenceValue: null,
+    };
+    expect(IncomingEvidenceWebhook.safeParse(event).success).toBe(true);
+    expect(IncomingEvidenceWebhook.safeParse({ ...event, currency: 'USD' }).success).toBe(false);
+    expect(IncomingEvidenceWebhook.safeParse({ ...event, payerName: 'Not accepted' }).success).toBe(false);
   });
 });

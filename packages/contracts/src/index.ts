@@ -3,6 +3,7 @@ export * from './errors';
 export * from './plans';
 export * from './schemas/pairing';
 export * from './schemas/ingestion';
+export * from './schemas/evidence';
 export * from './schemas/records';
 export * from './schemas/review';
 export * from './schemas/billing';

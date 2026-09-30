@@ -25,6 +25,7 @@ const EMPTY_STATUS: CollectorStatus = {
   configured: false,
   notificationAccessGranted: false,
   listenerConnected: false,
+  batteryOptimizationExempt: false,
   enabledProviders: [],
   pendingUploadCount: 0,
   lastObservedEventAt: null,

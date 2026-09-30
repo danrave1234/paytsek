@@ -1,3 +1,18 @@
+## PayTsek V2 beta — 0.2.14
+
+- A notification that was already recorded now becomes a Strong match automatically when it is the one safe exact-amount and nearby-time candidate.
+- Matching is fully server-authoritative: the phone no longer chooses a notification before ambiguity, timing, edits, source, and approval rules are checked.
+- Multiple or conflicting candidates remain Possible match and still need review.
+- Scan confirmation now says wallet evidence is being checked, and evidence wording is consistent across Today, Records, Settings, the web dashboard, Support, and Updates.
+- You can open Scan automatically at app launch or use the Android launcher shortcut. Optional auto-capture waits for two matching, clearly readable receipt frames; manual capture remains available.
+- Rejected auto-capture frames are deleted locally, and accepted proofs still save on the phone before upload or evidence matching.
+- Owner and cashier access is now enforced by the API: cashiers see only their own records and totals, while team administration and workspace-wide data remain owner-only.
+- Wallet evidence uploads now retry correctly after temporary network or server failures, restore health checks after reboot, and show battery-optimization guidance in Settings.
+- The beta backend now supports signed evidence connectors for future provider or payment-partner webhooks, while notification evidence remains optional and proof records remain primary.
+
+A Strong match is supplementary payment evidence, not confirmation of a wallet balance or settlement by a bank or wallet provider.
+
+
 ## PayTsek V2 beta — 0.2.13
 
 - Auto-matching is more reliable: payment records are linked to wallet notifications automatically when the amount and time match, even when the notification arrives before the scan.

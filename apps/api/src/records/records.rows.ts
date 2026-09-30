@@ -63,7 +63,7 @@ export const RECORD_SELECT = `
             (select count(*)::int from notification_events e
               where e.organization_id = r.organization_id
                 and (r.source_id is null or e.source_id = r.source_id)
-                and e.amount_centavos = r.amount_centavos and e.purged_at is null
+                and e.amount_centavos = r.amount_centavos and e.purged_at is null and e.event_status = 'SUCCEEDED'
                and not exists (select 1 from payment_matches x where x.event_id = e.id and x.active))
           else 0 end) as candidate_count,
          (r.proof_id is not null) as has_proof

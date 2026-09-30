@@ -3,9 +3,12 @@ package ph.paytsek.collector
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -44,13 +47,26 @@ class PaymentCollectorModule : Module() {
       context.startActivity(intent)
     }
 
+    Function("openBatteryOptimizationSettings") {
+      val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      context.startActivity(intent)
+    }
+
+    Function("openAppDetailsSettings") {
+      val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      context.startActivity(intent)
+    }
+
     AsyncFunction("getStatus") {
       val appVersion = try { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "" } catch (_: Throwable) { "" }
+      val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
       mapOf(
         "supported" to true,
         "configured" to prefs.isConfigured,
         "notificationAccessGranted" to NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName),
         "listenerConnected" to prefs.listenerConnected,
+        "batteryOptimizationExempt" to power.isIgnoringBatteryOptimizations(context.packageName),
         "enabledProviders" to prefs.enabledProviders.toList().sorted(),
         "pendingUploadCount" to outbox.pendingCount(),
         "lastObservedEventAt" to prefs.lastObservedEventAt,
@@ -142,7 +158,7 @@ class PaymentCollectorModule : Module() {
       val attempted = outbox.pendingCount()
       // Run the upload loop inline so the server has notifications before
       // the record is created, enabling instant inline matching.
-      val acknowledged = runBlocking { UploadRunner.uploadPending(context, waitForAcks = true) }
+      val acknowledged = runBlocking { UploadRunner.uploadPending(context, waitForAcks = true).acknowledged }
       // Also enqueue WorkManager as a backup for any remaining pending rows.
       UploadWorker.enqueue(context, expedited = true)
       mapOf("attempted" to attempted, "acknowledged" to acknowledged)

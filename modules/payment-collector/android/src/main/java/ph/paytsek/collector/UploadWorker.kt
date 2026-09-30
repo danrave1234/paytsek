@@ -38,6 +38,8 @@ import java.util.concurrent.TimeUnit
  * (inline, before record create) so the server has notifications before matching.
  */
 object UploadRunner {
+  data class Outcome(val acknowledged: Int, val shouldRetry: Boolean)
+
   private val client = OkHttpClient.Builder()
     .connectTimeout(15, TimeUnit.SECONDS)
     .readTimeout(30, TimeUnit.SECONDS)
@@ -48,12 +50,12 @@ object UploadRunner {
    * When [waitForAcks] is true, runs until all pending rows are acknowledged
    * or a server error stops the loop (used by flushNow for inline matching).
    */
-  suspend fun uploadPending(context: Context, waitForAcks: Boolean = false): Int = withContext(Dispatchers.IO) {
+  suspend fun uploadPending(context: Context, waitForAcks: Boolean = false): Outcome = withContext(Dispatchers.IO) {
     val prefs = CollectorPrefs(context)
     val outbox = OutboxDb.getInstance(context)
-    if (!prefs.isConfigured) return@withContext 0
-    val base = prefs.apiBaseUrl?.trimEnd('/') ?: return@withContext 0
-    val credential = prefs.credential ?: return@withContext 0
+    if (!prefs.isConfigured) return@withContext Outcome(0, false)
+    val base = prefs.apiBaseUrl?.trimEnd('/') ?: return@withContext Outcome(0, false)
+    val credential = prefs.credential ?: return@withContext Outcome(0, false)
 
     var acknowledged = 0
     val skippedIds = mutableSetOf<String>()
@@ -80,17 +82,19 @@ object UploadRunner {
           when {
             res.code == 401 -> {
               prefs.lastUploadError = "COLLECTOR_CREDENTIAL_REVOKED"
-              return@withContext acknowledged
+              return@withContext Outcome(acknowledged, false)
             }
             res.code == 429 || res.code >= 500 -> {
               prefs.lastUploadError = "HTTP_${res.code}"
               outbox.bumpAttempts(pending.map { it.clientEventId })
-              return@withContext acknowledged
+              return@withContext Outcome(acknowledged, true)
             }
             !res.isSuccessful -> {
               prefs.lastUploadError = "HTTP_${res.code}"
               outbox.bumpAttempts(pending.map { it.clientEventId })
-              return@withContext acknowledged
+              // A permanent client error needs owner attention; retrying it
+              // forever wastes battery and cannot repair the request.
+              return@withContext Outcome(acknowledged, false)
             }
           }
           val acks = JSONObject(res.body?.string() ?: "{}").optJSONArray("acks") ?: JSONArray()
@@ -118,16 +122,16 @@ object UploadRunner {
           prefs.lastUploadError = null
           if (!progressed) {
             outbox.bumpAttempts(pending.filter { it.clientEventId !in skippedIds }.map { it.clientEventId })
-            done = true
+            return@withContext Outcome(acknowledged, skippedIds.size < pending.size)
           }
         }
       } catch (e: Exception) {
         prefs.lastUploadError = e.javaClass.simpleName
         outbox.bumpAttempts(pending.map { it.clientEventId })
-        return@withContext acknowledged
+        return@withContext Outcome(acknowledged, true)
       }
     }
-    acknowledged
+    Outcome(acknowledged, false)
   }
 }
 
@@ -142,8 +146,8 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
   override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
     val prefs = CollectorPrefs(applicationContext)
     if (!prefs.isConfigured) return@withContext Result.success()
-    UploadRunner.uploadPending(applicationContext, waitForAcks = false)
-    Result.success()
+    val outcome = UploadRunner.uploadPending(applicationContext, waitForAcks = false)
+    if (outcome.shouldRetry) Result.retry() else Result.success()
   }
 
   companion object {
@@ -225,6 +229,7 @@ class BootReceiver : BroadcastReceiver() {
   override fun onReceive(context: Context, intent: Intent) {
     if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
       try { if (OutboxDb.getInstance(context).pendingCount() > 0) UploadWorker.enqueue(context, expedited = false) } catch (_: Throwable) {}
+      try { HealthWorker.schedule(context) } catch (_: Throwable) {}
     }
   }
 }

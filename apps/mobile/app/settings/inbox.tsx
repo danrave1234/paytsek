@@ -84,13 +84,13 @@ export default function Inbox() {
   return (
     <Screen>
       <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-        Unmatched incoming-payment notifications are kept for 7 days.
+        Unmatched incoming payment evidence is kept for 7 days.
       </Text>
       {error ? <Notice kind="error">{error}</Notice> : null}
       {query.isLoading ? <Loading variant="list" label="Loading incoming payments" /> : null}
       {query.error ? <ErrorState error={query.error} retry={() => void query.refetch()} /> : null}
       {query.data?.length === 0 ? (
-        <EmptyState icon="inbox-outline" title="Nothing waiting" body="New unmatched incoming-payment notifications will appear here." />
+        <EmptyState icon="inbox-outline" title="Nothing waiting" body="New unmatched incoming payment evidence will appear here." />
       ) : null}
       {(query.data?.length ?? 0) > 0 ? (
         <Group title="Recent">
@@ -103,7 +103,7 @@ export default function Inbox() {
                   {event.sourceLabel} · {manilaTime(event.eventAt, 'SECOND', timezone)}
                 </Text>
                 <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                  {event.referenceValue ? 'Reference included' : 'No reference in notification'}
+                  {event.evidenceOrigin === 'SIGNED_WEBHOOK' ? 'Signed integration evidence' : event.referenceValue ? 'Reference included' : 'No reference in notification'}
                 </Text>
               </View>
               <Button compact mode="contained-tonal" loading={savingId === event.eventId} disabled={savingId !== null} onPress={() => void saveAsRecord(event)}>

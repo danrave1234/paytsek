@@ -1,15 +1,16 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { clearInactiveCache } from '@/lib/queries';
 import { pruneSynced } from '@/lib/drafts';
 import { Linking, Platform, View } from 'react-native';
-import { IconButton, Portal, Snackbar, Text, useTheme } from 'react-native-paper';
+import { IconButton, Portal, Snackbar, Switch, Text, useTheme } from 'react-native-paper';
 import { AppUpdateDialog } from '@/components/app-update-dialog';
 import { Group, ListRow, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
 import { useAppUpdate } from '@/lib/release-update';
 import { useIsOwner, useSession } from '@/lib/session';
 import { useThemeMode } from '@/lib/theme-mode';
+import { DEFAULT_CAPTURE_PREFERENCES, getCapturePreferences, setCapturePreferences, type CapturePreferences } from '@/lib/capture-preferences';
 
 export default function Settings() {
   const router = useRouter();
@@ -22,6 +23,15 @@ export default function Settings() {
   const [cacheMessage, setCacheMessage] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
   const [showUpdate, setShowUpdate] = useState(false);
+  const [capturePreferences, setLocalCapturePreferences] = useState<CapturePreferences>(DEFAULT_CAPTURE_PREFERENCES);
+  useEffect(() => { void getCapturePreferences().then(setLocalCapturePreferences); }, []);
+  const updateCapturePreference = async (key: keyof CapturePreferences, value: boolean) => {
+    const previous = capturePreferences;
+    const next = { ...capturePreferences, [key]: value };
+    setLocalCapturePreferences(next);
+    try { await setCapturePreferences(next); }
+    catch { setLocalCapturePreferences(previous); setCacheMessage('Could not save that preference.'); }
+  };
   const clearCache = async () => {
     if (clearing) return;
     setClearing(true);
@@ -77,6 +87,18 @@ export default function Settings() {
       ) : null}
 
       <Group title="Preferences">
+        <ListRow
+          icon="camera-outline"
+          title="Open Scan when PayTsek starts"
+          subtitle="Deep links to records and settings still open their requested page"
+          right={<Switch value={capturePreferences.openScannerOnLaunch} onValueChange={(value) => void updateCapturePreference('openScannerOnLaunch', value)} />}
+        />
+        <ListRow
+          icon="camera-timer"
+          title="Auto-capture clear proofs"
+          subtitle="Requires two matching on-device reads; manual capture stays available"
+          right={<Switch value={capturePreferences.autoCapture} onValueChange={(value) => void updateCapturePreference('autoCapture', value)} />}
+        />
         <ListRow icon="shield-check-outline" title="Permissions checklist" subtitle="Verify camera, notifications, and listener access" onPress={() => router.push('/settings/permissions' as any)} />
         <ListRow icon="bell-outline" title="Notifications" onPress={() => router.push('/settings/notifications')} />
         <ListRow icon="shield-lock-outline" title="Privacy & data" onPress={() => router.push('/settings/privacy')} />

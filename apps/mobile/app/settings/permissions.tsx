@@ -161,6 +161,7 @@ export default function PermissionsChecklist() {
   const isConfigured = collector?.configured ?? false;
   const accessGranted = collector?.notificationAccessGranted ?? false;
   const isConnected = collector?.listenerConnected ?? false;
+  const batteryExempt = collector?.batteryOptimizationExempt ?? false;
   const enabledProviders = collector?.enabledProviders ?? [];
 
   return (
@@ -228,6 +229,18 @@ export default function PermissionsChecklist() {
                   />
                 )}
 
+                {isConfigured && (
+                  <CheckRow
+                    icon="battery-check-outline"
+                    label="Battery optimization"
+                    subtitle={batteryExempt
+                      ? 'PayTsek is allowed to run without Doze restrictions'
+                      : 'Set PayTsek to Unrestricted and allow background activity'}
+                    status={batteryExempt ? 'ok' : 'warn'}
+                    onPress={batteryExempt ? undefined : () => PaymentCollector.openBatteryOptimizationSettings()}
+                  />
+                )}
+
                 {isConfigured && enabledProviders.length > 0 && (
                   <CheckRow
                     icon="wallet-outline"
@@ -250,6 +263,12 @@ export default function PermissionsChecklist() {
                 {!isSupported && (
                   <Notice kind="warning">
                     Notification listening requires the signed PayTsek APK. It is not available in Expo Go or development builds.
+                  </Notice>
+                )}
+
+                {isConfigured && !batteryExempt && (
+                  <Notice kind="info">
+                    Android and some phone makers may delay background work. Open battery settings, choose PayTsek, then select Unrestricted. Also allow Auto-start or Background activity if your phone shows those options.
                   </Notice>
                 )}
               </Group>

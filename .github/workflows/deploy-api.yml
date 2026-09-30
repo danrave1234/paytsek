@@ -1,0 +1,72 @@
+name: Deploy API
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-api-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Migrate and deploy production API
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    environment:
+      name: production-api
+      url: https://api.paytsek.online
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_API_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Install deployment tools
+        run: npm install --global pnpm@11.9.0 vercel@62.0.0
+      - name: Validate deployment secrets
+        shell: bash
+        run: |
+          test -n "${DATABASE_URL}"
+          test -n "${VERCEL_TOKEN}"
+          test -n "${VERCEL_ORG_ID}"
+          test -n "${VERCEL_PROJECT_ID}"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Pull paytsek-api production configuration
+        run: vercel pull --yes --environment=production --token="${VERCEL_TOKEN}" --scope=danrave1234s-projects
+      - name: Build production API
+        run: vercel build --prod --token="${VERCEL_TOKEN}" --scope=danrave1234s-projects
+      - name: Apply pending database migrations
+        run: node supabase/apply-migrations.mjs
+      - name: Deploy prebuilt API
+        id: deploy
+        shell: bash
+        run: |
+          DEPLOYMENT_URL=$(vercel deploy --prebuilt --prod --yes --token="${VERCEL_TOKEN}" --scope=danrave1234s-projects)
+          echo "url=${DEPLOYMENT_URL}" >> "${GITHUB_OUTPUT}"
+          echo "### API deployment" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Production: https://api.paytsek.online" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Deployment: ${DEPLOYMENT_URL}" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Commit: ${{ github.event.workflow_run.head_sha || github.sha }}" >> "${GITHUB_STEP_SUMMARY}"
+      - name: Verify production health
+        shell: bash
+        run: |
+          for attempt in {1..12}; do
+            RESPONSE=$(curl --fail --silent --show-error https://api.paytsek.online/v1/health || true)
+            if [[ "${RESPONSE}" == *'"ok":true'* && "${RESPONSE}" == *'"service":"paytsek-api"'* ]]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Production health check did not return the PayTsek API response." >&2
+          exit 1

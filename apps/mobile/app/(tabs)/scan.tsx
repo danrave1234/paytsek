@@ -1,5 +1,5 @@
 import type { CaptureOrigin, OcrResult, ReceiptFields } from '@paytsek/contracts';
-import { extractReceiptFields, parseMoneyExact, type ReceiptExtraction } from '@paytsek/receipt-parsers';
+import { parseMoneyExact, type ReceiptExtraction } from '@paytsek/receipt-parsers';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -12,12 +12,15 @@ import { FadeIn } from '@/components/motion';
 import { Notice, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
 import { newId } from '@/lib/device';
-import { findLocalMatches, pruneSynced, saveDraft, stageImage, syncCachedNotifications, syncDraft, type Draft, type LocalMatch } from '@/lib/drafts';
+import { pruneSynced, saveDraft, stageImage, syncDraft, type Draft } from '@/lib/drafts';
 import { peso } from '@/lib/format';
 import { applySyncedRecord, invalidateDrafts, useHomeSnapshot, useInvalidateRecord } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TOUCH_TARGET, successColorFor } from '@/theme';
 import { PaymentCollector } from 'payment-collector';
+import { DEFAULT_CAPTURE_PREFERENCES, getCapturePreferences, setCapturePreferences, type CapturePreferences } from '@/lib/capture-preferences';
+import { discardCaptureFile, prepareReceiptProof, type PreparedReceiptProof } from '@/lib/receipt-capture';
+import { useReceiptAutoCapture } from '@/lib/use-receipt-auto-capture';
 
 type Stage = 'capture' | 'processing' | 'review' | 'saved';
 
@@ -46,12 +49,13 @@ export default function Scan() {
   const [cameraReady, setCameraReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
-  const [localMatch, setLocalMatch] = useState<LocalMatch | null>(null);
+  const [capturePreferences, setLocalCapturePreferences] = useState<CapturePreferences>(DEFAULT_CAPTURE_PREFERENCES);
   const saveLock = useRef(false);
   const operation = useRef(false);
   const generation = useRef(0);
   const resetOnNextFocus = useRef(false);
   const handledShare = useRef<string | null>(null);
+  const temporaryImage = useRef<string | null>(null);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -63,6 +67,8 @@ export default function Scan() {
 
   const reset = useCallback(() => {
     generation.current += 1;
+    discardCaptureFile(temporaryImage.current);
+    temporaryImage.current = null;
     setStage('capture');
     setImageUri(null);
     setExtraction(null);
@@ -73,7 +79,6 @@ export default function Scan() {
     setSaved(null);
     setError(null);
     setDuplicateWarning(null);
-    setLocalMatch(null);
     saveLock.current = false;
     // Allow the next share-sheet intent (including another inbox drain) to be
     // handled after the previous scan flow has fully completed.
@@ -81,12 +86,14 @@ export default function Scan() {
   }, []);
 
   useFocusEffect(useCallback(() => {
+    let active = true;
+    void getCapturePreferences().then((preferences) => { if (active) setLocalCapturePreferences(preferences); });
     if (resetOnNextFocus.current) {
       resetOnNextFocus.current = false;
       reset();
     }
     setFocused(true);
-    return () => { setFocused(false); setTorch(false); setCameraReady(false); };
+    return () => { active = false; setFocused(false); setTorch(false); setCameraReady(false); };
   }, [reset]));
 
   const persist = useCallback(async (
@@ -94,8 +101,8 @@ export default function Scan() {
     uri: string,
     from: CaptureOrigin,
     corrected: ReceiptFields = receipt.fields,
-    rawOcrText: string = ocrText,
-    rawOcrBlocks: OcrResult['blocks'] = ocrBlocks,
+    rawOcrText: string,
+    rawOcrBlocks: OcrResult['blocks'],
   ) => {
     if (saveLock.current) return false;
     if (!workspace) {
@@ -142,9 +149,10 @@ export default function Scan() {
           editedFields: [],
           customerLabel: null,
           note: null,
-          matchClientEventId: localMatch?.clientEventId ?? null,
         },
       });
+      discardCaptureFile(uri);
+      if (temporaryImage.current === uri) temporaryImage.current = null;
 
       // Local persistence is success. Navigation never waits for image upload,
       // record creation, matching, or any other backend acknowledgement.
@@ -178,75 +186,73 @@ export default function Scan() {
       setError('Could not save the proof on this phone. Keep this screen open and try again.');
       return false;
     }
-  }, [invalidate, localMatch, ocrBlocks, ocrText, router, workspace]);
+  }, [invalidate, router, workspace]);
+
+  const processPrepared = useCallback(async (prepared: PreparedReceiptProof, from: CaptureOrigin, token: number) => {
+    if (token !== generation.current) {
+      discardCaptureFile(prepared.imageUri);
+      return;
+    }
+    temporaryImage.current = prepared.imageUri;
+    setStage('processing');
+    setImageUri(prepared.imageUri);
+    setError(null);
+    setOrigin(from);
+    const { extraction: receipt, ocr } = prepared;
+    setOcrText(ocr.fullText);
+    setOcrBlocks(ocr.blocks);
+    setExtraction(receipt);
+    setFields(receipt.fields);
+    setAmountText(receipt.fields.amountCentavos ? (receipt.fields.amountCentavos / 100).toFixed(2) : '');
+
+    // Duplicate-proof soft warning: same known amount/provider in the recent feed.
+    if (receipt.fields.amountCentavos) {
+      const now = Date.now();
+      const provider = receipt.fields.receiptProvider ?? null;
+      const cents = receipt.fields.amountCentavos;
+      const match = (home.data?.recentRecords ?? []).find((record) =>
+        record.amountCentavos === cents &&
+        (!provider || record.receiptProvider === provider) &&
+        now - Date.parse(record.createdAt) < 15 * 60 * 1000,
+      );
+      if (match) {
+        setDuplicateWarning(`Similar proof (${peso(cents)}) recorded recently. If this is a different payment, save it.`);
+      }
+    }
+
+    // Local persistence is success; provider evidence and upload remain background work.
+    if (receipt.fields.amountCentavos && await persist(receipt, prepared.imageUri, from, receipt.fields, ocr.fullText, ocr.blocks)) return;
+    setStage('review');
+  }, [home.data?.recentRecords, persist]);
 
   const processImage = useCallback(async (uri: string, from: CaptureOrigin, fileName?: string | null) => {
-    // A late OCR completion from an abandoned flow must never clobber a newer
-    // flow's state; each await below re-checks this generation token.
     const token = ++generation.current;
     setStage('processing');
-    setImageUri(uri);
     setError(null);
     setOrigin(from);
     try {
-      const clean = await ReceiptOcr.stripMetadata(uri, 0.92);
-      if (token !== generation.current) return;
-      setImageUri(clean.uri);
-      const ocr = await ReceiptOcr.recognize(clean.uri);
-      if (token !== generation.current) return;
-      setOcrText(ocr.fullText);
-      setOcrBlocks(ocr.blocks);
-      const receipt = extractReceiptFields(ocr.fullText, ocr.blocks, { fileName });
-      setExtraction(receipt);
-      setFields(receipt.fields);
-      setAmountText(receipt.fields.amountCentavos ? (receipt.fields.amountCentavos / 100).toFixed(2) : '');
-
-      // Duplicate-proof soft warning: check if a similar proof (same amount +
-      // provider within ~15 minutes) was already recorded locally or on server.
-      if (receipt.fields.amountCentavos) {
-        const now = Date.now();
-        const windowMs = 15 * 60 * 1000;
-        const provider = receipt.fields.receiptProvider ?? null;
-        const cents = receipt.fields.amountCentavos;
-        const recentRecords = home.data?.recentRecords ?? [];
-        const match = recentRecords.find((r) => {
-          if (r.amountCentavos !== cents) return false;
-          if (provider && r.sourceLabel !== provider) return false;
-          return (now - Date.parse(r.createdAt)) < windowMs;
-        });
-        if (match) {
-          setDuplicateWarning(`Similar proof (${peso(cents)}) recorded recently. If this is a different payment, save it.`);
-        }
-      }
-
-      // Check for local notification matches: sync pending notifications from
-      // the native collector, then find matches by amount and time.
-      if (receipt.fields.amountCentavos) {
-        try {
-          await syncCachedNotifications();
-          const matches = await findLocalMatches(
-            receipt.fields.amountCentavos,
-            receipt.fields.receiptProvider ?? null,
-            new Date().toISOString(),
-            receipt.fields.receiptTransactionAt ?? null,
-          );
-          if (matches.length > 0) {
-            setLocalMatch(matches[0]!);
-          }
-        } catch {
-          // Non-critical: local matching is a convenience, not required.
-        }
-      }
-
-      // A receipt proof is valuable on its own. As soon as OCR finds an amount,
-      // keep it locally and let matching happen later in the background.
-      if (receipt.fields.amountCentavos && await persist(receipt, clean.uri, from, receipt.fields, ocr.fullText, ocr.blocks)) return;
-      setStage('review');
+      const prepared = await prepareReceiptProof(uri, { fileName, deleteSource: from === 'CAMERA' });
+      await processPrepared(prepared, from, token);
     } catch {
       setError('Could not read the proof. Try again or import a screenshot.');
       setStage('capture');
     }
-  }, [persist]);
+  }, [processPrepared]);
+
+  const onAutoDetected = useCallback(async (prepared: PreparedReceiptProof) => {
+    const token = ++generation.current;
+    await processPrepared(prepared, 'CAMERA', token);
+  }, [processPrepared]);
+
+  const autoCaptureStatus = useReceiptAutoCapture({
+    camera,
+    enabled: capturePreferences.autoCapture,
+    active: focused && foreground,
+    ready: cameraReady,
+    blocked: stage !== 'capture' || busy || !permission?.granted,
+    operation,
+    onDetected: onAutoDetected,
+  });
 
   useEffect(() => {
     if (params.source !== 'share') return;
@@ -268,7 +274,7 @@ export default function Scan() {
     operation.current = true;
     setBusy(true);
     try {
-      const photo = await camera.takePictureAsync({ quality: 0.9, skipProcessing: false });
+      const photo = await camera.takePictureAsync({ quality: 0.9, skipProcessing: false, shutterSound: true });
       if (photo?.uri) await processImage(photo.uri, 'CAMERA');
     } catch {
       setError('Could not capture the proof.');
@@ -300,11 +306,22 @@ export default function Scan() {
     const corrected: ReceiptFields = { ...fields, amountCentavos: amount.centavos, currency: 'PHP' };
     setBusy(true);
     try {
-      await persist(extraction, imageUri, origin, corrected);
+      await persist(extraction, imageUri, origin, corrected, ocrText, ocrBlocks);
     } finally {
       setBusy(false);
     }
   };
+
+  const toggleAutoCapture = useCallback(async () => {
+    const previous = capturePreferences;
+    const next = { ...capturePreferences, autoCapture: !capturePreferences.autoCapture };
+    setLocalCapturePreferences(next);
+    try { await setCapturePreferences(next); }
+    catch {
+      setLocalCapturePreferences(previous);
+      setError('Could not save the auto-capture preference.');
+    }
+  }, [capturePreferences]);
 
   if (stage === 'processing') {
     return (
@@ -331,11 +348,6 @@ export default function Scan() {
           <Notice kind="info">We'll save the proof now. You can edit details later.</Notice>
           <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} right={<TextInput.Affix text="₱" />} />
           {duplicateWarning ? <Notice kind="warning">{duplicateWarning}</Notice> : null}
-          {localMatch ? (
-            <Notice kind="info">
-              Matched: {localMatch.provider} notification for {peso(localMatch.amountCentavos)} ({localMatch.deltaSeconds}s ago). This will be linked automatically.
-            </Notice>
-          ) : null}
           {error ? <Notice kind="error">{error}</Notice> : null}
           <Button mode="contained" onPress={() => void saveReview()} disabled={busy} loading={busy} style={{ minHeight: TOUCH_TARGET }}>Save proof</Button>
           <Button onPress={reset}>Retake</Button>
@@ -379,6 +391,9 @@ export default function Scan() {
         onPermission={() => void requestPermission()}
         onCapture={capture}
         onImport={pick}
+        autoCapture={capturePreferences.autoCapture}
+        autoStatus={autoCaptureStatus}
+        onAutoCapture={() => void toggleAutoCapture()}
       />
     </Screen>
   );

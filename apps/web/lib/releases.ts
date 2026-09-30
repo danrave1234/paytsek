@@ -15,6 +15,20 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: '0.2.14',
+    date: '2026-10-01',
+    channel: 'beta',
+    highlights: [
+      'A notification that was already recorded now becomes a Strong match automatically when it is the one safe exact-amount and nearby-time candidate.',
+      'Matching is fully server-authoritative: the phone no longer chooses a notification before ambiguity, timing, edits, source, and approval rules are checked.',
+      'Scan confirmation and evidence wording are now consistent across the mobile app and website.',
+    ],
+    fixes: [
+      'Multiple or conflicting candidates remain Possible match instead of the nearest notification being selected locally.',
+    ],
+    notes: 'PayTsek remains a free public beta. A Strong match is notification evidence, not confirmation from a wallet provider.',
+  },
+  {
     version: '0.2.13',
     date: '2026-09-19',
     channel: 'beta',

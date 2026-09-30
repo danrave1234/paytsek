@@ -89,7 +89,7 @@ export class WorkspacesService {
       );
       const row = inv.rows[0];
       if (!row) throw new ApiException('NOT_FOUND', 'Invitation is invalid or expired');
-      if (email && row.email !== email.toLowerCase()) throw new ApiException('FORBIDDEN', 'This invitation was sent to a different email address');
+      if (!email || row.email !== email.toLowerCase()) throw new ApiException('FORBIDDEN', 'Sign in with the email address this invitation was sent to');
       await c.query(`insert into profiles (user_id, display_name) values ($1,$2) on conflict (user_id) do nothing`, [userId, displayName ?? email ?? 'Member']);
       // Never lower an existing member's role via a stale invite: existing memberships win.
       await c.query(
@@ -109,15 +109,37 @@ export class WorkspacesService {
   }
 
   async updateMember(orgId: string, actorId: string, userId: string, input: UpdateMemberRequest): Promise<void> {
-    if (input.role === 'CASHIER') {
-      const owners = await this.db.one<{ n: number }>(`select count(*)::int as n from memberships where organization_id = $1 and role = 'OWNER' and user_id <> $2`, [orgId, userId]);
-      if ((owners?.n ?? 0) === 0) throw new ApiException('CONFLICT', 'A workspace must keep at least one owner');
-    }
-    await this.db.query(
-      `update memberships set role = coalesce($3, role), can_confirm_matches = coalesce($4, can_confirm_matches) where organization_id = $1 and user_id = $2`,
-      [orgId, userId, input.role ?? null, input.canConfirmMatches ?? null],
-    );
-    await this.audit.record({ organizationId: orgId, actorUserId: actorId, action: 'MEMBER_UPDATED', subjectType: 'membership', subjectId: userId, after: input as Record<string, unknown> });
+    await this.db.tx(async (c) => {
+      // Serialize membership administration for this workspace. This prevents
+      // two owners demoting each other concurrently and leaving no owner.
+      const workspace = await c.query(`select id from organizations where id = $1 for update`, [orgId]);
+      if (!workspace.rows[0]) throw new ApiException('NOT_FOUND', 'Workspace not found');
+      const target = await c.query<{ role: MemberSummary['role']; can_confirm_matches: boolean }>(
+        `select role, can_confirm_matches from memberships where organization_id = $1 and user_id = $2 for update`,
+        [orgId, userId],
+      );
+      const before = target.rows[0];
+      if (!before) throw new ApiException('NOT_FOUND', 'Member not found');
+      if (before.role === 'OWNER' && input.role === 'CASHIER') {
+        const owners = await c.query<{ n: number }>(`select count(*)::int as n from memberships where organization_id = $1 and role = 'OWNER'`, [orgId]);
+        if ((owners.rows[0]?.n ?? 0) <= 1) throw new ApiException('CONFLICT', 'A workspace must keep at least one owner');
+      }
+      const nextRole = input.role ?? before.role;
+      const nextCanConfirm = nextRole === 'OWNER' ? true : (input.canConfirmMatches ?? before.can_confirm_matches);
+      await c.query(
+        `update memberships set role = $3, can_confirm_matches = $4 where organization_id = $1 and user_id = $2`,
+        [orgId, userId, nextRole, nextCanConfirm],
+      );
+      await this.audit.record({
+        organizationId: orgId,
+        actorUserId: actorId,
+        action: 'MEMBER_UPDATED',
+        subjectType: 'membership',
+        subjectId: userId,
+        before: { role: before.role, canConfirmMatches: before.can_confirm_matches },
+        after: { role: nextRole, canConfirmMatches: nextCanConfirm },
+      }, c);
+    });
   }
 
   async updateWorkspace(orgId: string, actorId: string, input: UpdateWorkspaceRequest): Promise<WorkspaceSummary> {
@@ -137,13 +159,14 @@ export class WorkspacesService {
 
   async removeMember(orgId: string, actorId: string, userId: string): Promise<void> {
     if (actorId === userId) throw new ApiException('CONFLICT', 'Use workspace deletion or owner transfer instead of removing yourself');
-    // Business-owned records stay; created_by references the removed user's id for audit continuity.
-    const deleted = await this.db.query(`delete from memberships where organization_id = $1 and user_id = $2 and role <> 'OWNER'`, [orgId, userId]);
-    if (!deleted.rowCount) {
-      const target = await this.db.one<{ role: MemberSummary['role'] }>(`select role from memberships where organization_id = $1 and user_id = $2`, [orgId, userId]);
-      if (target?.role === 'OWNER') throw new ApiException('CONFLICT', 'Owners cannot be removed. Transfer ownership first.');
-      throw new ApiException('NOT_FOUND', 'Member not found');
-    }
-    await this.audit.record({ organizationId: orgId, actorUserId: actorId, action: 'MEMBER_REMOVED', subjectType: 'membership', subjectId: userId });
+    await this.db.tx(async (c) => {
+      await c.query(`select id from organizations where id = $1 for update`, [orgId]);
+      const target = await c.query<{ role: MemberSummary['role'] }>(`select role from memberships where organization_id = $1 and user_id = $2 for update`, [orgId, userId]);
+      if (!target.rows[0]) throw new ApiException('NOT_FOUND', 'Member not found');
+      if (target.rows[0].role === 'OWNER') throw new ApiException('CONFLICT', 'Owners cannot be removed. Demote or transfer ownership first.');
+      // Business-owned records stay; created_by references the removed user's id for audit continuity.
+      await c.query(`delete from memberships where organization_id = $1 and user_id = $2`, [orgId, userId]);
+      await this.audit.record({ organizationId: orgId, actorUserId: actorId, action: 'MEMBER_REMOVED', subjectType: 'membership', subjectId: userId }, c);
+    });
   }
 }

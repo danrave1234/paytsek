@@ -13,6 +13,8 @@ export interface CollectorStatus {
   notificationAccessGranted: boolean;
   /** The listener service is currently connected to the system notification manager. */
   listenerConnected: boolean;
+  /** Android is not applying Doze battery optimization to PayTsek. */
+  batteryOptimizationExempt: boolean;
   /** Wallet providers this installation was paired to collect. */
   enabledProviders: Array<'GCASH' | 'GOTYME' | 'MAYA' | 'MARIBANK'>;
   pendingUploadCount: number;
@@ -89,6 +91,8 @@ interface NativeModule {
   isSupported(): boolean;
   isNotificationAccessGranted(): boolean;
   openNotificationAccessSettings(): void;
+  openBatteryOptimizationSettings(): void;
+  openAppDetailsSettings(): void;
   getStatus(): Promise<CollectorStatus>;
   detectProviderApps(): Promise<DetectedProviderApp[]>;
   configure(config: CollectorConfig): Promise<void>;
@@ -120,6 +124,7 @@ const unsupportedStatus = (): CollectorStatus => ({
   configured: false,
   notificationAccessGranted: false,
   listenerConnected: false,
+  batteryOptimizationExempt: false,
   enabledProviders: [],
   pendingUploadCount: 0,
   lastObservedEventAt: null,
@@ -135,6 +140,8 @@ export const PaymentCollector = {
   isSupported: (): boolean => native?.isSupported() ?? false,
   isNotificationAccessGranted: (): boolean => native?.isNotificationAccessGranted() ?? false,
   openNotificationAccessSettings: (): void => native?.openNotificationAccessSettings(),
+  openBatteryOptimizationSettings: (): void => native?.openBatteryOptimizationSettings(),
+  openAppDetailsSettings: (): void => native?.openAppDetailsSettings(),
   getStatus: (): Promise<CollectorStatus> => native?.getStatus() ?? Promise.resolve(unsupportedStatus()),
   detectProviderApps: (): Promise<DetectedProviderApp[]> => native?.detectProviderApps() ?? Promise.resolve([]),
   configure: (config: CollectorConfig): Promise<void> => native?.configure(config) ?? Promise.resolve(),

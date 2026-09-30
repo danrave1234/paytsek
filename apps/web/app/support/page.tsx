@@ -18,7 +18,7 @@ const groups = [
       },
       {
         q: 'Why didn’t a payment auto-match, even though the amount and time agree?',
-        a: 'By design. Amount and nearby time can be useful evidence but are not a provider confirmation. PayTsek only marks a strong match when the tested wallet flow has enough comparable evidence; otherwise it stays a Possible match for review.',
+        a: 'PayTsek marks a Strong match automatically only when one unclaimed wallet notification has the exact amount and a safe nearby time, with no conflicting evidence. Multiple candidates, edited matching fields, pending or failed proofs, and other conflicts stay a Possible match for review.',
       },
     ],
   },
@@ -33,7 +33,7 @@ const groups = [
       },
       {
         q: 'Which wallets auto-match?',
-        a: 'None automatically during the current beta. GCash receiving pushes show the amount and sender number but normally not the reference printed on the customer’s screenshot. GCash, GoTyme, Maya and MariBank notifications can therefore suggest a Possible match by wallet, exact amount and nearby time; a person must review it.',
+        a: 'Recognized incoming-payment notifications from GCash, GoTyme, Maya and MariBank can match automatically when there is exactly one safe exact-amount and nearby-time candidate. Multiple or conflicting candidates stay a Possible match. A Strong match is notification evidence, not confirmation from the wallet provider.',
       },
       {
         q: 'Does PayTsek see my balance or MPIN?',

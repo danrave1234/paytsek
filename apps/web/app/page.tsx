@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { EVIDENCE_STATE_LABELS } from '@paytsek/contracts';
 import { PROVIDER_SUPPORT } from '@/lib/providers';
 import { latest } from '@/lib/releases';
 
@@ -40,9 +41,9 @@ function ProviderMark({ wallet, size = 28, className = '' }: { wallet: string; s
 }
 
 const sampleRows = [
-  { time: '8:42 PM', wallet: 'GCash', state: 'Possible match', amount: '₱850.00', tone: 'warn' },
-  { time: '7:18 PM', wallet: 'Maya', state: 'Recorded', amount: '₱240.00', tone: 'plain' },
-  { time: '6:05 PM', wallet: 'GoTyme', state: 'Owner confirmed', amount: '₱1,200.00', tone: 'ok' },
+  { time: '8:42 PM', wallet: 'GCash', state: EVIDENCE_STATE_LABELS.MATCHED_AUTO, amount: '₱850.00', tone: 'ok' },
+  { time: '7:18 PM', wallet: 'Maya', state: EVIDENCE_STATE_LABELS.REVIEW_REQUIRED, amount: '₱240.00', tone: 'warn' },
+  { time: '6:05 PM', wallet: 'GoTyme', state: EVIDENCE_STATE_LABELS.UNVERIFIED, amount: '₱1,200.00', tone: 'plain' },
 ] as const;
 
 function ScanGlyph({ className = 'size-6' }: { className?: string }) {
@@ -60,13 +61,7 @@ function TodayPreview() {
     <div className="phone-v2 mx-auto w-full max-w-[370px]" aria-label="Sample PayTsek Today screen">
       <div className="phone-v2-screen">
         <div className="flex items-center justify-between px-5 pb-4 pt-5">
-          <div className="flex items-center gap-2.5">
-            <Image src="/brand/paytsek-icon.png" alt="" width={38} height={38} className="size-9 rounded-lg" />
-            <div>
-              <p className="text-sm font-bold tracking-[-.02em]">PayTsek</p>
-              <p className="text-[10px] text-ink-3">Sample workspace</p>
-            </div>
-          </div>
+          <Image src="/brand/paytsek-wordmark.png" alt="PayTsek" width={108} height={36} className="h-auto w-[108px]" />
           <div className="size-8 rounded-full border border-line bg-bg-2" />
         </div>
 
@@ -153,7 +148,7 @@ export default function Home() {
             </div>
             <div className="absolute -right-5 bottom-28 z-20 hidden rounded-2xl border border-brand-solid/30 bg-brand-solid px-4 py-3 text-on-brand shadow-raised sm:block">
               <p className="text-[10px] font-semibold uppercase tracking-[.12em] text-white/60">Evidence</p>
-              <p className="mt-1 text-sm font-semibold">Possible match</p>
+              <p className="mt-1 text-sm font-semibold">{EVIDENCE_STATE_LABELS.MATCHED_AUTO}</p>
             </div>
             <TodayPreview />
           </div>
@@ -237,7 +232,7 @@ export default function Home() {
           <div>
             <p className="eyebrow text-brand">Optional wallet evidence</p>
             <h2 className="h-section mt-4 text-[clamp(2.2rem,5vw,3.8rem)] leading-[1.02]">Notification evidence, not confirmation.</h2>
-            <p className="mt-6 text-[16px] leading-8 text-ink-2">On Android, PayTsek compares the receiving wallet, exact amount and nearby time with a recognized incoming notification. Because the customer screenshot and receiver notification may not share a reference number, it presents a possible match for review, not provider verification.</p>
+            <p className="mt-6 text-[16px] leading-8 text-ink-2">On Android, PayTsek compares the exact amount and nearby time with recognized incoming notifications. One safe candidate becomes a Strong match automatically; multiple or conflicting candidates stay Possible match for review. Neither state is provider verification.</p>
             <div className="mt-8 border-l-2 border-brand pl-5">
               <p className="font-semibold">The record is saved either way.</p>
               <p className="mt-1 text-sm leading-6 text-ink-3">Missed notifications never erase a sale from your ledger.</p>

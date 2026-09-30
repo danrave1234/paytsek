@@ -40,13 +40,13 @@ export class RecordsController {
   }
 
   @Get()
-  list(@Workspace() ws: WorkspaceContext, @Query(zod(ListQuery)) q: ListRecordsQuery) {
-    return this.svc.list(ws.organizationId, q);
+  list(@Workspace() ws: WorkspaceContext, @CurrentUser() u: AuthUser, @Query(zod(ListQuery)) q: ListRecordsQuery) {
+    return this.svc.list(ws.organizationId, u.id, ws.role === 'OWNER', q);
   }
 
   @Get(':id')
-  detail(@Workspace() ws: WorkspaceContext, @Param('id') id: string) {
-    return this.svc.detail(ws.organizationId, id);
+  detail(@Workspace() ws: WorkspaceContext, @CurrentUser() u: AuthUser, @Param('id', zod(z.string().uuid())) id: string) {
+    return this.svc.detail(ws.organizationId, u.id, ws.role === 'OWNER', id);
   }
 
   @Patch(':id')
