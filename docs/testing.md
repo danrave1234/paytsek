@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Contracts | `pnpm --filter @paytsek/contracts test` | Labels/forbidden wording, plan invariants, schema strictness (integer centavos) |
 | Parsers | `pnpm --filter @paytsek/receipt-parsers test` | Money, reference normalization, Manila time, flow registry, redacted current GCash push + legacy parsing, fail-closed wallet templates, receipt extraction |
-| Matcher (adversarial) | `pnpm --filter @paytsek/api test` | Every rule in §6 of the brief: amount+time never auto, cross-provider never maps, 3 same-amount → distinct candidates, delayed exact-ID, edited fields, already-linked, failed/pending, owner approval, capture-time fallback |
+| Matcher (adversarial) | `pnpm --filter @paytsek/api test` | Single safe amount+time candidate auto-matches; multiple providers/candidates, edited fields, already-linked events, failed/pending proofs and owner-approval cases require review; delayed exact-ID and capture-time fallback remain covered |
 | Kotlin parity | `cd apps/mobile/android && ./gradlew :payment-collector:testDebugUnitTest` | Same fixtures as the TS GCash adapter |
 
 **Synthetic fixtures do not demonstrate real GCash notification coverage.** Each fixture file records `provenance: SYNTHETIC`. Replace with `REDACTED_REAL_SAMPLE` entries (with app version and platform) before treating a flow as production-verified.
@@ -26,15 +26,15 @@ Prereqs: two Android phones (one receives real GCash notifications), one iPhone,
 
 | # | Scenario (brief §16) | Steps | Expected | Status |
 | --- | --- | --- | --- | --- |
-| 1 | Same Android phone scans + collects | Pair phone as BOTH; scan receipt; receive real GCash payment | One record, one event, state REVIEW_REQUIRED when exact amount is nearby; never auto-matched without a shared reference | ☐ untested on real GCash |
+| 1 | Same Android phone scans + collects | Pair phone as BOTH; scan receipt; receive real GCash payment | One record, one event; a sole safe exact-amount/time candidate becomes MATCHED_AUTO without a manual tap | ☐ untested on real GCash |
 | 2 | iPhone scanner + distant Android collector (mobile data) | Owner code on iPhone, enter on Android over LTE | Approval flow completes without LAN | ☐ |
 | 3 | All-iPhone workspace | Skip pairing | Settings shows manual mode; no collector UI pretends to work | ☐ |
-| 4 | Notification before scan | Receive first, scan later | Record picks up existing event as candidate/match | ☐ |
-| 5 | Notification after scan | Scan first, receive later | Record updates after worker runs (realtime/refetch) | ☐ |
+| 4 | Notification before scan | Receive first, scan later | Record automatically becomes Strong match when the existing event is the sole safe candidate | ☐ |
+| 5 | Notification after scan | Scan first, receive later | Record automatically becomes Strong match after ingestion/reconciliation when the new event is the sole safe candidate | ☐ |
 | 6 | Payer absent, payee present | Receipt with "Sent to" only | payee_name filled, payer null, never compared to notification sender | ✔ unit |
-| 7 | Same amount / masked / time only | Two receipts, one event, no ref in notification | REVIEW_REQUIRED, never AUTO | ✔ unit |
-| 8 | Current GCash push without reference | Receipt has Ref; notification has amount + sender number only | REVIEW_REQUIRED; candidate is never auto-confirmed | ✔ unit / ☐ device |
-| 9 | Cross-provider refs differ | GoTyme receipt vs GCash notification | NO_COMPARABLE_NAMESPACE, no auto | ✔ unit |
+| 7 | Same amount / masked / time only | Two receipts, one event, no ref in notification | One record may claim the event; the other remains REVIEW_REQUIRED and the event is never linked twice | ✔ unit |
+| 8 | Current GCash push without reference | Receipt has Ref; notification has amount + sender number only | MATCHED_AUTO when it is the sole safe candidate; REVIEW_REQUIRED when ambiguous | ✔ unit / ☐ device |
+| 9 | Cross-provider refs differ | GoTyme receipt vs GCash notification | References are never compared; one safe amount/time candidate may still MATCHED_AUTO | ✔ unit |
 | 10 | Three same-amount payments | 3 events, 1 record | 3 distinct candidates sorted by Δt | ✔ unit |
 | 11 | Two cashiers claim one event | Confirm from two phones within 1 s | One MATCHED_BY_USER, one MATCH_CONFLICT | ☐ (DB constraint verified) |
 | 12 | Same receipt scanned repeatedly | Same image bytes / same clientRecordId | One record, `deduplicated: true`; no beta usage charge | ☐ |
@@ -50,6 +50,10 @@ Prereqs: two Android phones (one receives real GCash notifications), one iPhone,
 | 25 | Cross-workspace access | Cashier of A requests B's record | 403 NOT_A_MEMBER; RLS returns 0 rows | ☐ |
 | 26 | Staff requests owner inbox | Cashier GET /v1/inbox | 403 OWNER_ONLY | ☐ |
 | 27 | Retention / deletion | Run PURGE_RETENTION; delete account | Files removed, events purged, profile gone | ☐ |
+| 28 | Auto-capture rejects ordinary text | Point camera at prices/messages and an incomplete receipt | No record; temporary probe files are removed | ☐ device |
+| 29 | Auto-capture stable proof | Hold one sanitized successful proof steady | Two agreeing reads produce one local draft; manual shutter remains usable | ✔ parser gate / ☐ device |
+| 30 | Signed webhook replay/tamper | Replay a valid delivery; alter body; use stale timestamp | One evidence event; tampered/stale requests rejected | ✔ signature unit / ☐ API+DB |
+| 31 | Signed evidence reversal | Match a signed SUCCEEDED event, then send REVERSED | Match deactivated; proof retained; record becomes Possible match; audit preserved | ☐ API+DB |
 
 Record outcomes (device model, OS, GCash version) in this table. **Release gate:** zero false automatic matches across rows 6–10 and 14 on device, plus rows 11, 12, 15, 19, 25, 26 passing.
 

@@ -37,6 +37,7 @@ export class WorkspacesController {
 
   @Get('current/members')
   @WorkspaceRoute()
+  @OwnerOnly()
   members(@Workspace() ws: WorkspaceContext) {
     return this.svc.members(ws.organizationId);
   }
@@ -51,7 +52,7 @@ export class WorkspacesController {
   @Patch('current/members/:userId')
   @WorkspaceRoute()
   @OwnerOnly()
-  async update(@Workspace() ws: WorkspaceContext, @CurrentUser() user: AuthUser, @Param('userId') userId: string, @Body(zod(UpdateMemberRequest)) body: UpdateMemberRequest) {
+  async update(@Workspace() ws: WorkspaceContext, @CurrentUser() user: AuthUser, @Param('userId', zod(z.string().uuid())) userId: string, @Body(zod(UpdateMemberRequest)) body: UpdateMemberRequest) {
     await this.svc.updateMember(ws.organizationId, user.id, userId, body);
     return { ok: true };
   }
@@ -59,7 +60,7 @@ export class WorkspacesController {
   @Delete('current/members/:userId')
   @WorkspaceRoute()
   @OwnerOnly()
-  async remove(@Workspace() ws: WorkspaceContext, @CurrentUser() user: AuthUser, @Param('userId') userId: string) {
+  async remove(@Workspace() ws: WorkspaceContext, @CurrentUser() user: AuthUser, @Param('userId', zod(z.string().uuid())) userId: string) {
     await this.svc.removeMember(ws.organizationId, user.id, userId);
     return { ok: true };
   }

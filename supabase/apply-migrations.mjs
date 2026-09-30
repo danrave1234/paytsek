@@ -2,7 +2,7 @@
 // Records applied versions in supabase_migrations.schema_migrations (CLI-compatible) so
 // `supabase db push` can take over later. Usage: node supabase/apply-migrations.mjs
 import { createRequire } from 'node:module';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -10,7 +10,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(join(here, '..', 'apps', 'api', 'package.json'));
 const { Client } = require('pg');
 
-const envFile = readFileSync(join(here, '..', '.env'), 'utf8');
+const envPath = join(here, '..', '.env');
+const envFile = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
 const url = process.env.DATABASE_URL ?? envFile.match(/^DATABASE_URL=(.+)$/m)?.[1]?.trim();
 if (!url) throw new Error('DATABASE_URL not set');
 

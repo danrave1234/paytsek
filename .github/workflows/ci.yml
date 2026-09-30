@@ -12,10 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - run: npm install --global pnpm@11.9.0
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @paytsek/contracts run build
       - run: pnpm --filter @paytsek/receipt-parsers run build
       - run: pnpm -r run typecheck
       - run: pnpm --filter @paytsek/api test
       - run: pnpm --filter @paytsek/contracts test
+      - run: pnpm --filter @paytsek/receipt-parsers test
       - run: git diff --check

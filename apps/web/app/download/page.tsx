@@ -36,7 +36,7 @@ const scenarios = [
   {
     have: 'Only iPhones',
     need: 'Manual confirmation only',
-    detail: 'iOS does not let apps read other apps’ notifications. You can record and confirm by hand, but nothing will auto-match.',
+    detail: 'iOS does not let apps read other apps’ notifications. Without a paired Android payment phone, you can record and confirm by hand but nothing can match automatically.',
     ok: false,
   },
 ];

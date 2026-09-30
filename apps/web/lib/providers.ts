@@ -1,40 +1,31 @@
 import { PROVIDERS, type Provider } from '@paytsek/contracts';
-import { FLOW_REGISTRY, autoMatchFlowsForReceivingProvider } from '@paytsek/receipt-parsers';
+import { PROVIDER_PACKAGES } from '@paytsek/receipt-parsers';
 
 /**
- * Provider support shown on the marketing pages, DERIVED from the capability
- * registry rather than retyped. If a flow is enabled in
- * packages/receipt-parsers/src/registry.ts the site starts saying so on the
- * next build; if it is disabled, the site cannot accidentally over-claim.
+ * Provider support shown on the marketing pages. A provider is eligible for
+ * authoritative matching only when its Android package is allowlisted. Exact
+ * reference capability is a separate, stricter registry concern.
  */
 export interface ProviderSupport {
   provider: Provider;
   name: string;
-  /** Auto-matching is live for at least one flow into this receiving wallet. */
+  /** A recognized notification can be auto-matched when it is the sole safe candidate. */
   autoMatch: boolean;
   /** Short status for the compact strip under the hero. */
   short: string;
-  /** Sentence for the support table. Uses the registry's own disabled reason. */
+  /** Sentence for the support table. */
   note: string;
 }
 
-/** The registry's reason for the first disabled flow into this wallet. */
-function disabledReasonFor(provider: Provider): string | null {
-  const flow = FLOW_REGISTRY.find((f) => f.receivingProvider === provider && !f.autoMatchEnabled && f.disabledReason);
-  return flow?.disabledReason ?? null;
-}
-
 export const PROVIDER_SUPPORT: readonly ProviderSupport[] = PROVIDERS.map(({ value, label }) => {
-  const flows = autoMatchFlowsForReceivingProvider(value);
-  const autoMatch = flows.length > 0;
+  const autoMatch = PROVIDER_PACKAGES[value].length > 0;
   return {
     provider: value,
     name: label,
     autoMatch,
-    short: autoMatch ? 'Strong-match evidence' : 'Recorded evidence',
+    short: autoMatch ? 'Automatic when unique' : 'Proof recording only',
     note: autoMatch
-      ? `Strong-match evidence is available for tested flows: ${flows.join(', ')}. Everything else stays recorded for review.`
-      : disabledReasonFor(value) ??
-        'Payment proofs stay recorded while notification evidence for this wallet is still being validated.',
+      ? 'A single recognized notification with the exact amount and a safe nearby time becomes a Strong match. Multiple or conflicting candidates stay Possible match.'
+      : 'Payment proofs stay Recorded while notification evidence for this wallet is unavailable.',
   };
 });

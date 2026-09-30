@@ -16,12 +16,25 @@ import {
   parseManilaDateTime,
   parseMoneyExact,
   parseNotification,
+  assessReceiptForAutoCapture,
   referencesEqual,
 } from './index';
 import type { NotificationText } from './index';
 
 const FIXTURES = join(__dirname, '..', '..', '..', 'tests', 'fixtures');
 const loadJson = <T>(rel: string): T => JSON.parse(readFileSync(join(FIXTURES, rel), 'utf8')) as T;
+
+describe('camera auto-capture gate', () => {
+  it('requires a stable-looking successful proof, not an amount alone', () => {
+    const amountOnly = extractReceiptFields('Amount\nPHP 150.00');
+    expect(assessReceiptForAutoCapture(amountOnly).eligible).toBe(false);
+
+    const proof = extractReceiptFields('GCash\nPayment successful\nAmount\nPHP 150.00\nReference No. 1234567890123\nOct 1, 2026 9:00 AM');
+    const result = assessReceiptForAutoCapture(proof);
+    expect(result.eligible).toBe(true);
+    expect(result.fingerprint).toContain('GCASH|15000');
+  });
+});
 
 describe('money', () => {
   it('parses exact PHP amounts into integer centavos', () => {

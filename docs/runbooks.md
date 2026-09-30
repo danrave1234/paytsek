@@ -8,8 +8,10 @@
 2. Apply migrations with `pnpm db:migrate:direct`, then run `pnpm db:check`.
    Verify `proof-images` and `exports` are private buckets.
 3. Configure all required API environment values from `.env.example` in the
-   `paytsek-api` Vercel project. Deploy and confirm `GET /v1/health` through
-   `https://api.paytsek.online`.
+   `paytsek-api` Vercel project. Configure the `production-api` GitHub
+   environment and its deployment secrets as described in `run-and-release.md`.
+   Push to `main`, wait for **Deploy API** to succeed, and confirm
+   `GET /v1/health` through `https://api.paytsek.online`.
 4. Configure the web project's public API and Supabase environment values,
    then confirm `https://www.paytsek.online` is serving the current commit.
 5. Build an Android APK through the GitHub release workflow. Verify Google

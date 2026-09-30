@@ -5,8 +5,9 @@ export const REGISTRY_VERSION = '1';
 export type FixtureProvenance = 'SYNTHETIC' | 'REDACTED_REAL_SAMPLE';
 
 /**
- * A payment flow is (receipt provider, receiving provider, rail). Automatic
- * matching is enabled per *tested* flow, not per brand.
+ * A payment flow is (receipt provider, receiving provider, rail). This
+ * registry governs the exact-reference matching path. The matcher separately
+ * permits one safe, unambiguous amount-and-time notification candidate.
  */
 export interface FlowCapability {
   flowId: string;
@@ -19,12 +20,12 @@ export interface FlowCapability {
   notificationReferenceNamespace: ReferenceNamespace | null;
   /**
    * True only when real samples proved the receipt reference and the
-   * notification reference are the same identifier. If false, the flow is
-   * recording + manual confirmation only.
+   * notification reference are the same identifier. If false, exact-reference
+   * matching is unavailable; the amount-and-time policy may still apply.
    */
   referenceNamespacesComparable: boolean;
   autoMatchEnabled: boolean;
-  /** Human-readable reason shown in Settings > Sources when auto-match is off. */
+  /** Human-readable reason exact-reference matching is unavailable. */
   disabledReason: string | null;
   /** Provenance of the evidence backing this entry. */
   evidence: FixtureProvenance | 'NONE';
@@ -32,9 +33,9 @@ export interface FlowCapability {
 }
 
 /**
- * Launch registry. Every flow below defaults to *disabled* until a redacted real
- * sample pair (receipt + notification) has been captured and the parity tests
- * pass. Flip `autoMatchEnabled` only together with fixtures under
+ * Every exact-reference flow below defaults to disabled until a redacted real
+ * sample pair (receipt + notification) has been captured and parity tests pass.
+ * Flip `autoMatchEnabled` only together with fixtures under
  * tests/fixtures/<flowId>/ and a note in docs/provider-support-matrix.md.
  */
 export const FLOW_REGISTRY: readonly FlowCapability[] = [
@@ -50,7 +51,7 @@ export const FLOW_REGISTRY: readonly FlowCapability[] = [
     // No.; that is not a safe assumption for the receiving notification.
     referenceNamespacesComparable: false,
     autoMatchEnabled: false,
-    disabledReason: 'Current GCash receiving notifications do not provide the customer receipt reference. Amount and nearby time require review.',
+    disabledReason: 'Current GCash receiving notifications do not provide the customer receipt reference. Exact-reference matching is unavailable.',
     evidence: 'REDACTED_REAL_SAMPLE',
     observedAppVersions: [],
   },
@@ -65,7 +66,7 @@ export const FLOW_REGISTRY: readonly FlowCapability[] = [
     // notification does not expose that same identifier.
     referenceNamespacesComparable: false,
     autoMatchEnabled: false,
-    disabledReason: 'The QR receipt reference is not present in the current GCash receiving notification. Amount and nearby time require review.',
+    disabledReason: 'The QR receipt reference is not present in the current GCash receiving notification. Exact-reference matching is unavailable.',
     evidence: 'REDACTED_REAL_SAMPLE',
     observedAppVersions: [],
   },
@@ -104,7 +105,7 @@ export const FLOW_REGISTRY: readonly FlowCapability[] = [
     notificationReferenceNamespace: null,
     referenceNamespacesComparable: false,
     autoMatchEnabled: false,
-    disabledReason: 'Incoming template is recognized, but it contains no comparable reference. Review required.',
+    disabledReason: 'Incoming template is recognized, but it contains no comparable reference for exact-reference matching.',
     evidence: 'REDACTED_REAL_SAMPLE',
     observedAppVersions: [],
   },
@@ -156,7 +157,7 @@ export const FLOW_REGISTRY: readonly FlowCapability[] = [
     notificationReferenceNamespace: null,
     referenceNamespacesComparable: false,
     autoMatchEnabled: false,
-    disabledReason: 'Incoming template is recognized, but it contains no comparable reference. Review required.',
+    disabledReason: 'Incoming template is recognized, but it contains no comparable reference for exact-reference matching.',
     evidence: 'REDACTED_REAL_SAMPLE',
     observedAppVersions: [],
   },
@@ -182,7 +183,7 @@ export const FLOW_REGISTRY: readonly FlowCapability[] = [
     notificationReferenceNamespace: null,
     referenceNamespacesComparable: false,
     autoMatchEnabled: false,
-    disabledReason: 'Incoming template is recognized, but it contains no comparable reference. Review required.',
+    disabledReason: 'Incoming template is recognized, but it contains no comparable reference for exact-reference matching.',
     evidence: 'REDACTED_REAL_SAMPLE',
     observedAppVersions: [],
   },
@@ -197,14 +198,14 @@ export function findFlow(receiptProvider: Provider | null, receivingProvider: Pr
   );
 }
 
-/** Flows for which a receiving source of this provider can auto-match. */
+/** Flows for which the exact-reference path is enabled for this provider. */
 export function autoMatchFlowsForReceivingProvider(receivingProvider: Provider): string[] {
   return FLOW_REGISTRY.filter((f) => f.receivingProvider === receivingProvider && f.autoMatchEnabled).map(
     (f) => f.flowId,
   );
 }
 
-/** Why an automatic match was not permitted. Surfaced for display and audit. */
+/** Why exact-reference matching was not permitted. Surfaced for audit. */
 export type FlowBlockReason =
   | 'MISSING_REFERENCE'
   | 'UNKNOWN_FLOW'
@@ -218,7 +219,7 @@ export interface FlowDecision {
 }
 
 /**
- * The single gate for automatic matching.
+ * The single gate for exact-reference automatic matching.
  *
  * A payment flow is (receipt provider, receiving provider, rail) — the rail
  * comes from the customer's confirmation, because a "money received"

@@ -50,7 +50,7 @@ export class RecordsService {
       // inline: a proof scanned minutes after its notification arrived must
       // match immediately, not on the next cron drain. The queued job stays
       // as the retry safety net.
-      const settled = await this.reconcileInline(created.record.id, input.matchClientEventId ?? null);
+      const settled = await this.reconcileInline(created.record.id);
       return settled ? { ...created, record: settled } : created;
     } catch (e) {
       if (!(e instanceof ApiException) || e.code !== 'IDEMPOTENCY_CONFLICT') throw e;
@@ -63,6 +63,23 @@ export class RecordsService {
 
   private insertRecord(orgId: string, userId: string, input: CreateRecordRequest, c: CreateRecordRequest['corrected'], edited: string[]): Promise<CreateRecordResponse> {
     return this.db.tx(async (tx) => {
+      if (input.fromEventId) {
+        if (input.captureOrigin !== 'FROM_EVENT' || !input.sourceId) {
+          throw new ApiException('VALIDATION_FAILED', 'An incoming evidence record must retain its receiving source');
+        }
+        const event = await tx.query<{ source_id: string; amount_centavos: string }>(
+          `select source_id, amount_centavos from notification_events
+            where id = $1 and organization_id = $2 and event_status = 'SUCCEEDED'
+              and purged_at is null and saved_as_record_id is null
+            for update`,
+          [input.fromEventId, orgId],
+        );
+        const row = event.rows[0];
+        if (!row) throw new ApiException('EVENT_NOT_FOUND', 'Incoming payment evidence is unavailable');
+        if (row.source_id !== input.sourceId || Number(row.amount_centavos) !== c.amountCentavos) {
+          throw new ApiException('CANDIDATE_OUT_OF_SCOPE', 'Incoming payment evidence does not match this record');
+        }
+      }
       let id: string;
       try {
         const ins = await tx.query<{ id: string }>(
@@ -101,16 +118,11 @@ export class RecordsService {
   }
 
   /** Run reconciliation now (best effort) and return the refreshed summary. */
-  private async reconcileInline(recordId: string, matchClientEventId?: string | null): Promise<RecordSummary | null> {
+  private async reconcileInline(recordId: string): Promise<RecordSummary | null> {
     try {
-      // If the client found a local cache match, claim it first.
-      if (matchClientEventId) {
-        const claimed = await this.reconcile.claimPreferredClientEvent(recordId, matchClientEventId);
-        if (claimed) {
-          const row = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.id = $1`, [recordId]);
-          return row ? toSummary(row) : null;
-        }
-      }
+      // The server is the sole matching authority. Even when the scanner has
+      // already uploaded a notification, the full ambiguity, timing, edit,
+      // source and approval policy is evaluated before evidence is elevated.
       await this.reconcile.reconcileRecord(recordId);
       const row = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.id = $1`, [recordId]);
       return row ? toSummary(row) : null;
@@ -136,7 +148,7 @@ export class RecordsService {
     if (flags.length) await tx.query(`update payment_records set flags = $2 where id = $1`, [id, flags]);
   }
 
-  async list(orgId: string, q: ListRecordsQuery): Promise<ListRecordsResponse> {
+  async list(orgId: string, userId: string, isOwner: boolean, q: ListRecordsQuery): Promise<ListRecordsResponse> {
     const params: unknown[] = [orgId];
     const where: string[] = ['r.organization_id = $1'];
     if (q.q) {
@@ -154,7 +166,8 @@ export class RecordsService {
     if (q.state?.length) { params.push(q.state); where.push(`r.evidence_state = any($${params.length}::evidence_state[])`); }
     if (q.sourceId) { params.push(q.sourceId); where.push(`r.source_id = $${params.length}`); }
     if (q.provider) { params.push(q.provider); where.push(`r.receipt_provider = $${params.length}::provider`); }
-    if (q.staffUserId) { params.push(q.staffUserId); where.push(`r.created_by = $${params.length}`); }
+    if (!isOwner) { params.push(userId); where.push(`r.created_by = $${params.length}`); }
+    else if (q.staffUserId) { params.push(q.staffUserId); where.push(`r.created_by = $${params.length}`); }
     if (q.from) { params.push(q.from); where.push(`r.created_at >= $${params.length}`); }
     if (q.to) { params.push(q.to); where.push(`r.created_at <= $${params.length}`); }
     if (q.cursor) {
@@ -178,14 +191,14 @@ export class RecordsService {
     return { items, nextCursor };
   }
 
-  async detail(orgId: string, id: string): Promise<RecordDetail> {
+  async detail(orgId: string, userId: string, isOwner: boolean, id: string): Promise<RecordDetail> {
     // Self-heal: if the record is still open and evidence may have changed
     // (e.g. a notification arrived after the record was created), reconcile
     // again so the user sees the current candidate state. Throttle to ~20s
     // so 15s visibility polls don't thrash the reconcile path.
     const pre = await this.db.one<{ evidence_state: string; last_reconciled_at: Date | null }>(
-      `select evidence_state, last_reconciled_at from payment_records where organization_id = $1 and id = $2`,
-      [orgId, id],
+      `select evidence_state, last_reconciled_at from payment_records where organization_id = $1 and id = $2 and ($3::boolean or created_by = $4)`,
+      [orgId, id, isOwner, userId],
     );
     if (pre && (pre.evidence_state === 'UNVERIFIED' || pre.evidence_state === 'REVIEW_REQUIRED')) {
       const sinceLastReconcile = pre.last_reconciled_at ? Date.now() - pre.last_reconciled_at.getTime() : Infinity;
@@ -193,7 +206,7 @@ export class RecordsService {
         try { await this.reconcile.reconcileRecord(id); } catch { /* next drain retries */ }
       }
     }
-    const row = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.organization_id = $1 and r.id = $2`, [orgId, id]);
+    const row = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.organization_id = $1 and r.id = $2 and ($3::boolean or r.created_by = $4)`, [orgId, id, isOwner, userId]);
     if (!row) throw new ApiException('RECORD_NOT_FOUND', 'Record not found');
     const versions = await this.db.query<{ kind: string; fields: RecordDetail['extracted'] }>(`select kind, fields from proof_versions where record_id = $1 order by version`, [id]);
     const history = await this.db.query<{ created_at: Date; action: string; display_name: string | null; reason: string | null }>(
@@ -257,7 +270,7 @@ export class RecordsService {
         await this.reconcile.scheduleRecord(id, tx);
       }
     });
-    return this.detail(orgId, id);
+    return this.detail(orgId, userId, isOwner, id);
   }
 
   /** Voiding excludes from totals, keeps evidence + audit, and never refunds quota automatically. */

@@ -5,3 +5,4 @@ export * from './time';
 export * from './notifications';
 export * from './receipt/extract';
 export * from './receipt/provider';
+export * from './receipt/auto-capture';

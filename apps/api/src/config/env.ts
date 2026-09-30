@@ -53,6 +53,8 @@ export const EnvSchema = z.object({
   PAYMONGO_SECRET_KEY: z.string().optional().default(''),
   /** Per-webhook endpoint secret used to verify Paymongo-Signature. */
   PAYMONGO_WEBHOOK_SECRET: z.string().optional().default(''),
+  /** Master key used to derive per-connector webhook signing secrets. */
+  EVIDENCE_WEBHOOK_SIGNING_KEY: z.string().optional().default(''),
   /** Optional override for test environments; live PayMongo links are PHP. */
   PAYMONGO_API_URL: z.string().url().default('https://api.paymongo.com'),
   /** Public dashboard destination after a hosted PayMongo checkout completes. */

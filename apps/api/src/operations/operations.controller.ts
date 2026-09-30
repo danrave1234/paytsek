@@ -24,7 +24,7 @@ export class OperationsService {
   ) {}
 
   /** Recorded-payment totals for "today" in the workspace timezone. Not wallet balance. */
-  async home(orgId: string): Promise<HomeSummary> {
+  async home(orgId: string, viewerUserId: string | null): Promise<HomeSummary> {
     const [t, hourly, collectors, recent] = await Promise.all([
       this.db.one<{
         recorded_n: number; recorded_c: string; matched_n: number; matched_c: string; manual_n: number; manual_c: string; unverified_n: number; unverified_c: string; review_n: number;
@@ -38,6 +38,7 @@ export class OperationsService {
          select r.*
          from payment_records r, day
          where r.organization_id = $1
+           and ($2::uuid is null or r.created_by = $2)
            and ${EFFECTIVE_AT_SQL} >= day.start
            and ${EFFECTIVE_AT_SQL} < day.start + interval '1 day'
        )
@@ -52,7 +53,7 @@ export class OperationsService {
          coalesce(sum(amount_centavos) filter (where evidence_state = 'UNVERIFIED'),0)::text as unverified_c,
          count(*) filter (where evidence_state = 'REVIEW_REQUIRED')::int as review_n
        from scoped`,
-        [orgId],
+        [orgId, viewerUserId],
       ),
       this.db.query<{ hour: number | string; amount_c: string }>(
         `with day as (
@@ -66,12 +67,13 @@ export class OperationsService {
          coalesce(sum(r.amount_centavos), 0)::text as amount_c
        from payment_records r, day
        where r.organization_id = $1
+         and ($2::uuid is null or r.created_by = $2)
          and r.evidence_state <> 'VOIDED'
          and ${EFFECTIVE_AT_SQL} >= day.start
          and ${EFFECTIVE_AT_SQL} < day.start + interval '1 day'
        group by 1
        order by 1`,
-        [orgId],
+        [orgId, viewerUserId],
       ),
       this.db.query<{ id: string; label: string; source_label: string; last: Date | null; pending: number | null; access: boolean | null }>(
         `select d.id, d.label, string_agg(distinct s.label, ', ' order by s.label) as source_label,
@@ -82,8 +84,8 @@ export class OperationsService {
         [orgId],
       ),
       this.db.query<RecordRow>(
-        `${RECORD_SELECT} where r.organization_id = $1 order by r.created_at desc limit 6`,
-        [orgId],
+        `${RECORD_SELECT} where r.organization_id = $1 and ($2::uuid is null or r.created_by = $2) order by r.created_at desc limit 6`,
+        [orgId, viewerUserId],
       ),
     ]);
     const hourlyRecordedCentavos = Array.from({ length: 24 }, () => 0);
@@ -104,7 +106,7 @@ export class OperationsService {
         reviewRequiredCount: t?.review_n ?? 0,
         hourlyRecordedCentavos,
       },
-      collectors: collectors.rows.map((c) => ({
+      collectors: viewerUserId ? [] : collectors.rows.map((c) => ({
         deviceId: c.id, label: c.label, sourceLabel: c.source_label, lastSeenAt: c.last?.toISOString() ?? null,
         stale: !c.last || Date.now() - c.last.getTime() > 10 * 60 * 1000, pendingUploadCount: c.pending, notificationAccessGranted: c.access,
       })),
@@ -113,7 +115,7 @@ export class OperationsService {
   }
 
   /** Aggregates only facts present in the ledger: date, provider, amount and evidence. */
-  async analytics(orgId: string, range: AnalyticsRange): Promise<AnalyticsSummary> {
+  async analytics(orgId: string, range: AnalyticsRange, viewerUserId: string | null): Promise<AnalyticsSummary> {
     const days = range === '90D' ? 90 : range === '30D' ? 30 : 7;
     const bounds = await this.db.one<{ timezone: string; from_date: string; to_date: string }>(
       `select o.timezone,
@@ -135,6 +137,7 @@ export class OperationsService {
         left join payment_sources s on s.id = r.source_id
         cross join context
        where r.organization_id = $1
+         and ($3::uuid is null or r.created_by = $3)
          and r.evidence_state <> 'VOIDED'
          and ${EFFECTIVE_AT_SQL} >= context.start_at
          and ${EFFECTIVE_AT_SQL} < context.end_at
@@ -143,11 +146,11 @@ export class OperationsService {
     const [totals, daily, providers, evidence] = await Promise.all([
       this.db.one<{ recorded_n: number; recorded_c: string }>(
         `${scope} select count(*)::int as recorded_n, coalesce(sum(amount_centavos), 0)::text as recorded_c from scoped`,
-        [orgId, days],
+        [orgId, days, viewerUserId],
       ),
       this.db.query<{ day: string; recorded_n: number; recorded_c: string }>(
         `${scope}, dates as (
-           select generate_series(($3::date), ($4::date), interval '1 day')::date as day
+           select generate_series(($4::date), ($5::date), interval '1 day')::date as day
          )
          select to_char(dates.day, 'YYYY-MM-DD') as day,
                 count(scoped.id)::int as recorded_n,
@@ -155,17 +158,17 @@ export class OperationsService {
            from dates
            left join scoped on (coalesce(scoped.receipt_transaction_at, scoped.captured_at, scoped.created_at) at time zone scoped.timezone)::date = dates.day
           group by dates.day order by dates.day`,
-        [orgId, days, bounds.from_date, bounds.to_date],
+        [orgId, days, viewerUserId, bounds.from_date, bounds.to_date],
       ),
       this.db.query<{ provider: AnalyticsSummary['byProvider'][number]['provider']; recorded_n: number; recorded_c: string }>(
         `${scope} select provider, count(*)::int as recorded_n, sum(amount_centavos)::text as recorded_c
                     from scoped where provider is not null group by provider order by sum(amount_centavos) desc`,
-        [orgId, days],
+        [orgId, days, viewerUserId],
       ),
       this.db.query<{ state: AnalyticsSummary['byEvidence'][number]['state']; recorded_n: number; recorded_c: string }>(
         `${scope} select evidence_state as state, count(*)::int as recorded_n, sum(amount_centavos)::text as recorded_c
                     from scoped group by evidence_state order by sum(amount_centavos) desc`,
-        [orgId, days],
+        [orgId, days, viewerUserId],
       ),
     ]);
 
@@ -275,14 +278,14 @@ export class OperationsController {
 
   @Get('home')
   @WorkspaceRoute()
-  home(@Workspace() ws: WorkspaceContext) {
-    return this.svc.home(ws.organizationId);
+  home(@Workspace() ws: WorkspaceContext, @CurrentUser() u: AuthUser) {
+    return this.svc.home(ws.organizationId, ws.role === 'OWNER' ? null : u.id);
   }
 
   @Get('analytics')
   @WorkspaceRoute()
-  analytics(@Workspace() ws: WorkspaceContext, @Query(zod(AnalyticsQuery)) query: { range: AnalyticsRange }) {
-    return this.svc.analytics(ws.organizationId, query.range);
+  analytics(@Workspace() ws: WorkspaceContext, @CurrentUser() u: AuthUser, @Query(zod(AnalyticsQuery)) query: { range: AnalyticsRange }) {
+    return this.svc.analytics(ws.organizationId, query.range, ws.role === 'OWNER' ? null : u.id);
   }
 
   @Post('exports')

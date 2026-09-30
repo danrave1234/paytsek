@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MatchReasonCode, PaymentRail, Provider, ReferenceNamespace, TimeBasis } from '../enums';
+import { EvidenceOrigin, MatchReasonCode, PaymentRail, Provider, ReferenceNamespace, TimeBasis } from '../enums';
 import { uuid } from './pairing';
 
 /**
@@ -9,6 +9,7 @@ import { uuid } from './pairing';
 export const CandidateEvent = z.object({
   eventId: uuid,
   provider: Provider,
+  evidenceOrigin: EvidenceOrigin,
   paymentRail: PaymentRail,
   currency: z.literal('PHP'),
   amountCentavos: z.number().int(),
@@ -74,7 +75,7 @@ export const OwnerInboxEvent = CandidateEvent.omit({
 }).extend({
   sourceId: uuid,
   sourceLabel: z.string(),
-  deviceId: uuid,
+  deviceId: uuid.nullable(),
   linkedRecordId: uuid.nullable(),
   serverReceivedAt: z.string().datetime(),
   purgeAfter: z.string().datetime().nullable(),

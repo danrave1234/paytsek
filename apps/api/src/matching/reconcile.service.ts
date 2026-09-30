@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { CandidateEvent, CandidatesResponse, EvidenceState, PaymentRail, Provider, ReferenceNamespace, TimePrecision } from '@paytsek/contracts';
+import type { CandidateEvent, CandidatesResponse, EvidenceOrigin, EvidenceState, PaymentRail, Provider, ReferenceNamespace, TimePrecision } from '@paytsek/contracts';
 import { loadEnv } from '../config/env';
 import { AuditService } from '../db/audit.service';
-import { DbService, isMatchInsertFailure, isUniqueViolation, type Queryable } from '../db/db.service';
+import { DbService, isMatchInsertFailure, type Queryable } from '../db/db.service';
 import { JobsService } from '../jobs/jobs.service';
 import { MATCHER_VERSION, decide, type MatchDecision, type MatchEventInput, type MatchRecordInput, type MatcherConfig } from './matcher';
 import { decideUnscoped } from './unscoped-matcher';
@@ -43,6 +43,7 @@ interface EventRow {
   payment_rail: CandidateEvent['paymentRail'];
   linked_record_id: string | null;
   source_id: string | null;
+  evidence_origin: EvidenceOrigin;
 }
 
 /** States that reconciliation may move between. Anything else needs an explicit human action. */
@@ -72,78 +73,11 @@ export class ReconcileService {
     await this.jobs.enqueue('RECONCILE_EVENT', { eventId }, `event:${eventId}`, q);
   }
 
-  /**
-   * If the client passed a preferred clientEventId from local cache matching,
-   * claim it immediately: find the ingested event, adopt its source, and
-   * insert an AUTO match. Returns true if claimed.
-   */
-  async claimPreferredClientEvent(recordId: string, clientEventId: string): Promise<boolean> {
-    return this.db.tx(async (c) => {
-      // Load and lock the record first to know the organization
-      const rec = await this.loadRecord(c, recordId, true);
-      if (!rec || !OPEN_STATES.includes(rec.evidence_state)) return false;
-
-      // Find the ingested event by client_event_id, scoped to the same organization
-      const ev = await c.query<{ id: string; currency: string; amount_centavos: string; source_id: string | null; linked_record_id: string | null }>(
-        `select e.id, e.currency, e.amount_centavos, e.source_id,
-                (select pm.record_id from payment_matches pm where pm.event_id = e.id and pm.active and pm.record_id <> $2 limit 1) as linked_record_id
-           from notification_events e
-          where e.client_event_id = $1 and e.organization_id = $3 and e.purged_at is null
-          limit 1`,
-        [clientEventId, recordId, rec.organization_id],
-      );
-      if (ev.rows.length === 0) return false;
-
-      const event = ev.rows[0]!;
-
-      // Guard: amount must match
-      if (event.amount_centavos !== rec.amount_centavos || event.currency !== rec.currency) return false;
-
-      // Guard: event not already linked to another record
-      if (event.linked_record_id && event.linked_record_id !== recordId) return false;
-
-      // Adopt source if needed
-      if (event.source_id && !rec.source_id) {
-        await c.query(`update payment_records set source_id = $2 where id = $1`, [rec.id, event.source_id]);
-      }
-
-      // Insert the match
-      try {
-        await c.query('SAVEPOINT claim');
-        await c.query(
-          `insert into payment_matches (organization_id, record_id, event_id, kind, reason_codes, supporting_fields, missing_fields, time_basis, window_seconds, delta_seconds, flow_id, matcher_version)
-           values ($1,$2,$3,'AUTO',$4,$5,$6,$7,$8,$9,$10,$11)`,
-          [rec.organization_id, rec.id, event.id, ['CLIENT_LOCAL_MATCH'], ['amount'], [], 'CAPTURE_TIME', 0, null, 'local_cache', MATCHER_VERSION],
-        );
-        await c.query('RELEASE SAVEPOINT claim');
-      } catch (e) {
-        if (!isMatchInsertFailure(e)) throw e;
-        await c.query('ROLLBACK TO SAVEPOINT claim');
-        return false;
-      }
-
-      // Protect event from purge
-      await c.query(`update notification_events set purge_after = now() + interval '90 days' where id = $1`, [event.id]);
-
-      // Update evidence state
-      await c.query(
-        `update payment_records set evidence_state = 'MATCHED_AUTO', matcher_version = $2, last_reconciled_at = now() where id = $1`,
-        [rec.id, MATCHER_VERSION],
-      );
-
-      await this.audit.record(
-        { organizationId: rec.organization_id, action: 'MATCH_AUTO', subjectType: 'payment_record', subjectId: rec.id, after: { eventId: event.id, reasonCodes: ['CLIENT_LOCAL_MATCH'], flowId: 'local_cache', deltaSeconds: null, matcherVersion: MATCHER_VERSION } },
-        c,
-      );
-      return true;
-    });
-  }
-
   async reconcileEvent(eventId: string): Promise<void> {
     const recs = await this.db.query<{ id: string }>(
       `select r.id from payment_records r
          join notification_events e on e.organization_id = r.organization_id and e.amount_centavos = r.amount_centavos and e.currency = r.currency
-        where e.id = $1 and r.evidence_state in ('UNVERIFIED','REVIEW_REQUIRED')
+        where e.id = $1 and e.event_status = 'SUCCEEDED' and r.evidence_state in ('UNVERIFIED','REVIEW_REQUIRED')
           and (r.source_id is null or r.source_id = e.source_id)
         order by r.created_at limit 200`,
       [eventId],
@@ -238,7 +172,8 @@ export class ReconcileService {
       [rec.organization_id, rec.source_id],
     );
     const lastSeen = collector?.last ?? null;
-    const stale = !lastSeen || Date.now() - lastSeen.getTime() > 10 * 60 * 1000;
+    const hasSignedEvidence = events.some((event) => event.evidence_origin === 'SIGNED_WEBHOOK');
+    const stale = !hasSignedEvidence && (!lastSeen || Date.now() - lastSeen.getTime() > 10 * 60 * 1000);
 
     return {
       recordId,
@@ -252,6 +187,7 @@ export class ReconcileService {
         return {
           eventId: e.id,
           provider: e.provider,
+          evidenceOrigin: e.evidence_origin,
           paymentRail: e.payment_rail,
           currency: 'PHP',
           amountCentavos: Number(e.amount_centavos),
@@ -288,16 +224,16 @@ export class ReconcileService {
   }
 
   /** Exact amount in the workspace. Once a receiving source is known, keep the
-   * search scoped to it; otherwise every enabled listener is supplementary
-   * evidence and the result always requires a human choice. */
+   * search scoped to it. Without a source, a single safe candidate from one
+   * provider may match; multiple providers or candidates require review. */
   private async loadCandidateEvents(q: Queryable, rec: RecordRow): Promise<EventRow[]> {
     const r = await q.query<EventRow>(
       `select e.id, e.currency, e.amount_centavos, e.reference_namespace, e.reference_value, e.provider_described_at, e.notification_when_at, e.posted_at,
-              e.payer_masked_name, e.payer_masked_phone, e.provider, e.payment_rail, e.source_id,
+              e.payer_masked_name, e.payer_masked_phone, e.provider, e.payment_rail, e.source_id, e.evidence_origin,
               (select pm.record_id from payment_matches pm where pm.event_id = e.id and pm.active and pm.record_id <> $1 limit 1) as linked_record_id
          from notification_events e
         where e.organization_id = $2 and ($3::uuid is null or e.source_id = $3)
-          and e.amount_centavos = $4 and e.currency = $5 and e.purged_at is null
+          and e.amount_centavos = $4 and e.currency = $5 and e.purged_at is null and e.event_status = 'SUCCEEDED'
           and e.posted_at between $6::timestamptz - interval '3 days' and $6::timestamptz + interval '3 days'
         order by e.posted_at limit 200`,
       [rec.id, rec.organization_id, rec.source_id, rec.amount_centavos, rec.currency, rec.receipt_transaction_at ?? rec.captured_at],
@@ -306,11 +242,11 @@ export class ReconcileService {
     if (rec.reference_value && rec.reference_namespace) {
       const extra = await q.query<EventRow>(
         `select e.id, e.currency, e.amount_centavos, e.reference_namespace, e.reference_value, e.provider_described_at, e.notification_when_at, e.posted_at,
-                e.payer_masked_name, e.payer_masked_phone, e.provider, e.payment_rail, e.source_id,
+                e.payer_masked_name, e.payer_masked_phone, e.provider, e.payment_rail, e.source_id, e.evidence_origin,
                 (select pm.record_id from payment_matches pm where pm.event_id = e.id and pm.active and pm.record_id <> $1 limit 1) as linked_record_id
            from notification_events e
           where e.organization_id = $2 and ($3::uuid is null or e.source_id = $3)
-            and e.amount_centavos = $4 and e.currency = $5 and e.purged_at is null
+            and e.amount_centavos = $4 and e.currency = $5 and e.purged_at is null and e.event_status = 'SUCCEEDED'
             and e.reference_value is not null and regexp_replace(e.reference_value, '[^A-Za-z0-9]', '', 'g') = regexp_replace($6, '[^A-Za-z0-9]', '', 'g')`,
         [rec.id, rec.organization_id, rec.source_id, rec.amount_centavos, rec.currency, rec.reference_value],
       );

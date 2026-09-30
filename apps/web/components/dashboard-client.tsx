@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import type { WorkspaceSummary } from '@paytsek/contracts';
+import { EVIDENCE_STATE_LABELS, type EvidenceState, type WorkspaceSummary } from '@paytsek/contracts';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 
 type Workspace = WorkspaceSummary;
-type RecordRow = { id: string; amountCentavos: number; currency: 'PHP'; evidenceState: string; sourceLabel: string; capturedAt: string; receiptTransactionAt: string | null };
+type RecordRow = { id: string; amountCentavos: number; currency: 'PHP'; evidenceState: EvidenceState; sourceLabel: string; capturedAt: string; receiptTransactionAt: string | null };
 type Home = { today: { recordedCount: number; recordedCentavos: number; notificationMatchedCount: number; notificationMatchedCentavos: number; confirmedManuallyCount: number; confirmedManuallyCentavos: number; unverifiedCount: number; unverifiedCentavos: number; reviewRequiredCount: number; hourlyRecordedCentavos: number[] }; recentRecords: RecordRow[]; collectors: Array<{ deviceId: string; label: string; sourceLabel: string; lastSeenAt: string | null; stale: boolean; notificationAccessGranted: boolean | null }> };
 type Device = { id: string; label: string; platform: string; status: string; lastServerContactAt: string | null; appVersion: string | null };
 type Member = { userId: string; displayName: string; email: string | null; role: string; joinedAt: string };
@@ -120,7 +120,7 @@ export function DashboardClient() {
     {loading || !data ? <Loading /> : <>
       <section className="grid overflow-hidden rounded-[1.75rem] border border-line bg-bg lg:grid-cols-[1.35fr_.65fr]">
         <div className="min-w-0 p-6 sm:p-10"><p className="text-sm text-ink-3">Recorded today</p><p className="data mt-4 break-words text-[clamp(2.65rem,14vw,3.75rem)] font-semibold tracking-[-.06em]">{amount(data.home.today.recordedCentavos)}</p><p className="mt-3 text-sm text-ink-3">{data.home.today.recordedCount} record{data.home.today.recordedCount === 1 ? '' : 's'}</p></div>
-        <div className="border-t border-line p-7 lg:border-l lg:border-t-0"><p className="eyebrow">Evidence</p><dl className="mt-5 space-y-4 text-sm"><EvidenceCount label="Strong match" value={data.home.today.notificationMatchedCount} /><EvidenceCount label="Owner confirmed" value={data.home.today.confirmedManuallyCount} /><EvidenceCount label="Possible match" value={data.home.today.reviewRequiredCount} /><EvidenceCount label="Recorded" value={data.home.today.unverifiedCount} /></dl></div>
+        <div className="border-t border-line p-7 lg:border-l lg:border-t-0"><p className="eyebrow">Evidence</p><dl className="mt-5 space-y-4 text-sm"><EvidenceCount label={EVIDENCE_STATE_LABELS.MATCHED_AUTO} value={data.home.today.notificationMatchedCount} /><EvidenceCount label={EVIDENCE_STATE_LABELS.CONFIRMED_MANUALLY} value={data.home.today.confirmedManuallyCount} /><EvidenceCount label={EVIDENCE_STATE_LABELS.REVIEW_REQUIRED} value={data.home.today.reviewRequiredCount} /><EvidenceCount label={EVIDENCE_STATE_LABELS.UNVERIFIED} value={data.home.today.unverifiedCount} /></dl></div>
       </section>
       <section className="mt-5 grid gap-5 xl:grid-cols-[1.45fr_.85fr]">
         <Panel title="Latest records" action="Synced from mobile"><div className="divide-y divide-line">{data.home.recentRecords.length ? data.home.recentRecords.map((record) => <div key={record.id} className="grid grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-2 py-3.5 sm:grid-cols-[82px_minmax(0,1fr)_auto] sm:gap-3"><p className="data text-xs text-ink-3">{recordTime(record, workspace?.timezone)}</p><div className="min-w-0"><p className="truncate text-sm font-semibold">{record.sourceLabel}</p><p className="mt-1 text-xs text-ink-3">{stateLabel(record.evidenceState)}</p></div><p className="data shrink-0 text-sm font-semibold">{amount(record.amountCentavos)}</p></div>) : <Empty label="No records yet today." />}</div></Panel>
@@ -187,4 +187,4 @@ function Panel({ title, action, children }: { title: string; action?: string; ch
 function Empty({ label }: { label: string }) { return <p className="py-5 text-sm text-ink-3">{label}</p>; }
 function EvidenceCount({ label, value }: { label: string; value: number }) { return <div className="flex items-center justify-between gap-4"><dt className="text-ink-2">{label}</dt><dd className="data font-semibold">{value}</dd></div>; }
 function recordTime(record: RecordRow, timezone = 'Asia/Manila') { return new Intl.DateTimeFormat('en-PH', { timeZone: timezone, hour: 'numeric', minute: '2-digit' }).format(new Date(record.receiptTransactionAt ?? record.capturedAt)); }
-function stateLabel(state: string) { return ({ UNVERIFIED: 'Recorded', REVIEW_REQUIRED: 'Possible match', MATCHED_AUTO: 'Strong match', MATCHED_BY_USER: 'Strong match', CONFIRMED_MANUALLY: 'Owner confirmed', VOIDED: 'Voided' } as Record<string, string>)[state] ?? 'Recorded'; }
+function stateLabel(state: EvidenceState) { return EVIDENCE_STATE_LABELS[state]; }

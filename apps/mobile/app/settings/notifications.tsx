@@ -46,7 +46,7 @@ export default function Notifications() {
         return;
       }
       const pesos = ((result.amountCentavos ?? 0) / 100).toFixed(2);
-      setTestNotice(`Test sent: \u20b1${pesos}. If listening works it appears in the Notification inbox within a minute \u2014 scan a proof for the same amount to see a Possible match.`);
+      setTestNotice(`Test sent: \u20b1${pesos}. If listening works it appears in the Notification inbox within a minute. Scan a proof for the same amount: one safe candidate becomes a Strong match; multiple candidates stay Possible match.`);
     } catch (sendError) {
       setTestError((sendError as Error).message);
     } finally {

@@ -12,6 +12,7 @@ import { RecordsModule } from './records/records.controller';
 import { ReviewModule } from './review/review.controller';
 import { SourcesModule } from './sources/sources.controller';
 import { WorkspacesModule } from './workspaces/workspaces.controller';
+import { EvidenceModule } from './evidence/evidence.controller';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { WorkspacesModule } from './workspaces/workspaces.controller';
     SourcesModule,
     PairingModule,
     IngestionModule,
+    EvidenceModule,
     RecordsModule,
     ReviewModule,
     BillingModule,

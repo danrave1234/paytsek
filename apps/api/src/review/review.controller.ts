@@ -18,8 +18,18 @@ export class ReviewService {
     private readonly reconcile: ReconcileService,
   ) {}
 
-  candidates(orgId: string, recordId: string) {
-    return this.reconcile.candidates(orgId, recordId);
+  async candidates(ws: WorkspaceContext, userId: string, recordId: string) {
+    await this.assertRecordAccess(ws, userId, recordId);
+    return this.reconcile.candidates(ws.organizationId, recordId);
+  }
+
+  private async assertRecordAccess(ws: WorkspaceContext, userId: string, recordId: string): Promise<void> {
+    const record = await this.db.one<{ created_by: string }>(
+      `select created_by from payment_records where id = $1 and organization_id = $2`,
+      [recordId, ws.organizationId],
+    );
+    if (!record) throw new ApiException('RECORD_NOT_FOUND', 'Record not found');
+    if (ws.role !== 'OWNER' && record.created_by !== userId) throw new ApiException('FORBIDDEN', 'Cashiers can only access their own records');
   }
 
   /**
@@ -49,10 +59,10 @@ export class ReviewService {
       const ev = await c.query<{ id: string; source_id: string }>(
         `select id, source_id from notification_events
           where id = $1 and organization_id = $2 and ($3::uuid is null or source_id = $3)
-            and amount_centavos = $4 and purged_at is null`,
+            and amount_centavos = $4 and purged_at is null and event_status = 'SUCCEEDED'`,
         [eventId, ws.organizationId, r.source_id, r.amount_centavos],
       );
-      if (!ev.rows[0]) throw new ApiException('CANDIDATE_OUT_OF_SCOPE', 'That notification is not a candidate for this record');
+      if (!ev.rows[0]) throw new ApiException('CANDIDATE_OUT_OF_SCOPE', 'That payment evidence is not a candidate for this record');
       if (r.source_id === null) {
         await c.query(`update payment_records set source_id = $2 where id = $1`, [recordId, ev.rows[0].source_id]);
       }
@@ -63,7 +73,7 @@ export class ReviewService {
           [ws.organizationId, recordId, eventId, MATCHER_VERSION, userId],
         );
       } catch (e) {
-        if (isUniqueViolation(e)) throw new ApiException('MATCH_CONFLICT', 'That notification was just claimed by another record. Review refreshed.');
+        if (isUniqueViolation(e)) throw new ApiException('MATCH_CONFLICT', 'That payment evidence was just linked to another record. Review refreshed.');
         throw e;
       }
       await c.query(`update payment_records set evidence_state = 'MATCHED_BY_USER' where id = $1`, [recordId]);
@@ -102,8 +112,8 @@ export class ReviewService {
       await c.query(`update payment_matches set active = false, unlinked_at = now(), unlinked_by = $2, unlink_reason = $3 where id = $1`, [m.id, ownerId, input.reason]);
       let next = 'UNVERIFIED';
       if (input.reassignToEventId) {
-        const ev = await c.query<{ source_id: string }>(`select source_id from notification_events where id = $1 and organization_id = $2 and ($3::uuid is null or source_id = $3) and amount_centavos = $4 and purged_at is null`, [input.reassignToEventId, orgId, m.source_id, m.amount_centavos]);
-        if (!ev.rows[0]) throw new ApiException('CANDIDATE_OUT_OF_SCOPE', 'Replacement notification is not a candidate for this record');
+        const ev = await c.query<{ source_id: string }>(`select source_id from notification_events where id = $1 and organization_id = $2 and ($3::uuid is null or source_id = $3) and amount_centavos = $4 and purged_at is null and event_status = 'SUCCEEDED'`, [input.reassignToEventId, orgId, m.source_id, m.amount_centavos]);
+        if (!ev.rows[0]) throw new ApiException('CANDIDATE_OUT_OF_SCOPE', 'Replacement evidence is not a candidate for this record');
         if (m.source_id === null) {
           await c.query(`update payment_records set source_id = $2 where id = $1`, [recordId, ev.rows[0].source_id]);
         }
@@ -113,7 +123,7 @@ export class ReviewService {
             [orgId, recordId, input.reassignToEventId, MATCHER_VERSION, ownerId],
           );
         } catch (e) {
-          if (isUniqueViolation(e)) throw new ApiException('MATCH_CONFLICT', 'Replacement notification is already linked to another record');
+          if (isUniqueViolation(e)) throw new ApiException('MATCH_CONFLICT', 'Replacement evidence is already linked to another record');
           throw e;
         }
         next = 'MATCHED_BY_USER';
@@ -124,23 +134,22 @@ export class ReviewService {
     });
   }
 
-  async escalate(orgId: string, userId: string, recordId: string, message: string | null | undefined): Promise<void> {
-    const r = await this.db.one<{ id: string }>(`select id from payment_records where id = $1 and organization_id = $2`, [recordId, orgId]);
-    if (!r) throw new ApiException('RECORD_NOT_FOUND', 'Record not found');
-    await this.db.query(`update payment_records set evidence_state = 'REVIEW_REQUIRED' where id = $1 and evidence_state = 'UNVERIFIED'`, [recordId]);
-    await this.audit.record({ organizationId: orgId, actorUserId: userId, action: 'RECORD_CORRECTED', subjectType: 'payment_record', subjectId: recordId, after: { escalated: true }, reason: message ?? 'escalated to owner' });
+  async escalate(ws: WorkspaceContext, userId: string, recordId: string, message: string | null | undefined): Promise<void> {
+    await this.assertRecordAccess(ws, userId, recordId);
+    await this.db.query(`update payment_records set evidence_state = 'REVIEW_REQUIRED' where id = $1 and organization_id = $2 and evidence_state = 'UNVERIFIED'`, [recordId, ws.organizationId]);
+    await this.audit.record({ organizationId: ws.organizationId, actorUserId: userId, action: 'RECORD_CORRECTED', subjectType: 'payment_record', subjectId: recordId, after: { escalated: true }, reason: message ?? 'escalated to owner' });
   }
 
   /** Owner-only incoming inbox (restricted retention). */
   async inbox(orgId: string, unlinkedOnly: boolean, limit: number): Promise<OwnerInboxEvent[]> {
     const r = await this.db.query<{
-      id: string; source_id: string; source_label: string; device_id: string; provider: OwnerInboxEvent['provider']; payment_rail: OwnerInboxEvent['paymentRail'];
+      id: string; source_id: string; source_label: string; device_id: string | null; provider: OwnerInboxEvent['provider']; payment_rail: OwnerInboxEvent['paymentRail']; evidence_origin: OwnerInboxEvent['evidenceOrigin'];
       amount_centavos: string; reference_namespace: OwnerInboxEvent['referenceNamespace']; reference_value: string | null; payer_masked_name: string | null; payer_masked_phone: string | null;
       provider_described_at: Date | null; notification_when_at: Date | null; posted_at: Date; server_received_at: Date; purge_after: Date | null; linked_record_id: string | null;
     }>(
       `select e.*, s.label as source_label, (select pm.record_id from payment_matches pm where pm.event_id = e.id and pm.active) as linked_record_id
          from notification_events e join payment_sources s on s.id = e.source_id
-        where e.organization_id = $1 and e.purged_at is null
+        where e.organization_id = $1 and e.purged_at is null and e.event_status = 'SUCCEEDED'
           ${unlinkedOnly ? `and not exists (select 1 from payment_matches pm where pm.event_id = e.id and pm.active) and e.saved_as_record_id is null` : ''}
         order by e.posted_at desc limit $2`,
       [orgId, limit],
@@ -149,7 +158,7 @@ export class ReviewService {
       const at = e.provider_described_at ?? e.notification_when_at ?? e.posted_at;
       const src: OwnerInboxEvent['eventTimeSource'] = e.provider_described_at ? 'PROVIDER_DESCRIBED' : e.notification_when_at ? 'NOTIFICATION_WHEN' : 'POSTED';
       return {
-        eventId: e.id, sourceId: e.source_id, sourceLabel: e.source_label, deviceId: e.device_id, provider: e.provider, paymentRail: e.payment_rail, currency: 'PHP',
+        eventId: e.id, sourceId: e.source_id, sourceLabel: e.source_label, deviceId: e.device_id, provider: e.provider, evidenceOrigin: e.evidence_origin, paymentRail: e.payment_rail, currency: 'PHP',
         amountCentavos: Number(e.amount_centavos), referenceNamespace: e.reference_namespace, referenceValue: e.reference_value,
         payerMaskedName: e.payer_masked_name, payerMaskedPhone: e.payer_masked_phone, eventAt: at.toISOString(), eventTimeSource: src,
         alreadyLinkedToOtherRecord: e.linked_record_id !== null, linkedRecordId: e.linked_record_id, serverReceivedAt: e.server_received_at.toISOString(), purgeAfter: e.purge_after?.toISOString() ?? null,
@@ -169,8 +178,8 @@ export class ReviewController {
   constructor(private readonly svc: ReviewService) {}
 
   @Get('records/:id/candidates')
-  candidates(@Workspace() ws: WorkspaceContext, @Param('id') id: string) {
-    return this.svc.candidates(ws.organizationId, id);
+  candidates(@Workspace() ws: WorkspaceContext, @CurrentUser() u: AuthUser, @Param('id', zod(z.string().uuid())) id: string) {
+    return this.svc.candidates(ws, u.id, id);
   }
 
   @Post('records/:id/confirm-candidate')
@@ -195,7 +204,7 @@ export class ReviewController {
 
   @Post('records/:id/escalate')
   async escalate(@Workspace() ws: WorkspaceContext, @CurrentUser() u: AuthUser, @Param('id') id: string, @Body(zod(EscalateRequest)) b: { message?: string | null }) {
-    await this.svc.escalate(ws.organizationId, u.id, id, b.message);
+    await this.svc.escalate(ws, u.id, id, b.message);
     return { ok: true };
   }
 

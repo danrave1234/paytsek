@@ -15,9 +15,9 @@ import { SPACING, TOUCH_TARGET } from '@/theme';
 
 const STATUS_COPY: Record<EvidenceState, { detail: string }> = {
   UNVERIFIED: { detail: 'Saved from the proof. No wallet evidence is linked yet.' },
-  REVIEW_REQUIRED: { detail: 'A nearby incoming notification may fit this proof. Review it before linking.' },
-  MATCHED_AUTO: { detail: 'The proof aligns with an incoming notification on the payment phone. This is supporting evidence, not a bank guarantee.' },
-  MATCHED_BY_USER: { detail: 'A team member linked this proof to the selected incoming notification.' },
+  REVIEW_REQUIRED: { detail: 'Nearby incoming payment evidence may fit this proof. Review it before linking.' },
+  MATCHED_AUTO: { detail: 'The proof aligns with incoming payment evidence. This is supporting evidence, not a bank or wallet balance confirmation.' },
+  MATCHED_BY_USER: { detail: 'A team member linked this proof to selected incoming payment evidence.' },
   CONFIRMED_MANUALLY: { detail: 'An owner confirmed this payment directly in the wallet app.' },
   VOIDED: { detail: 'This record is kept in history but excluded from recorded totals.' },
 };
@@ -104,9 +104,9 @@ export default function RecordDetail() {
 
   const onConfirm = async (eventId: string) => {
     setMsg(null);
-    try { await confirm.mutateAsync(eventId); setMsg({ kind: 'info', text: 'Notification linked. The status was updated.' }); }
+    try { await confirm.mutateAsync(eventId); setMsg({ kind: 'info', text: 'Payment evidence linked. The status was updated.' }); }
     catch (e) {
-      if (isApiError(e, 'MATCH_CONFLICT')) setMsg({ kind: 'warning', text: 'That notification was just claimed by another record. The list has been refreshed.' });
+      if (isApiError(e, 'MATCH_CONFLICT')) setMsg({ kind: 'warning', text: 'That evidence was just linked to another record. The list has been refreshed.' });
       else if (isApiError(e, 'CONFIRMATION_REQUIRES_OWNER_APPROVAL')) setMsg({ kind: 'warning', text: (e as Error).message });
       else setMsg({ kind: 'error', text: (e as Error).message });
     }
@@ -192,12 +192,13 @@ export default function RecordDetail() {
       {open && cands?.candidates.length ? (
         <View>
           <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-            {cands.candidates.length} nearby notification{cands.candidates.length === 1 ? '' : 's'} on the payment phone. Linking one is notification evidence, not a provider confirmation.
+            {cands.candidates.length} nearby payment evidence item{cands.candidates.length === 1 ? '' : 's'}. Review the source before linking.
           </Text>
           {cands.collectorStale ? <Notice kind="warning">Payment phone {lastSeenWithTime(cands.collectorLastSeenAt).toLowerCase()}.</Notice> : null}
           {cands.candidates.map((c, index) => {
             const payer = c.payerMaskedName ?? c.payerMaskedPhone;
-            const meta = [PROVIDER_LABELS[c.provider], deltaLabel(c.deltaSeconds), payer].filter(Boolean).join(' · ');
+            const origin = c.evidenceOrigin === 'SIGNED_WEBHOOK' ? 'Signed integration evidence' : 'Android notification';
+            const meta = [PROVIDER_LABELS[c.provider], origin, deltaLabel(c.deltaSeconds), payer].filter(Boolean).join(' · ');
             return (
               <AppearMotion key={c.eventId} itemKey={`candidate.${c.eventId}`}>
                 <View style={[styles.candidateRow, index > 0 && { borderTopColor: theme.colors.outlineVariant, borderTopWidth: StyleSheet.hairlineWidth }]}>
@@ -222,7 +223,7 @@ export default function RecordDetail() {
         </View>
       ) : null}
       {!r.matchExplanation.kind && !(open && cands?.candidates.length) ? (
-        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>No wallet notification evidence is linked to this record.</Text>
+        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>No incoming payment evidence is linked to this record.</Text>
       ) : null}
 
       <SectionTitle>History</SectionTitle>

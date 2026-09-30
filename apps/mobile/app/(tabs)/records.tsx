@@ -1,4 +1,4 @@
-import { PROVIDERS, type EvidenceState, type Provider, type RecordSummary } from '@paytsek/contracts';
+import { EVIDENCE_STATE_LABELS, PROVIDERS, type EvidenceState, type Provider, type RecordSummary } from '@paytsek/contracts';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -22,11 +22,11 @@ type RowItem =
 type EvidenceFilter = 'ALL' | 'STRONG' | 'POSSIBLE' | 'RECORDED' | 'CONFIRMED' | 'VOIDED';
 const EVIDENCE_FILTERS: Array<{ value: EvidenceFilter; label: string; states?: EvidenceState[] }> = [
   { value: 'ALL', label: 'All' },
-  { value: 'STRONG', label: 'Strong match', states: ['MATCHED_AUTO', 'MATCHED_BY_USER'] },
-  { value: 'POSSIBLE', label: 'Possible match', states: ['REVIEW_REQUIRED'] },
-  { value: 'RECORDED', label: 'Recorded', states: ['UNVERIFIED'] },
-  { value: 'CONFIRMED', label: 'Owner confirmed', states: ['CONFIRMED_MANUALLY'] },
-  { value: 'VOIDED', label: 'Voided', states: ['VOIDED'] },
+  { value: 'STRONG', label: EVIDENCE_STATE_LABELS.MATCHED_AUTO, states: ['MATCHED_AUTO', 'MATCHED_BY_USER'] },
+  { value: 'POSSIBLE', label: EVIDENCE_STATE_LABELS.REVIEW_REQUIRED, states: ['REVIEW_REQUIRED'] },
+  { value: 'RECORDED', label: EVIDENCE_STATE_LABELS.UNVERIFIED, states: ['UNVERIFIED'] },
+  { value: 'CONFIRMED', label: EVIDENCE_STATE_LABELS.CONFIRMED_MANUALLY, states: ['CONFIRMED_MANUALLY'] },
+  { value: 'VOIDED', label: EVIDENCE_STATE_LABELS.VOIDED, states: ['VOIDED'] },
 ];
 
 const dayKey = (iso: string, timezone: string) => getFormatter('en-CA', {

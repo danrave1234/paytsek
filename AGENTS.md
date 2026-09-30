@@ -8,7 +8,7 @@
 - Never log raw wallet notification text or unmasked sender information outside the restricted ingestion flow.
 - Record lists may display only facts PayTsek actually has from the proof or matching system: transaction time, evidence status, amount, and payment source. Never invent or infer customer names, products, categories, or notes for presentation.
 - User-facing evidence labels are **Recorded**, **Possible match**, **Strong match**, **Owner confirmed**, and **Voided**. A Strong match is notification evidence, not confirmation from a bank or wallet provider.
-- A proof record does not require a receiving-wallet source. `payment_records.source_id` stays nullable until notification evidence identifies a receiving source; never block or delay local proof persistence on notification setup.
+- A proof record does not require a receiving-wallet source. `payment_records.source_id` stays nullable until supplementary evidence identifies a receiving source; never block or delay local proof persistence on notification or connector setup.
 - On the signed-in owner’s Android phone, wallet listening is configured directly from Settings with per-provider toggles. Pairing codes are only for a separate payment phone. One active source row per workspace/provider is enforced by the database.
 
 ## V2 technical direction
@@ -18,7 +18,8 @@
 - Prefer current stable, security-patched versions compatible with the repository. Do not adopt canary or release-candidate dependencies merely because they are newer.
 - Keep request/response validation in `@paytsek/contracts`. Screens must not maintain handwritten copies of API types.
 - Keep matching, parsing, idempotency, authorization, retention, and audit rules in testable domain/server code. UI labels never replace server enforcement.
-- Keep the wallet that issued a customer's receipt separate from the seller wallet that received the payment. Receipt-provider classification may use proof OCR/layout; only an allowlisted Android notification package identifies the receiving wallet. Never let one silently substitute for the other.
+- Keep the wallet that issued a customer's receipt separate from the seller wallet that received the payment. Receipt-provider classification may use proof OCR/layout; only an allowlisted Android notification package or a server-bound signed provider connector identifies the receiving wallet. Never let one silently substitute for the other.
+- Signed provider/PSP evidence is optional and supplementary. A connector is bound on the server to one workspace receiving source, accepts only a strict minimal HMAC-signed payload, and must preserve reversals and audit history. Do not enable a production adapter without a written provider agreement plus the documented BSP and NPC/privacy reviews.
 - Preserve privacy-safe provider-classifier method, confidence, candidate scores, and signal codes with OCR provenance. Raw OCR text remains restricted evidence and must never be copied into classifier signal codes, logs, or analytics.
 
 ## Authentication and privacy
@@ -74,7 +75,7 @@ There are two separate Vercel projects. Verify which project is linked before de
 | Web | `paytsek-web` | `www.paytsek.online`, `paytsek.online` | `apps/web/vercel.json` and Root Directory `apps/web` |
 
 - Do not deploy the repository root while it is linked to `paytsek-web`: the API `vercel.json` then conflicts with the web project. The frontend config must remain in `apps/web/vercel.json` so Git-based web deploys do not pick up the API rewrite.
-- For a production API deployment, link the root to `paytsek-api`, deploy with `vercel --prod --yes --scope danrave1234s-projects`, then confirm the deployment is `Ready` and aliased to `api.paytsek.online`.
+- Every push to `main` must pass `.github/workflows/deploy-api.yml`, which applies pending migrations and deploys a prebuilt artifact to the `paytsek-api` project before checking `api.paytsek.online/v1/health`. `VERCEL_API_PROJECT_ID` must identify `paytsek-api`, never the web project. Use a manual root deployment only for recovery, then confirm the deployment is `Ready` and aliased to `api.paytsek.online`.
 - The local `.vercel/` directory and `.env.local` are ignored. Never commit them or deployment credentials.
 - A successful build is not evidence that a release workflow has succeeded; check each independently.
 

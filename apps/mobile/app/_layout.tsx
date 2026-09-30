@@ -1,18 +1,19 @@
 import { QueryClientProvider, focusManager } from '@tanstack/react-query';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AppState, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useTheme } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { applySyncedRecord, invalidateDrafts, queryClient } from '@/lib/queries';
 import { SessionProvider, useSession } from '@/lib/session';
-import { pruneCachedNotifications, pruneSynced, syncAll, syncCachedNotifications } from '@/lib/drafts';
+import { pruneSynced, syncAll } from '@/lib/drafts';
 import { reportHealth, restoreCollectorFilters } from '@/lib/collector';
 import { SPACING } from '@/theme';
 import { ErrorState, Loading } from '@/components/ui';
 import { ThemeModeProvider } from '@/lib/theme-mode';
 import { useReducedMotion } from '@/components/motion';
+import { getCapturePreferences } from '@/lib/capture-preferences';
 
 export const unstable_settings = { initialRouteName: '(tabs)' };
 
@@ -32,6 +33,7 @@ function Gate({ children }: { children: React.ReactNode }) {
   const theme = useTheme();
   const segments = useSegments();
   const router = useRouter();
+  const launchRouteHandled = useRef(false);
 
   useEffect(() => {
     if (!ready) return;
@@ -60,6 +62,23 @@ function Gate({ children }: { children: React.ReactNode }) {
     if (top === '(auth)' || top === 'workspaces' || top === 'onboarding' || top === undefined) router.replace('/(tabs)');
   }, [ready, configured, session, workspace, segments, router]);
 
+  // Normal signed-in launches may open directly to Scan. Explicit deep links
+  // always win, and this runs only once per app process (not on every resume).
+  useEffect(() => {
+    if (launchRouteHandled.current || !ready || !configured || !session || !workspace) return;
+    const top = segments[0] as string | undefined;
+    const child = (segments as readonly string[])[1];
+    if (top === '(tabs)' && (child === undefined || child === 'index')) {
+      launchRouteHandled.current = true;
+      void getCapturePreferences().then((preferences) => {
+        if (preferences.openScannerOnLaunch) router.replace('/(tabs)/scan');
+      });
+      return;
+    }
+    if (top === '(auth)' || top === 'workspaces' || top === 'onboarding' || top === undefined) return;
+    launchRouteHandled.current = true;
+  }, [configured, ready, router, segments, session, workspace]);
+
   // On resume/reconnect: refetch server state (system of record) and retry local drafts.
   useEffect(() => {
     let syncing = false;
@@ -72,13 +91,6 @@ function Gate({ children }: { children: React.ReactNode }) {
     const runSync = () => {
       if (!workspace || syncing) return;
       syncing = true;
-      // Cache pending notifications from the native collector so local matching
-      // can work even before the server has them.
-      if (Platform.OS === 'android') {
-        void syncCachedNotifications().then(() => {
-          void pruneCachedNotifications();
-        }).catch(() => { /* Non-critical: native collector unavailable. */ });
-      }
       void syncAll(workspace.id).then(async (result) => {
         if (result.synced > 0) {
           // Insert synced server records into the home cache before pruning
