@@ -68,7 +68,7 @@ jobs:
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" > apk-signature.txt
           EXPECTED_CERT=$(openssl dgst -sha256 release-cert.der | awk '{print $NF}' | tr '[:upper:]' '[:lower:]' | tr -d ':')
-          ACTUAL_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' apk-signature.txt | tr '[:upper:]' '[:lower:]' | tr -d ':')
+          ACTUAL_CERT=$(awk '/certificate SHA-256 digest:/ { print $NF; exit }' apk-signature.txt | tr '[:upper:]' '[:lower:]' | tr -d ':\r')
           [[ "$EXPECTED_CERT" =~ ^[0-9a-f]{64}$ ]] || { echo 'Expected signing certificate digest could not be derived.' >&2; exit 1; }
           [[ "$ACTUAL_CERT" =~ ^[0-9a-f]{64}$ ]] || { echo 'APK signing certificate digest could not be read.' >&2; exit 1; }
           test "$EXPECTED_CERT" = "$ACTUAL_CERT" || { echo 'APK signing certificate does not match the release keystore.' >&2; exit 1; }
