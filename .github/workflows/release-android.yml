@@ -53,18 +53,40 @@ jobs:
           EOF
           echo "apply from: 'signing.gradle'" >> android/app/build.gradle
           (cd android && ./gradlew app:assembleRelease :payment-collector:testReleaseUnitTest --no-daemon)
-          cp android/app/build/outputs/apk/release/app-release.apk "PayTsek-${RELEASE_VERSION}.apk"
+          keytool -exportcert -keystore android/app/paytsek-release.jks -alias "$ANDROID_KEY_ALIAS" -storepass:env ANDROID_KEYSTORE_PASSWORD -file release-cert.der
+          test -s release-cert.der || { echo 'Release signing certificate could not be exported.' >&2; exit 1; }
+      - name: Stage signed APK
+        working-directory: apps/mobile
+        run: |
+          SOURCE_APK=android/app/build/outputs/apk/release/app-release.apk
+          test -s "$SOURCE_APK" || { echo 'Signed release APK was not produced at the expected path.' >&2; exit 1; }
+          cp "$SOURCE_APK" "PayTsek-${RELEASE_VERSION}.apk"
+      - name: Verify APK signing identity
+        working-directory: apps/mobile
+        run: |
+          APK="PayTsek-${RELEASE_VERSION}.apk"
           BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
-          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "PayTsek-${RELEASE_VERSION}.apk" > apk-signature.txt
-          EXPECTED_CERT=$(keytool -exportcert -keystore android/app/paytsek-release.jks -alias "$ANDROID_KEY_ALIAS" -storepass:env ANDROID_KEYSTORE_PASSWORD | openssl dgst -sha256 | awk '{print $NF}')
-          ACTUAL_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' apk-signature.txt)
-          test -n "$EXPECTED_CERT" && test "$EXPECTED_CERT" = "$ACTUAL_CERT"
-          "$BUILD_TOOLS/aapt" dump badging "PayTsek-${RELEASE_VERSION}.apk" > apk-badging.txt
-          grep -q "name='ph.paytsek.app'" apk-badging.txt
-          grep -q "versionCode='$RELEASE_VERSION_CODE'" apk-badging.txt
-          grep -q "versionName='${RELEASE_VERSION#v}'" apk-badging.txt
-          sha256sum "PayTsek-${RELEASE_VERSION}.apk" > "PayTsek-${RELEASE_VERSION}.apk.sha256"
-          export APK_CERT_SHA256="$ACTUAL_CERT"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" > apk-signature.txt
+          EXPECTED_CERT=$(openssl dgst -sha256 release-cert.der | awk '{print $NF}' | tr '[:upper:]' '[:lower:]' | tr -d ':')
+          ACTUAL_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' apk-signature.txt | tr '[:upper:]' '[:lower:]' | tr -d ':')
+          [[ "$EXPECTED_CERT" =~ ^[0-9a-f]{64}$ ]] || { echo 'Expected signing certificate digest could not be derived.' >&2; exit 1; }
+          [[ "$ACTUAL_CERT" =~ ^[0-9a-f]{64}$ ]] || { echo 'APK signing certificate digest could not be read.' >&2; exit 1; }
+          test "$EXPECTED_CERT" = "$ACTUAL_CERT" || { echo 'APK signing certificate does not match the release keystore.' >&2; exit 1; }
+          echo "APK_CERT_SHA256=$ACTUAL_CERT" >> "$GITHUB_ENV"
+      - name: Verify APK package and version
+        working-directory: apps/mobile
+        run: |
+          APK="PayTsek-${RELEASE_VERSION}.apk"
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          "$BUILD_TOOLS/aapt" dump badging "$APK" > apk-badging.txt
+          grep -q "name='ph.paytsek.app'" apk-badging.txt || { echo 'APK package name is not ph.paytsek.app.' >&2; exit 1; }
+          grep -q "versionCode='$RELEASE_VERSION_CODE'" apk-badging.txt || { echo 'APK versionCode does not match app.config.ts.' >&2; exit 1; }
+          grep -q "versionName='${RELEASE_VERSION#v}'" apk-badging.txt || { echo 'APK versionName does not match app.config.ts.' >&2; exit 1; }
+      - name: Create checksum and immutable release manifest
+        working-directory: apps/mobile
+        run: |
+          APK="PayTsek-${RELEASE_VERSION}.apk"
+          sha256sum "$APK" > "${APK}.sha256"
           node ../../scripts/ci/release-manifest.mjs
       - uses: actions/upload-artifact@v4
         with:
