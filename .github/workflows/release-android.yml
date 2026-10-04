@@ -89,7 +89,10 @@ jobs:
           ref: ${{ needs.build.outputs.sha }}
           fetch-depth: 0
       - uses: actions/setup-node@v5
-        with: { node-version: 24.21.0 }
+        with:
+          node-version: 24.21.0
+          # Publication uses built-in Node modules and the downloaded artifact only.
+          package-manager-cache: false
       - uses: actions/download-artifact@v5
         with:
           name: signed-android-release
