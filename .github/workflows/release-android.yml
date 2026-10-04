@@ -52,7 +52,7 @@ jobs:
           android.buildTypes.release.signingConfig = android.signingConfigs.release
           EOF
           echo "apply from: 'signing.gradle'" >> android/app/build.gradle
-          (cd android && ./gradlew app:assembleRelease :payment-collector:testReleaseUnitTest --no-daemon)
+          (cd android && ./gradlew app:assembleRelease :payment-collector:testReleaseUnitTest --no-daemon --max-workers=2 -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8")
           keytool -exportcert -keystore android/app/paytsek-release.jks -alias "$ANDROID_KEY_ALIAS" -storepass:env ANDROID_KEYSTORE_PASSWORD -file release-cert.der
           test -s release-cert.der || { echo 'Release signing certificate could not be exported.' >&2; exit 1; }
       - name: Stage signed APK
