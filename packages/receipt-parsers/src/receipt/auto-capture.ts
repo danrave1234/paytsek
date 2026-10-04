@@ -1,4 +1,5 @@
 import type { ReceiptExtraction } from './extract';
+import { assessReceiptAmount } from './amount-assessment';
 
 export interface AutoCaptureAssessment {
   eligible: boolean;
@@ -14,6 +15,7 @@ export interface AutoCaptureAssessment {
 export function assessReceiptForAutoCapture(receipt: ReceiptExtraction): AutoCaptureAssessment {
   const fields = receipt.fields;
   if (!fields.amountCentavos) return { eligible: false, fingerprint: null, reason: 'NO_AMOUNT' };
+  if (!assessReceiptAmount(receipt).ready) return { eligible: false, fingerprint: null, reason: 'LOW_CONFIDENCE' };
   if (!fields.receiptProvider) return { eligible: false, fingerprint: null, reason: 'NO_PROVIDER' };
   if (receipt.providerDetection.confidence < 0.5) return { eligible: false, fingerprint: null, reason: 'LOW_CONFIDENCE' };
   if (fields.receiptStatus !== 'SUCCESS') return { eligible: false, fingerprint: null, reason: 'NOT_SUCCESSFUL' };

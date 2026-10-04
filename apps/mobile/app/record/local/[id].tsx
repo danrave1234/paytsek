@@ -8,9 +8,10 @@ import { ProviderLogo } from '@/components/provider-logo';
 import { Loading, Notice, Screen } from '@/components/ui';
 import { correctDraft, getDraft, pruneSynced, syncDraft, type Draft } from '@/lib/drafts';
 import { manilaTime, peso } from '@/lib/format';
-import { useInvalidateRecord } from '@/lib/queries';
+import { applySyncedRecord, invalidateDrafts, queryClient, useDraftsSignal, useInvalidateRecord } from '@/lib/queries';
+import { isScopeCurrent, requireRequestScope } from '@/lib/request-scope';
 import { useSession } from '@/lib/session';
-import { SPACING } from '@/theme';
+import { SPACING, TOUCH_TARGET } from '@/theme';
 
 export default function LocalRecordDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -18,6 +19,7 @@ export default function LocalRecordDetail() {
   const theme = useTheme();
   const { workspace } = useSession();
   const invalidate = useInvalidateRecord();
+  const draftsSignal = useDraftsSignal();
   const [draft, setDraft] = useState<Draft | null | undefined>(undefined);
   const [amountText, setAmountText] = useState('');
   const [providerValue, setProviderValue] = useState<Provider | null>(null);
@@ -35,6 +37,8 @@ export default function LocalRecordDetail() {
   const load = useCallback(async () => {
     if (!workspace || !id) return setDraft(null);
     const next = await getDraft(workspace.id, id);
+    const syncedId = queryClient.getQueryData<string>(['synced-draft', id]);
+    if (!next && syncedId) { router.replace(`/record/${syncedId}`); return; }
     if (next?.syncStatus === 'SYNCED' && next.serverRecordId) {
       // The server owns this record; background pruning may delete the staged
       // copy at any moment, so hand over to the canonical detail screen.
@@ -49,13 +53,13 @@ export default function LocalRecordDetail() {
   }, [id, router, workspace]);
 
   useFocusEffect(useCallback(() => {
-    void load();
+    if (!editing) void load().catch(() => setError('Could not read the saved record. Go back and open it again.'));
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
       goBack();
       return true;
     });
     return () => subscription.remove();
-  }, [goBack, load]));
+  }, [goBack, load, draftsSignal, editing]));
 
   const save = async () => {
     if (!draft || !workspace || busy) return;
@@ -70,6 +74,7 @@ export default function LocalRecordDetail() {
       });
       setDraft(next);
       invalidate();
+      void invalidateDrafts();
       setEditing(false);
       setToast('Record updated');
     } catch (saveError) {
@@ -84,9 +89,13 @@ export default function LocalRecordDetail() {
     setBusy(true);
     setError(null);
     try {
+      const scope = requireRequestScope();
       const result = await syncDraft(draft);
+      if (!isScopeCurrent(scope)) return;
+      if (result.record) applySyncedRecord(result.record, workspace.timezone, scope);
       const next = await getDraft(workspace.id, draft.clientRecordId);
       invalidate(next?.serverRecordId ?? undefined);
+      void invalidateDrafts();
       if (result.status === 'SYNCED' && next?.serverRecordId) {
         // The server owns the record now; remove the redundant staged copy.
         await pruneSynced(workspace.id);
@@ -102,7 +111,7 @@ export default function LocalRecordDetail() {
     }
   };
 
-  if (draft === undefined) return <Screen scroll={false}><Loading variant="detail" label="Opening local record" /></Screen>;
+  if (draft === undefined) return <Screen scroll={false}>{error ? <><Notice kind="error">{error}</Notice><Button onPress={goBack}>Back to records</Button></> : <Loading variant="detail" label="Opening local record" />}</Screen>;
   if (!draft) return <Screen scroll={false}><Notice kind="warning">This local record has already synced or is no longer on this phone.</Notice><Button onPress={goBack}>Back to records</Button></Screen>;
 
   const fields = draft.request.corrected;
@@ -161,7 +170,7 @@ export default function LocalRecordDetail() {
           <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
             {draft.syncStatus === 'UPLOADING' ? 'Syncing now.' : 'Not uploaded yet. The proof remains safely stored on this phone.'}
           </Text>
-          {draft.syncStatus !== 'UPLOADING' ? <Button icon="cloud-upload-outline" onPress={() => void retry()} disabled={busy}>Retry sync</Button> : null}
+          <Button icon="cloud-upload-outline" onPress={() => void retry()} disabled={busy} loading={busy} contentStyle={{ minHeight: TOUCH_TARGET }}>{draft.syncStatus === 'UPLOADING' ? 'Check sync' : 'Retry sync'}</Button>
         </View>
       ) : null}
 
@@ -186,7 +195,7 @@ export default function LocalRecordDetail() {
 }
 
 const styles = StyleSheet.create({
-  topBar: { height: 44, marginHorizontal: -SPACING.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  topBar: { minHeight: TOUCH_TARGET, marginHorizontal: -SPACING.md, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   topTitle: { fontWeight: '700' },
   hero: { paddingTop: SPACING.sm, gap: SPACING.xs },
   heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: SPACING.sm },

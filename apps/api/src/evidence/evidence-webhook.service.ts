@@ -83,7 +83,7 @@ export class EvidenceWebhookService {
     });
 
     if (result.reconcile) {
-      try { await this.reconcile.reconcileEvent(result.eventId); }
+      try { await this.reconcile.reconcileEventInline(result.eventId); }
       catch { /* Queued reconciliation remains the retry safety net. */ }
     }
     return { ok: true, outcome: result.outcome };

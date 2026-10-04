@@ -1,6 +1,7 @@
 import type { RecordDetail, RecordSummary, ReceiptFields } from '@paytsek/contracts';
 
 export interface RecordRow {
+  client_record_id: string;
   id: string;
   organization_id: string;
   source_id: string | null;
@@ -9,7 +10,7 @@ export interface RecordRow {
   receiving_source_label: string | null;
   proof_id: string | null;
   capture_origin: RecordDetail['captureOrigin'];
-  created_by: string;
+  created_by: string | null;
   created_by_name: string | null;
   currency: 'PHP';
   amount_centavos: string;
@@ -49,7 +50,7 @@ export const PROVIDER_LABEL_SQL = `case r.receipt_provider
            when 'GOTYME' then 'GoTyme'
            when 'MAYA' then 'Maya'
            when 'MARIBANK' then 'MariBank'
-           else coalesce(s.label, 'Payment')
+           else 'Unknown provider'
          end`;
 
 export const RECORD_SELECT = `
@@ -93,6 +94,7 @@ export function rowFields(r: RecordRow): ReceiptFields {
 
 export function toSummary(r: RecordRow): RecordSummary {
   return {
+    clientRecordId: r.client_record_id,
     id: r.id,
     organizationId: r.organization_id,
     sourceId: r.source_id,
@@ -113,7 +115,7 @@ export function toSummary(r: RecordRow): RecordSummary {
     capturedAt: r.captured_at.toISOString(),
     createdAt: r.created_at.toISOString(),
     createdByUserId: r.created_by,
-    createdByDisplayName: r.created_by_name ?? 'Member',
+    createdByDisplayName: r.created_by_name ?? (r.created_by ? 'Member' : 'Deleted member'),
     receiptTransactionAt: r.receipt_transaction_at?.toISOString() ?? null,
     hasProofImage: r.has_proof,
     linkedEventId: r.linked_event_id,

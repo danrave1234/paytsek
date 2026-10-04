@@ -7,6 +7,7 @@ import { ProviderLogo } from '@/components/provider-logo';
 import { AppearMotion, ScreenEnter, ValueChangeMotion, GrowBar } from '@/components/motion';
 import { ErrorState, Loading } from '@/components/ui';
 import { peso } from '@/lib/format';
+import { providerLabel } from '@/lib/feed';
 import { useAnalytics } from '@/lib/queries';
 import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET, stateColorsFor } from '@/theme';
 
@@ -97,7 +98,7 @@ export default function Analytics() {
                 <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Daily average</Text>
               </View>
               <View style={[styles.metric, styles.metricRule, { borderColor: theme.colors.outlineVariant }]}>
-                <Text variant="titleMedium" numberOfLines={1} style={styles.metricValue}>{strongest ? PROVIDER_LABELS[strongest.provider] : '—'}</Text>
+                <Text variant="titleMedium" numberOfLines={1} style={styles.metricValue}>{strongest ? providerLabel(strongest.provider) : '—'}</Text>
                 <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Top source</Text>
               </View>
             </View>
@@ -125,11 +126,11 @@ export default function Analytics() {
               {query.data.byProvider.length === 0 ? (
                 <Text variant="bodyMedium" style={[styles.empty, { color: theme.colors.onSurfaceVariant }]}>No recorded payments in this period.</Text>
               ) : query.data.byProvider.map((item, index) => (
-                <AppearMotion key={item.provider} itemKey={`provider.${item.provider}`}>
+                <AppearMotion key={item.provider ?? 'UNKNOWN'} itemKey={`provider.${item.provider ?? 'UNKNOWN'}`}>
                   <View style={[styles.row, index > 0 && { borderTopColor: theme.colors.outlineVariant, borderTopWidth: StyleSheet.hairlineWidth }]}>
                     <ProviderLogo provider={item.provider} size={40} />
                     <View style={{ flex: 1 }}>
-                      <Text variant="titleSmall">{PROVIDER_LABELS[item.provider]}</Text>
+                      <Text variant="titleSmall">{providerLabel(item.provider)}</Text>
                       <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{item.recordedCount} {item.recordedCount === 1 ? 'record' : 'records'}</Text>
                     </View>
                     <Text variant="titleMedium" style={styles.rowAmount}>{peso(item.recordedCentavos)}</Text>

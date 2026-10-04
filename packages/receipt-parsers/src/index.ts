@@ -6,3 +6,4 @@ export * from './notifications';
 export * from './receipt/extract';
 export * from './receipt/provider';
 export * from './receipt/auto-capture';
+export * from './receipt/amount-assessment';

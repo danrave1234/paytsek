@@ -99,6 +99,10 @@ export type SourceSummary = z.infer<typeof SourceSummary>;
 // ---- Home dashboard ---------------------------------------------------------
 
 export const HomeSummary = z.object({
+  workspaceLocalDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  workspaceTimezone: z.string(),
+  asOf: z.string().datetime(),
+  acknowledgedClientRecordIds: z.array(uuid),
   /** Recorded-payment totals — not wallet balance or guaranteed revenue. */
   today: z.object({
     /** Every captured record except voided records. This is the dashboard headline. */
@@ -111,6 +115,7 @@ export const HomeSummary = z.object({
     unverifiedCount: z.number().int(),
     unverifiedCentavos: z.number().int(),
     reviewRequiredCount: z.number().int(),
+    reviewRequiredCentavos: z.number().int(),
     /** Actual recorded amount by local workspace hour, index 0 through 23. */
     hourlyRecordedCentavos: z.array(z.number().int().nonnegative()).length(24),
   }),
@@ -130,6 +135,11 @@ export const HomeSummary = z.object({
 });
 export type HomeSummary = z.infer<typeof HomeSummary>;
 
+export const HomeQuery = z.object({
+  pendingIds: z.preprocess((value) => typeof value === 'string' && value ? value.split(',') : [], z.array(uuid).max(100)),
+});
+export type HomeQuery = z.infer<typeof HomeQuery>;
+
 // ---- Analytics -------------------------------------------------------------
 
 export const AnalyticsRange = z.enum(['7D', '30D', '90D']);
@@ -148,7 +158,7 @@ export const AnalyticsSummary = z.object({
     recordedCentavos: z.number().int().nonnegative(),
   })),
   byProvider: z.array(z.object({
-    provider: Provider,
+    provider: Provider.nullable(),
     recordedCount: z.number().int().nonnegative(),
     recordedCentavos: z.number().int().nonnegative(),
   })),
@@ -163,11 +173,13 @@ export type AnalyticsSummary = z.infer<typeof AnalyticsSummary>;
 // ---- Exports ----------------------------------------------------------------
 
 export const CreateExportRequest = z.object({
-  format: ExportFormat,
+  format: z.literal('CSV'),
   from: z.string().datetime(),
   to: z.string().datetime(),
   sourceId: uuid.optional(),
   includeVoided: z.boolean().default(false),
+}).refine((v) => Date.parse(v.to) > Date.parse(v.from) && Date.parse(v.to) - Date.parse(v.from) <= 366 * 86400_000, {
+  message: 'Choose a non-empty export range of at most 366 days.', path: ['to'],
 });
 export type CreateExportRequest = z.infer<typeof CreateExportRequest>;
 
@@ -183,3 +195,10 @@ export const ExportJobView = z.object({
   errorCode: z.string().nullable(),
 });
 export type ExportJobView = z.infer<typeof ExportJobView>;
+
+export const AccountDeletionResult = z.object({
+  requestId: uuid,
+  status: z.literal('PENDING'),
+  requestedAt: z.string().datetime(),
+});
+export type AccountDeletionResult = z.infer<typeof AccountDeletionResult>;

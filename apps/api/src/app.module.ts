@@ -13,6 +13,9 @@ import { ReviewModule } from './review/review.controller';
 import { SourcesModule } from './sources/sources.controller';
 import { WorkspacesModule } from './workspaces/workspaces.controller';
 import { EvidenceModule } from './evidence/evidence.controller';
+import { ExportService } from './jobs/export.service';
+import { RetentionService } from './jobs/retention.service';
+import { ReadinessController, ReadinessService } from './operations/readiness.controller';
 
 @Module({
   imports: [
@@ -29,7 +32,7 @@ import { EvidenceModule } from './evidence/evidence.controller';
     BillingModule,
     OperationsModule,
   ],
-  controllers: [CronController],
-  providers: [WorkerService],
+  controllers: [CronController, ReadinessController],
+  providers: [WorkerService, ExportService, RetentionService, ReadinessService],
 })
 export class AppModule {}

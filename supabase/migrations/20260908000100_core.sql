@@ -1,4 +1,4 @@
--- PayTsek core schema.
+-- PayRecord core schema.
 -- Conventions: UUID PKs, every tenant row carries organization_id, amounts are
 -- integer centavos, references are TEXT, timestamps are timestamptz (UTC) with
 -- source precision retained where relevant.
@@ -6,7 +6,7 @@
 create extension if not exists pgcrypto;
 
 -- ---------------------------------------------------------------------------
--- Enumerations (mirrored in @paytsek/contracts)
+-- Enumerations (mirrored in @payrecord/contracts)
 -- ---------------------------------------------------------------------------
 create type evidence_state as enum ('UNVERIFIED','REVIEW_REQUIRED','MATCHED_AUTO','MATCHED_BY_USER','CONFIRMED_MANUALLY','VOIDED');
 create type membership_role as enum ('OWNER','CASHIER');

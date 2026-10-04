@@ -126,6 +126,10 @@ describe('contracts', () => {
     expect(IncomingPaymentEventInput.safeParse({ ...base, amountCentavos: 150.5 }).success).toBe(false);
     expect(IncomingPaymentEventInput.safeParse({ ...base, amountCentavos: 0 }).success).toBe(false);
     expect(IncomingPaymentEventInput.safeParse({ ...base, amountCentavos: 15050 }).success).toBe(true);
+    expect(IncomingPaymentEventInput.safeParse({ ...base, amountCentavos: 15050, sourcePackage: 'ph.paytsek.app' }).success).toBe(false);
+    expect(IncomingPaymentEventInput.safeParse({ ...base, amountCentavos: 15050, originPackage: 'ph.paytsek.app' }).success).toBe(false);
+    expect(IncomingPaymentEventInput.safeParse({ ...base, amountCentavos: 15050, isTest: true }).success).toBe(false);
+    expect(IncomingPaymentEventInput.safeParse({ ...base, amountCentavos: 15050, originPackage: base.sourcePackage }).success).toBe(true);
   });
 
   it('keeps signed webhook evidence minimal and PHP-only', () => {

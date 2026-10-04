@@ -11,7 +11,7 @@
     "doctor": "npx expo-doctor",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "echo \"mobile: unit tests live in packages/*; device E2E in docs/testing.md\" && exit 0",
+    "test": "vitest run",
     "eas-build-post-install": "cd ../.. && pnpm --filter @paytsek/contracts run build && pnpm --filter @paytsek/receipt-parsers run build"
   },
   "dependencies": {
@@ -19,6 +19,7 @@
     "@hookform/resolvers": "^5.9.1",
     "@paytsek/contracts": "workspace:*",
     "@paytsek/receipt-parsers": "workspace:*",
+    "@sentry/react-native": "^8.29.0",
     "@supabase/supabase-js": "^2.116.0",
     "@tanstack/react-query": "^5.102.8",
     "expo": "~57.0.22",
@@ -32,6 +33,7 @@
     "expo-image-picker": "~57.0.17",
     "expo-intent-launcher": "~57.0.1",
     "expo-linking": "~57.0.10",
+    "expo-network": "~57.0.2",
     "expo-router": "~57.0.21",
     "expo-secure-store": "~57.0.4",
     "expo-splash-screen": "~57.0.9",
@@ -58,7 +60,8 @@
     "@expo/config-plugins": "57.0.9",
     "@types/react": "~19.2.0",
     "babel-preset-expo": "~57.0.10",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^2.1.8"
   },
   "expo": {
     "install": {

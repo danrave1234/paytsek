@@ -26,9 +26,9 @@ class NotificationParserTest {
     assertNull(e.providerDescribedAt)
   }
 
-  @Test fun acceptsListenerTestNotificationText() {
-    // Same shape PaymentCollectorModule.postTestNotification generates: masked
-    // payer, no Ref No. — can only ever produce a Possible match downstream.
+  @Test fun acceptsSyntheticMaskedWalletFixture() {
+    // Synthetic parser fixture only. PayTsek's local diagnostic never sends
+    // wallet-shaped text through the evidence parser or outbox.
     val r = NotificationParser.parse(NotificationParser.Input("com.globe.gcash.android", "You have received money in GCash!", "You have received PHP 123.45 of GCash from JU•N D. 0917••••123.", null, emptyList(), false))
     assertTrue(r is NotificationParser.Result.Accepted)
     val e = (r as NotificationParser.Result.Accepted).event
@@ -60,6 +60,16 @@ class NotificationParserTest {
 
   @Test fun rejectsLookalikePackage() {
     val r = NotificationParser.parse(input("You have received PHP 1,250.00 from JU•N D.", pkg = "com.example.fakegcash"))
+    assertEquals("UNKNOWN_PACKAGE", (r as NotificationParser.Result.Rejected).reason)
+  }
+
+  @Test fun rejectsOwnPackageEvenWithWalletShapedText() {
+    val r = NotificationParser.parse(input("You have received PHP 123.45 of GCash from JU•N D. 0917••••123.", pkg = "ph.paytsek.app"))
+    assertEquals("UNKNOWN_PACKAGE", (r as NotificationParser.Result.Rejected).reason)
+  }
+
+  @Test fun rejectsLocalDiagnosticAsPaymentEvidence() {
+    val r = NotificationParser.parse(NotificationParser.Input("ph.paytsek.app", "PayTsek listener check", "Local diagnostic complete", null, emptyList(), false))
     assertEquals("UNKNOWN_PACKAGE", (r as NotificationParser.Result.Rejected).reason)
   }
 

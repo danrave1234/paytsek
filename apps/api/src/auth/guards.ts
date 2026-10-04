@@ -7,6 +7,7 @@ import { ApiException } from '../common/errors';
 import { loadEnv } from '../config/env';
 import { DbService } from '../db/db.service';
 import { hashSecret } from './credentials';
+import { accountSubjectHash } from '../privacy/account-deletion.service';
 
 export interface AuthUser {
   id: string;
@@ -45,7 +46,7 @@ export class UserAuthGuard implements CanActivate {
   private readonly secret: Uint8Array | null;
   private readonly jwks: JWTVerifyGetKey;
 
-  constructor() {
+  constructor(private readonly db: DbService) {
     const env = loadEnv();
     this.secret = env.SUPABASE_JWT_SECRET ? new TextEncoder().encode(env.SUPABASE_JWT_SECRET) : null;
     this.jwks = createRemoteJWKSet(new URL('/auth/v1/.well-known/jwks.json', env.SUPABASE_URL));
@@ -78,10 +79,14 @@ export class UserAuthGuard implements CanActivate {
         throw new Error('bad aud');
       }
       req.user = { id: payload.sub, email: typeof payload.email === 'string' ? payload.email : null };
-      return true;
     } catch {
       throw new ApiException('UNAUTHENTICATED', 'Invalid or expired token');
     }
+    // Database failures are transient API errors, not reasons to erase the
+    // mobile session. A committed deletion tombstone rejects every old token.
+    const deleted = await this.db.one(`select 1 from account_deletions where subject_hash=$1`, [accountSubjectHash(req.user!.id)]);
+    if (deleted) throw new ApiException('UNAUTHENTICATED', 'This account is being deleted.');
+    return true;
   }
 }
 

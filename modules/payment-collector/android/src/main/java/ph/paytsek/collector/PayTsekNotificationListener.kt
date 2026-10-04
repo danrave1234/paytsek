@@ -23,11 +23,9 @@ import java.util.UUID
 class PayTsekNotificationListener : NotificationListenerService() {
 
   companion object {
-    /** Private extra set by PaymentCollectorModule.postTestNotification on our own package. */
+    /** Legacy test marker is still ignored when recovering active notifications. */
     const val EXTRA_TEST_GCASH = "ph.paytsek.collector.TEST_GCASH"
-
-    /** A listener test rides the normal GCash path end-to-end. */
-    const val TEST_SOURCE_PACKAGE = "com.globe.gcash.android"
+    const val EXTRA_DIAGNOSTIC_ID = "ph.paytsek.collector.DIAGNOSTIC_ID"
   }
 
   // Lazily constructed in the handling path: EncryptedSharedPreferences creation
@@ -75,13 +73,16 @@ class PayTsekNotificationListener : NotificationListenerService() {
   override fun onNotificationRemoved(sbn: StatusBarNotification) { /* removal is not evidence of anything */ }
 
   private fun handle(sbn: StatusBarNotification, recovery: Boolean) {
-    // A flagged own-package test notification takes the GCash path so every
-    // downstream step (gates, parse, dedupe, outbox, upload) runs exactly like
-    // a real notification. All other own-package notifications stay ignored
-    // because our package is not in the ProviderApps allowlist.
-    val isTest = sbn.packageName == packageName &&
-      sbn.notification?.extras?.getBoolean(EXTRA_TEST_GCASH, false) == true
-    val sourcePackage = if (isTest) TEST_SOURCE_PACKAGE else sbn.packageName
+    // Own-package notifications can ONLY acknowledge a local diagnostic.
+    // Never impersonate a wallet, parse, enqueue, upload, or update evidence health.
+    if (sbn.packageName == packageName) {
+      val id = sbn.notification?.extras?.getString(EXTRA_DIAGNOSTIC_ID)
+      if (id != null && runCatching { UUID.fromString(id) }.isSuccess) {
+        prefsOrNull()?.lastDiagnosticId = id
+      }
+      return
+    }
+    val sourcePackage = sbn.packageName
     val provider = ProviderApps.providerFor(sourcePackage) ?: return
     val prefs = prefsOrNull() ?: return
     val outbox = outboxOrNull() ?: return
@@ -97,10 +98,9 @@ class PayTsekNotificationListener : NotificationListenerService() {
       Log.d("PayTsekCollector", "Ignored $provider notification: provider is not enabled")
       return
     }
-    // Installed/signature checks verify the wallet app that posted the
-    // notification; a test comes from our own signed package, so they are skipped.
+    // Installed/signature checks always apply to payment evidence.
     val appInfo = ProviderApps.inspect(this, sourcePackage, provider)
-    if (!isTest && (!appInfo.installed || !ProviderApps.signerAcceptable(appInfo))) return
+    if (!appInfo.installed || !ProviderApps.signerAcceptable(appInfo)) return
 
     val n = sbn.notification ?: return
     val isSummary = (n.flags and Notification.FLAG_GROUP_SUMMARY) != 0
@@ -146,6 +146,7 @@ class PayTsekNotificationListener : NotificationListenerService() {
       put("clientEventId", UUID.randomUUID().toString())
       put("provider", parsed.provider)
       put("sourcePackage", sourcePackage)
+      put("originPackage", sbn.packageName)
       put("sourceAppVersionName", appInfo.versionName ?: JSONObject.NULL)
       put("sourceAppVersionCode", appInfo.versionCode?.toInt() ?: JSONObject.NULL)
       put("parserId", parsed.parserId)

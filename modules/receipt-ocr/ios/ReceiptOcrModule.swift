@@ -51,14 +51,24 @@ public class ReceiptOcrModule: Module {
 
     /// Re-encode as JPEG with orientation applied and no EXIF/GPS.
     AsyncFunction("stripMetadata") { (fileUri: String, quality: Double) -> [String: Any] in
-      guard let url = URL(string: fileUri), let image = UIImage(contentsOfFile: url.path) else {
-        throw Exception(name: "STRIP_FAILED", description: "Could not load image")
+      guard let url = URL(string: fileUri), let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+        let width = properties[kCGImagePropertyPixelWidth] as? Int,
+        let height = properties[kCGImagePropertyPixelHeight] as? Int,
+        width > 0, height > 0, Double(width) * Double(height) <= 64_000_000,
+        let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+          kCGImageSourceCreateThumbnailFromImageAlways: true,
+          kCGImageSourceCreateThumbnailWithTransform: true,
+          kCGImageSourceThumbnailMaxPixelSize: 4096,
+        ] as CFDictionary) else {
+        throw Exception(name: "STRIP_FAILED", description: "Unsupported image dimensions")
       }
+      let image = UIImage(cgImage: thumbnail)
       let normalized = image.normalizedOrientation()
-      guard let data = normalized.jpegData(compressionQuality: CGFloat(min(max(quality, 0.5), 1.0))) else {
+      guard let data = normalized.jpegData(compressionQuality: CGFloat(min(max(quality, 0.8), 0.9))) else {
         throw Exception(name: "STRIP_FAILED", description: "Encode failed")
       }
-      let out = FileManager.default.temporaryDirectory.appendingPathComponent("clean-\(Int(Date().timeIntervalSince1970 * 1000)).jpg")
+      let out = FileManager.default.temporaryDirectory.appendingPathComponent("clean-\(UUID().uuidString).jpg")
       try data.write(to: out, options: .atomic)
       return ["uri": out.absoluteString, "byteLength": data.count, "contentType": "image/jpeg"]
     }

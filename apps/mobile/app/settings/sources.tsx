@@ -31,6 +31,7 @@ const EMPTY_STATUS: CollectorStatus = {
   lastObservedEventAt: null,
   lastUploadAt: null,
   lastUploadError: null,
+  lastDiagnosticId: null,
   unknownTemplateCount: 0,
   paused: false,
   appVersion: '',

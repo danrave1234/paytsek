@@ -15,7 +15,7 @@ export async function prepareReceiptProof(
 ): Promise<PreparedReceiptProof> {
   let cleanUri: string | null = null;
   try {
-    const clean = await ReceiptOcr.stripMetadata(sourceUri, 0.92);
+    const clean = await ReceiptOcr.stripMetadata(sourceUri);
     cleanUri = clean.uri;
     const ocr = await ReceiptOcr.recognize(clean.uri);
     return {

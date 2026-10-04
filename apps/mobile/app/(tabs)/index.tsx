@@ -7,11 +7,13 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppUpdateDialog } from '@/components/app-update-dialog';
 import { AppearMotion, GrowBar, ValueChangeMotion } from '@/components/motion';
 import { PaymentRecordRow } from '@/components/payment-record-row';
+import { SyncStatus } from '@/components/sync-status';
 import { Loading, Notice } from '@/components/ui';
 import { OfflineError } from '@/lib/api';
 import { listDrafts, type Draft } from '@/lib/drafts';
 import { draftOccurredAt, providerLabel, recordOccurredAt } from '@/lib/feed';
-import { getFormatter, peso, workspaceDate } from '@/lib/format';
+import { peso, workspaceDate } from '@/lib/format';
+import { todayWithPending, unacknowledgedDrafts } from '@/lib/record-totals';
 import { prefetchRecord, useDraftsSignal, useHome } from '@/lib/queries';
 import { useAppUpdate } from '@/lib/release-update';
 import { useSession } from '@/lib/session';
@@ -20,17 +22,6 @@ import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET, successColorFor } fro
 type FeedItem =
   | { kind: 'local'; id: string; draft: Draft; at: string; source: string; state: EvidenceState; amount: number; onPress: () => void; onPressIn?: () => void }
   | { kind: 'remote'; id: string; record: RecordSummary; at: string; source: string; state: EvidenceState; amount: number; onPress: () => void; onPressIn?: () => void };
-
-function hourInZone(iso: string, timezone: string): number {
-  const formatted = getFormatter('en-US', {
-    timeZone: timezone,
-    hour: '2-digit',
-    hour12: false,
-    hourCycle: 'h23',
-  }).format(new Date(iso));
-  const parsed = Number(formatted);
-  return parsed === 24 ? 0 : parsed;
-}
 
 function HourlyRhythm({ values }: { values: number[] }) {
   const theme = useTheme();
@@ -70,6 +61,7 @@ export default function Today() {
   const draftsSignal = useDraftsSignal();
   const update = useAppUpdate();
   const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [localError, setLocalError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showUpdate, setShowUpdate] = useState(false);
   const [savedToast, setSavedToast] = useState<string | null>(null);
@@ -92,7 +84,7 @@ export default function Today() {
 
   const refreshLocal = useCallback(() => {
     if (!workspace) return;
-    void listDrafts(workspace.id, true).then(setDrafts).catch(() => setDrafts([]));
+    void listDrafts(workspace.id, true).then((rows) => { setDrafts(rows); setLocalError(false); }).catch(() => setLocalError(true));
   }, [workspace]);
 
   useFocusEffect(useCallback(() => {
@@ -100,7 +92,7 @@ export default function Today() {
   }, [refreshLocal, draftsSignal]));
 
   const feed = useMemo<FeedItem[]>(() => {
-    const local: FeedItem[] = drafts.map((draft) => ({
+    const local: FeedItem[] = unacknowledgedDrafts(drafts, home.data).map((draft) => ({
       kind: 'local',
       id: draft.clientRecordId,
       draft,
@@ -115,7 +107,7 @@ export default function Today() {
       id: record.id,
       record,
       at: recordOccurredAt(record),
-      source: record.sourceLabel,
+      source: providerLabel(record.receiptProvider),
       state: record.evidenceState,
       amount: record.amountCentavos,
       onPress: () => router.push(`/record/${record.id}`),
@@ -124,34 +116,23 @@ export default function Today() {
     return [...local, ...remote]
       .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
       .slice(0, 8);
-  }, [drafts, home.data?.recentRecords, router]);
+  }, [drafts, home.data, router]);
 
-  const { totalCentavos, recordCount, hourly } = useMemo(() => {
-    const pendingCentavos = drafts.reduce((sum, draft) => sum + draft.request.corrected.amountCentavos, 0);
-    const buckets = [...(home.data?.today.hourlyRecordedCentavos ?? Array.from({ length: 24 }, () => 0))];
-    for (const draft of drafts) {
-      const hour = hourInZone(draftOccurredAt(draft), timezone);
-      if (Number.isInteger(hour) && hour >= 0 && hour < 24) buckets[hour] = (buckets[hour] ?? 0) + draft.request.corrected.amountCentavos;
-    }
-    return {
-      totalCentavos: (home.data?.today.recordedCentavos ?? 0) + pendingCentavos,
-      recordCount: (home.data?.today.recordedCount ?? 0) + drafts.length,
-      hourly: buckets,
-    };
-  }, [drafts, home.data, timezone]);
+  const today = todayWithPending(home.data, drafts, timezone);
+  const totalCentavos = today.recordedCentavos;
+  const recordCount = today.recordedCount;
+  const hourly = today.hourlyRecordedCentavos;
 
   // Day-close summary: evidence breakdown from server today counts + drafts
-  const closeDaySummary = useMemo(() => {
-    const today = home.data?.today;
-    if (!today) return null;
+  const closeDaySummary = (() => {
     const evidence: Array<{ label: string; count: number; cents: number }> = [
       { label: EVIDENCE_STATE_LABELS.UNVERIFIED, count: today.unverifiedCount, cents: today.unverifiedCentavos },
-      { label: EVIDENCE_STATE_LABELS.REVIEW_REQUIRED, count: today.reviewRequiredCount, cents: 0 },
+      { label: EVIDENCE_STATE_LABELS.REVIEW_REQUIRED, count: today.reviewRequiredCount, cents: today.reviewRequiredCentavos },
       { label: EVIDENCE_STATE_LABELS.MATCHED_AUTO, count: today.notificationMatchedCount, cents: today.notificationMatchedCentavos },
       { label: EVIDENCE_STATE_LABELS.CONFIRMED_MANUALLY, count: today.confirmedManuallyCount, cents: today.confirmedManuallyCentavos },
     ];
     return { evidence, totalCents: totalCentavos, totalCount: recordCount };
-  }, [home.data?.today, totalCentavos, recordCount]);
+  })();
 
   useEffect(() => {
     const savedAmount = Number(params.savedAmount);
@@ -187,7 +168,9 @@ export default function Today() {
         <View style={styles.header}>
           <Image source={require('../../assets/paytsek-wordmark.png')} resizeMode="contain" accessibilityLabel="PayTsek" style={styles.wordmark} />
         </View>
-
+        <SyncStatus drafts={drafts} />
+        {localError ? <Notice kind="error">Saved scans could not be read. Pull to refresh; the files have not been removed.</Notice> : null}
+        {home.error && !offline ? <Notice kind="error">Could not refresh server records. Pull to retry.</Notice> : null}
         {update.data ? (
           <TouchableRipple onPress={() => setShowUpdate(true)} accessibilityRole="button">
             <View style={[styles.inlineNotice, { backgroundColor: theme.colors.primaryContainer }]}>
@@ -207,7 +190,7 @@ export default function Today() {
               {healthWarning}
             </Text>
             <TouchableRipple onPress={() => setHealthDismissed(true)} accessibilityRole="button">
-              <View style={{ padding: 4 }}>
+              <View style={{ minHeight: TOUCH_TARGET, minWidth: TOUCH_TARGET, alignItems: 'center', justifyContent: 'center' }}>
                 <Icon source="close" size={18} color={theme.colors.onErrorContainer} />
               </View>
             </TouchableRipple>
@@ -272,7 +255,7 @@ export default function Today() {
 
         <View>
           {feed.map((item, index) => (
-            <AppearMotion itemKey={`${item.kind}.${item.id}`}>
+            <AppearMotion key={`${item.kind}.${item.id}`} itemKey={`${item.kind}.${item.id}`}>
               <PaymentRecordRow
                 amountCentavos={item.amount}
                 occurredAt={item.at}
@@ -327,6 +310,7 @@ export default function Today() {
             )}
           </Dialog.Content>
           <Dialog.Actions>
+            {workspace?.role === 'OWNER' ? <Button onPress={() => { setShowCloseDay(false); router.push('/settings/exports'); }}>Export CSV</Button> : null}
             <Button onPress={() => setShowCloseDay(false)}>Close</Button>
           </Dialog.Actions>
         </Dialog>

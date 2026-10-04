@@ -5,6 +5,7 @@ import { API_VERSION_HEADER, WORKSPACE_HEADER, IDEMPOTENCY_HEADER } from '@payts
 import { AppModule } from './app.module';
 import { ApiExceptionFilter } from './common/errors';
 import { loadEnv } from './config/env';
+import { reportOperationalError } from './common/monitoring';
 
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
@@ -22,8 +23,9 @@ async function bootstrap(): Promise<void> {
   new Logger('Bootstrap').log(`PayTsek API listening on ${env.API_PUBLIC_URL} (port ${env.API_PORT})`);
 }
 
-bootstrap().catch((e) => {
+bootstrap().catch(async () => {
   // eslint-disable-next-line no-console
-  console.error(e instanceof Error ? e.message : e);
+  console.error('BOOTSTRAP_FAILED');
+  await reportOperationalError('BOOTSTRAP_FAILED');
   process.exit(1);
 });

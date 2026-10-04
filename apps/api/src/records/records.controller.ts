@@ -36,7 +36,7 @@ export class RecordsController {
 
   @Post()
   create(@Workspace() ws: WorkspaceContext, @CurrentUser() u: AuthUser, @Body(zod(CreateRecordRequest)) body: CreateRecordRequest) {
-    return this.svc.create(ws.organizationId, u.id, body);
+    return this.svc.create(ws.organizationId, u.id, body, ws.role === 'OWNER');
   }
 
   @Get()

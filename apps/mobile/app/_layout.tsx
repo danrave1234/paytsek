@@ -1,24 +1,25 @@
-import { QueryClientProvider, focusManager } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { AppState, Platform, View } from 'react-native';
+import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useTheme } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { applySyncedRecord, invalidateDrafts, queryClient } from '@/lib/queries';
+import { queryClient } from '@/lib/queries';
 import { SessionProvider, useSession } from '@/lib/session';
-import { pruneSynced, syncAll } from '@/lib/drafts';
-import { reportHealth, restoreCollectorFilters } from '@/lib/collector';
+import { useDraftSync } from '@/lib/use-draft-sync';
 import { SPACING } from '@/theme';
 import { ErrorState, Loading } from '@/components/ui';
 import { ThemeModeProvider } from '@/lib/theme-mode';
 import { useReducedMotion } from '@/components/motion';
 import { getCapturePreferences } from '@/lib/capture-preferences';
+import { reportOperationalError } from '@/lib/monitoring';
 
 export const unstable_settings = { initialRouteName: '(tabs)' };
 
 /** Render-time throws land on this themed screen instead of Expo Router's default red screen. */
 export function ErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }) {
+  useEffect(() => { reportOperationalError('MOBILE_RENDER_FAILED'); }, []);
   return (
     <SafeAreaProvider>
       <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: SPACING.xl }}>
@@ -34,6 +35,7 @@ function Gate({ children }: { children: React.ReactNode }) {
   const segments = useSegments();
   const router = useRouter();
   const launchRouteHandled = useRef(false);
+  useDraftSync(workspace);
 
   useEffect(() => {
     if (!ready) return;
@@ -79,46 +81,6 @@ function Gate({ children }: { children: React.ReactNode }) {
     launchRouteHandled.current = true;
   }, [configured, ready, router, segments, session, workspace]);
 
-  // On resume/reconnect: refetch server state (system of record) and retry local drafts.
-  useEffect(() => {
-    let syncing = false;
-    // A paired payment phone has no reason to wait for its Settings page to
-    // report that the Android listener is healthy. This also makes an upgrade
-    // clear a stale health indicator as soon as the app is opened.
-    if (Platform.OS === 'android') {
-      void restoreCollectorFilters().then(reportHealth);
-    }
-    const runSync = () => {
-      if (!workspace || syncing) return;
-      syncing = true;
-      void syncAll(workspace.id).then(async (result) => {
-        if (result.synced > 0) {
-          // Insert synced server records into the home cache before pruning
-          // local drafts so the Today feed never goes blank.
-          for (const record of result.records) {
-            applySyncedRecord(record);
-          }
-          await Promise.all(['records', 'home', 'inbox'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
-        }
-        await pruneSynced(workspace.id);
-        // Signal the Today/Records screens to re-read local drafts now that
-        // synced rows are pruned, without keying re-reads to server polling.
-        void invalidateDrafts();
-      }).catch(() => { /* Durable drafts will retry on the next resume. */ }).finally(() => { syncing = false; });
-    };
-    // A fresh launch never emits an AppState change, so drafts left over from
-    // a previous session must be retried here, not only on resume.
-    if (AppState.currentState === 'active') runSync();
-    const sub = AppState.addEventListener('change', (s) => {
-      focusManager.setFocused(s === 'active');
-      if (s === 'active') {
-        if (Platform.OS === 'android') void restoreCollectorFilters().then(reportHealth);
-        runSync();
-      }
-    });
-    return () => sub.remove();
-  }, [workspace]);
-
   return (
     <>
       {children}
@@ -145,10 +107,12 @@ function Gate({ children }: { children: React.ReactNode }) {
 
 function AppNavigator() {
   const theme = useTheme();
+  const { session, workspace } = useSession();
   const reducedMotion = useReducedMotion();
   return (
     <Gate>
       <Stack
+        key={`${session?.user.id ?? 'signed-out'}:${workspace?.id ?? 'no-workspace'}`}
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: theme.colors.background },

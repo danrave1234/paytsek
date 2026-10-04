@@ -9,6 +9,7 @@ import {
 import type { ApiErrorBody, ApiErrorCode } from '@paytsek/contracts';
 import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
+import { reportOperationalError } from './monitoring';
 
 const STATUS_BY_CODE: Partial<Record<ApiErrorCode, number>> = {
   UNAUTHENTICATED: 401,
@@ -86,10 +87,10 @@ export class ApiExceptionFilter implements ExceptionFilter {
         requestId,
       };
     } else {
-      // Never leak internals; log with a request id for correlation. Log redaction:
-      // messages may contain user data, so only the error name/stack head is logged.
-      const err = exception as Error;
-      this.logger.error(`[${requestId}] ${err?.name ?? 'Error'}: ${redact(err?.message ?? '')}`);
+      // Never log the exception, request, stack or evidence; only a stable code
+      // and generated correlation ID may leave the restricted evidence flow.
+      this.logger.error(`[${requestId}] UNHANDLED_REQUEST_ERROR`);
+      void reportOperationalError('API_UNHANDLED');
     }
     res.status(status).json(body);
   }

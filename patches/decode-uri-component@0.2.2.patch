@@ -1,0 +1,92 @@
+diff --git a/index.js b/index.js
+index 24e7db0..1c7f25c 100644
+--- a/index.js
++++ b/index.js
+@@ -1,41 +1,61 @@
+ 'use strict';
+ var token = '%[a-f0-9]{2}';
+-var singleMatcher = new RegExp('(' + token + ')|([^%]+?)', 'gi');
+ var multiMatcher = new RegExp('(' + token + ')+', 'gi');
+ 
+-function decodeComponents(components, split) {
+-	try {
+-		// Try to decode the entire string first
+-		return [decodeURIComponent(components.join(''))];
+-	} catch (err) {
+-		// Do nothing
+-	}
++// Backport of the bounded decoder from upstream v0.5.0 (MIT).
++// Preserve this release's CommonJS API and plus-as-space behavior.
++var hexPair = /^[a-f\d]{2}$/i;
+ 
+-	if (components.length === 1) {
+-		return components;
+-	}
+-
+-	split = split || 1;
+-
+-	// Split the array in 2 parts
+-	var left = components.slice(0, split);
+-	var right = components.slice(split);
++function parsePercentByte(input, position) {
++	if (input.charCodeAt(position) !== 37 || position + 3 > input.length) return;
++	var digits = input.slice(position + 1, position + 3);
++	if (!hexPair.test(digits)) return;
++	return { byte: parseInt(digits, 16), next: position + 3 };
++}
+ 
+-	return Array.prototype.concat.call([], decodeComponents(left), decodeComponents(right));
++function utf8SequenceLength(byte) {
++	if (byte <= 0x7F) return 1;
++	if (byte >= 0xC2 && byte <= 0xDF) return 2;
++	if (byte >= 0xE0 && byte <= 0xEF) return 3;
++	if (byte >= 0xF0 && byte <= 0xF4) return 4;
++	return 0;
+ }
+ 
+ function decode(input) {
+ 	try {
+ 		return decodeURIComponent(input);
+ 	} catch (err) {
+-		var tokens = input.match(singleMatcher) || [];
+-
+-		for (var i = 1; i < tokens.length; i++) {
+-			input = decodeComponents(tokens, i).join('');
+-
+-			tokens = input.match(singleMatcher) || [];
++		var output = '';
++		var position = 0;
++		while (position < input.length) {
++			var first = parsePercentByte(input, position);
++			if (!first) {
++				output += input.charAt(position++);
++				continue;
++			}
++			var length = utf8SequenceLength(first.byte);
++			var end = first.next;
++			var valid = length > 0;
++			for (var i = 1; i < length; i++) {
++				var next = parsePercentByte(input, end);
++				if (!next || next.byte < 0x80 || next.byte > 0xBF) {
++					valid = false;
++					break;
++				}
++				end = next.next;
++			}
++			if (valid) {
++				try {
++					output += decodeURIComponent(input.slice(position, end));
++					position = end;
++					continue;
++				} catch (invalidUtf8) {
++					// Reject overlong UTF-8, surrogates and out-of-range code points.
++				}
++			}
++			output += input.slice(position, position + 3);
++			position += 3;
+ 		}
+-
+-		return input;
++		return output;
+ 	}
+ }

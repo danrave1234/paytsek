@@ -147,7 +147,9 @@ export class PairingService {
         }
         await c.query(`update payment_sources set collection_paused = false where id = $1`, [row.source_id]);
       }
-      await c.query(`update devices set status = 'ACTIVE' where id = $1`, [row.accepted_device_id]);
+      // Owner-approved pairing makes this a shared payment phone, no longer a
+      // personal current-phone listener tied to a previously signed-in user.
+      await c.query(`update devices set status = 'ACTIVE', current_phone_user_id = null where id = $1`, [row.accepted_device_id]);
       await c.query(`update pairing_sessions set state = 'APPROVED', approved_at = now(), approved_by = $2 where id = $1`, [row.id, ownerId]);
       await this.audit.record({ organizationId: orgId, actorUserId: ownerId, action: 'DEVICE_APPROVED', subjectType: 'device', subjectId: row.accepted_device_id, after: { sourceId: row.source_id, capability: cap } }, c);
       return { state: 'APPROVED' };

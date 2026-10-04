@@ -3,6 +3,7 @@ import type {
   AnalyticsSummary,
   CorrectRecordRequest,
   DeviceSummary,
+  ExportJobView,
   HomeSummary,
   ListRecordsResponse,
   MemberSummary,
@@ -16,6 +17,10 @@ import { QueryClient, keepPreviousData, useInfiniteQuery, useMutation, useQuery,
 import { ApiError, api } from './api';
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
+import { listDrafts } from './drafts';
+import { isScopeCurrent, requireRequestScope, type RequestScope } from './request-scope';
+import { mergeSyncedRecord } from './record-totals';
+import { recordPollInterval } from './record-polling';
 
 /** One query client; server state is the system of record (no duplicate stores). */
 export const queryClient = new QueryClient({
@@ -60,16 +65,23 @@ export const keys = {
 };
 
 export const useWorkspaces = () => useQuery({ queryKey: keys.workspaces, queryFn: ({ signal }) => api<WorkspaceSummary[]>('/v1/workspaces', { noWorkspace: true, signal }) });
+async function fetchHome(signal?: AbortSignal) {
+  const scope = requireRequestScope();
+  const drafts = scope.workspaceId ? await listDrafts(scope.workspaceId, true) : [];
+  const ids = drafts.map((draft) => draft.clientRecordId).sort().slice(0, 100);
+  const query = ids.length ? `?pendingIds=${encodeURIComponent(ids.join(','))}` : '';
+  return api<HomeSummary>(`/v1/home${query}`, { signal, scope });
+}
 export const useHome = () => useQuery({
   queryKey: keys.home,
-  queryFn: ({ signal }) => api<HomeSummary>('/v1/home', { signal }),
+  queryFn: ({ signal }) => fetchHome(signal),
   staleTime: 30_000,
   refetchInterval: useVisiblePolling(30_000),
 });
 /** Read Today's cached /v1/home without driving another polling interval. */
 export const useHomeSnapshot = () => useQuery({
   queryKey: keys.home,
-  queryFn: ({ signal }) => api<HomeSummary>('/v1/home', { signal }),
+  queryFn: ({ signal }) => fetchHome(signal),
   staleTime: 30_000,
 });
 /**
@@ -117,7 +129,24 @@ export function useInfiniteRecords(filters: { q?: string; state?: string[]; sour
 }
 
 /** Keep an open record current while a notification from the payment phone is arriving. */
-export const useRecord = (id: string) => useQuery({ queryKey: keys.record(id), queryFn: ({ signal }) => api<RecordDetail>(`/v1/records/${id}`, { signal }), enabled: !!id, refetchInterval: useVisiblePolling(15_000) });
+export function useRecord(id: string) {
+  const [visibleSince, setVisibleSince] = useState<number | null>(null);
+  useFocusEffect(useCallback(() => { setVisibleSince(Date.now()); return () => setVisibleSince(null); }, [id]));
+  return useQuery({ queryKey: keys.record(id), queryFn: ({ signal }) => api<RecordDetail>(`/v1/records/${id}`, { signal }), enabled: !!id,
+    refetchInterval: (query) => recordPollInterval(query.state.data?.evidenceState, visibleSince) });
+}
+
+/** Short, visible-only export polling. Manual refresh remains available after timeout. */
+export function useExportJob(id: string | undefined) {
+  const [visibleSince, setVisibleSince] = useState<number | null>(null);
+  useFocusEffect(useCallback(() => { setVisibleSince(Date.now()); return () => setVisibleSince(null); }, [id]));
+  return useQuery({ queryKey: ['export', id], enabled: !!id,
+    queryFn: ({ signal }) => api<ExportJobView>(`/v1/exports/${id}`, { signal }),
+    staleTime: 5_000,
+    refetchInterval: (query) => visibleSince !== null && Date.now() - visibleSince < 120_000 &&
+      !['READY', 'FAILED', 'EXPIRED'].includes(query.state.data?.status ?? '') ? 2500 : false,
+  });
+}
 
 /** Warm a record while the user is pressing its row; navigation still owns rendering. */
 export const prefetchRecord = (id: string) => queryClient.prefetchQuery({
@@ -133,6 +162,7 @@ export function useInvalidateRecord() {
     void qc.invalidateQueries({ queryKey: ['records'] });
     void qc.invalidateQueries({ queryKey: keys.home });
     void qc.invalidateQueries({ queryKey: keys.inbox });
+    void qc.invalidateQueries({ queryKey: ['analytics'] });
     if (id) {
       void qc.invalidateQueries({ queryKey: keys.record(id) });
       void qc.invalidateQueries({ queryKey: keys.candidates(id) });
@@ -145,42 +175,12 @@ export function useInvalidateRecord() {
  * Today feed never goes blank while the server refetch catches up.
  * This runs before pruning the local draft.
  */
-export function applySyncedRecord(record: RecordSummary): void {
+export function applySyncedRecord(record: RecordSummary, timezone: string, scope: RequestScope): void {
+  if (!isScopeCurrent(scope)) return;
+  queryClient.setQueryData(['synced-draft', record.clientRecordId], record.id);
   const current = queryClient.getQueryData<HomeSummary>(keys.home);
   if (!current) return;
-  // Avoid double-inserting if the record is already in the cache.
-  if (current.recentRecords.some((r) => r.id === record.id)) return;
-  const cents = record.amountCentavos;
-  const today = current.today;
-  // Map evidence state to the corresponding today counters.
-  const state = record.evidenceState;
-  let countKey: string | null = null;
-  let centKey: string | null = null;
-  if (state === 'MATCHED_AUTO' || state === 'MATCHED_BY_USER') {
-    countKey = 'notificationMatchedCount';
-    centKey = 'notificationMatchedCentavos';
-  } else if (state === 'CONFIRMED_MANUALLY') {
-    countKey = 'confirmedManuallyCount';
-    centKey = 'confirmedManuallyCentavos';
-  } else if (state === 'REVIEW_REQUIRED') {
-    countKey = 'reviewRequiredCount';
-    centKey = null; // review has no separate centavos bucket
-  } else if (state === 'UNVERIFIED') {
-    countKey = 'unverifiedCount';
-    centKey = 'unverifiedCentavos';
-  }
-  const updated: HomeSummary = {
-    ...current,
-    recentRecords: [record, ...current.recentRecords].slice(0, 6),
-    today: {
-      ...today,
-      recordedCount: today.recordedCount + 1,
-      recordedCentavos: today.recordedCentavos + cents,
-      ...(countKey ? { [countKey]: (today as any)[countKey] + 1 } : {}),
-      ...(centKey ? { [centKey]: (today as any)[centKey] + cents } : {}),
-    },
-  };
-  queryClient.setQueryData(keys.home, updated);
+  queryClient.setQueryData(keys.home, mergeSyncedRecord(current, record, timezone));
 }
 
 export function useConfirmCandidate(recordId: string) {

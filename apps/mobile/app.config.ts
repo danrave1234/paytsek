@@ -10,7 +10,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   slug: 'paytsek',
   owner: 'danrave1234',
   scheme: 'paytsek',
-  version: '0.2.14',
+  version: '0.2.15',
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',
   backgroundColor: '#0C111D',
@@ -29,7 +29,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     package: 'ph.paytsek.app',
     // Must increase for every public APK so Android accepts it as an upgrade.
-    versionCode: 33,
+    versionCode: 34,
     adaptiveIcon: { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#0B5FFF' },
     permissions: ['android.permission.CAMERA', 'android.permission.INTERNET', 'android.permission.POST_NOTIFICATIONS', 'android.permission.RECEIVE_BOOT_COMPLETED', 'android.permission.REQUEST_INSTALL_PACKAGES'],
     // Receive shared images from other apps (share sheet import).
@@ -86,5 +86,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
     sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN ?? '',
+    monitoringEnabled: process.env.EXPO_PUBLIC_MONITORING_ENABLED === 'true',
   },
 });

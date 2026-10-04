@@ -1,5 +1,5 @@
 import type { CaptureOrigin, OcrResult, ReceiptFields } from '@paytsek/contracts';
-import { parseMoneyExact, type ReceiptExtraction } from '@paytsek/receipt-parsers';
+import { assessReceiptAmount, parseMoneyExact, type ReceiptExtraction } from '@paytsek/receipt-parsers';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -12,15 +12,17 @@ import { FadeIn } from '@/components/motion';
 import { Notice, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
 import { newId } from '@/lib/device';
-import { pruneSynced, saveDraft, stageImage, syncDraft, type Draft } from '@/lib/drafts';
+import { saveDraft, stageImage, type Draft } from '@/lib/drafts';
 import { peso } from '@/lib/format';
-import { applySyncedRecord, invalidateDrafts, useHomeSnapshot, useInvalidateRecord } from '@/lib/queries';
+import { invalidateDrafts, queryClient, useHomeSnapshot } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TOUCH_TARGET, successColorFor } from '@/theme';
 import { PaymentCollector } from 'payment-collector';
 import { DEFAULT_CAPTURE_PREFERENCES, getCapturePreferences, setCapturePreferences, type CapturePreferences } from '@/lib/capture-preferences';
 import { discardCaptureFile, prepareReceiptProof, type PreparedReceiptProof } from '@/lib/receipt-capture';
 import { useReceiptAutoCapture } from '@/lib/use-receipt-auto-capture';
+import { isScopeCurrent, requireRequestScope, ScopeChangedError } from '@/lib/request-scope';
+import { syncWorkspace } from '@/lib/sync-coordinator';
 
 type Stage = 'capture' | 'processing' | 'review' | 'saved';
 
@@ -28,9 +30,8 @@ export default function Scan() {
   const theme = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ source?: string; uri?: string }>();
-  const { workspace } = useSession();
+  const { workspace, session } = useSession();
   const home = useHomeSnapshot();
-  const invalidate = useInvalidateRecord();
   const [permission, requestPermission] = useCameraPermissions();
   const [camera, setCamera] = useState<CameraView | null>(null);
   const [stage, setStage] = useState<Stage>('capture');
@@ -49,6 +50,7 @@ export default function Scan() {
   const [cameraReady, setCameraReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
+  const [amountWarning, setAmountWarning] = useState<string | null>(null);
   const [capturePreferences, setLocalCapturePreferences] = useState<CapturePreferences>(DEFAULT_CAPTURE_PREFERENCES);
   const saveLock = useRef(false);
   const operation = useRef(false);
@@ -79,6 +81,7 @@ export default function Scan() {
     setSaved(null);
     setError(null);
     setDuplicateWarning(null);
+    setAmountWarning(null);
     saveLock.current = false;
     // Allow the next share-sheet intent (including another inbox drain) to be
     // handled after the previous scan flow has fully completed.
@@ -118,11 +121,14 @@ export default function Scan() {
     setError(null);
     const clientRecordId = newId();
     try {
+      const scope = requireRequestScope();
+      if (scope.workspaceId !== workspace.id || scope.userId !== session?.user.id) throw new ScopeChangedError();
       const stagedUri = await stageImage(uri, clientRecordId, 'jpg');
       const finalFields = { ...corrected, amountCentavos: corrected.amountCentavos, currency: 'PHP' as const };
       const draft = await saveDraft({
         clientRecordId,
         workspaceId: workspace.id,
+        userId: scope.userId,
         imageUri: stagedUri,
         contentType: 'image/jpeg',
         request: {
@@ -153,6 +159,9 @@ export default function Scan() {
       });
       discardCaptureFile(uri);
       if (temporaryImage.current === uri) temporaryImage.current = null;
+      if (!isScopeCurrent(scope)) return true;
+      void invalidateDrafts();
+      void queryClient.invalidateQueries({ queryKey: ['home'] });
 
       // Local persistence is success. Navigation never waits for image upload,
       // record creation, matching, or any other backend acknowledgement.
@@ -166,18 +175,7 @@ export default function Scan() {
           savedProvider: finalFields.receiptProvider ?? '',
         },
       });
-      void syncDraft(draft).then(async (result) => {
-        // Insert the server record into the home cache before pruning the
-        // local draft so the Today feed never goes blank.
-        if (result.status === 'SYNCED' && result.record) {
-          applySyncedRecord(result.record);
-        }
-        invalidate();
-        // The server has acknowledged the durable record; the staged copy is
-        // now redundant and can be pruned without waiting for the next resume.
-        if (result.status === 'SYNCED') await pruneSynced(workspace.id);
-        void invalidateDrafts();
-      }).catch(() => undefined);
+      void syncWorkspace(workspace).catch(() => undefined);
       return true;
     } catch {
       saveLock.current = false;
@@ -186,7 +184,7 @@ export default function Scan() {
       setError('Could not save the proof on this phone. Keep this screen open and try again.');
       return false;
     }
-  }, [invalidate, router, workspace]);
+  }, [router, session?.user.id, workspace]);
 
   const processPrepared = useCallback(async (prepared: PreparedReceiptProof, from: CaptureOrigin, token: number) => {
     if (token !== generation.current) {
@@ -220,8 +218,10 @@ export default function Scan() {
       }
     }
 
-    // Local persistence is success; provider evidence and upload remain background work.
-    if (receipt.fields.amountCentavos && await persist(receipt, prepared.imageUri, from, receipt.fields, ocr.fullText, ocr.blocks)) return;
+    const assessment = assessReceiptAmount(receipt, ocr.blocks);
+    setAmountWarning(assessment.ready ? null : assessment.reason === 'MISSING' ? 'Enter the amount shown on the proof.' : 'Check the amount against the proof. The reading is uncertain.');
+    // Only uncertainty in the required amount opens a form; optional evidence never does.
+    if (assessment.ready && await persist(receipt, prepared.imageUri, from, receipt.fields, ocr.fullText, ocr.blocks)) return;
     setStage('review');
   }, [home.data?.recentRecords, persist]);
 
@@ -346,6 +346,7 @@ export default function Scan() {
           <ScreenTitle title="Confirm amount" />
           {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="contain" accessibilityLabel="Captured payment proof" /> : null}
           <Notice kind="info">We'll save the proof now. You can edit details later.</Notice>
+          {amountWarning ? <Notice kind="warning">{amountWarning}</Notice> : null}
           <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} right={<TextInput.Affix text="₱" />} />
           {duplicateWarning ? <Notice kind="warning">{duplicateWarning}</Notice> : null}
           {error ? <Notice kind="error">{error}</Notice> : null}

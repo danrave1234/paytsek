@@ -1,9 +1,10 @@
 import type { ExportJobView } from '@paytsek/contracts';
-import React, { useEffect, useRef, useState } from 'react';
-import { Linking, StyleSheet, View } from 'react-native';
+import React, { useState } from 'react';
+import { Linking, Share, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Icon, Text, useTheme } from 'react-native-paper';
 import { Group, ListRow, Notice, Row, Screen } from '@/components/ui';
-import { api, isApiError } from '@/lib/api';
+import { api } from '@/lib/api';
+import { useExportJob } from '@/lib/queries';
 import { manilaTime } from '@/lib/format';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TOUCH_TARGET } from '@/theme';
@@ -14,9 +15,6 @@ const RANGES = [
   { key: '30', label: 'Last 30 days', days: 30 },
   { key: '90', label: 'Last 90 days', days: 90 },
 ];
-
-// A stuck export must not poll forever: ~2 minutes at 2.5s per attempt.
-const MAX_POLL_ATTEMPTS = 48;
 
 /** Milliseconds elapsed since midnight in the workspace timezone. */
 function elapsedSinceMidnight(now: Date, timezone: string): number {
@@ -29,43 +27,28 @@ export default function Exports() {
   const theme = useTheme();
   const { workspace } = useSession();
   const timezone = workspace?.timezone || 'Asia/Manila';
-  const [job, setJob] = useState<ExportJobView | null>(null);
+  const [requested, setRequested] = useState<ExportJobView | null>(null);
+  const query = useExportJob(requested?.id);
+  const job = query.data ?? requested;
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const pollAttempts = useRef(0);
-
-  useEffect(() => {
-    if (!job || ['READY', 'FAILED', 'EXPIRED'].includes(job.status)) return;
-    const timer = setInterval(async () => {
-      pollAttempts.current += 1;
-      if (pollAttempts.current > MAX_POLL_ATTEMPTS) {
-        setJob({ ...job, status: 'FAILED' });
-        setError('The export is taking too long. Try creating it again.');
-        return;
-      }
-      try {
-        setJob(await api<ExportJobView>(`/v1/exports/${job.id}`));
-      } catch (pollError) {
-        if (isApiError(pollError, 'EXPORT_EXPIRED')) setJob({ ...job, status: 'EXPIRED' });
-      }
-    }, 2500);
-    return () => clearInterval(timer);
-  }, [job]);
 
   const create = async (days: number) => {
+    if (creating || job?.status === 'PENDING' || job?.status === 'RUNNING') return;
+    setCreating(true);
     setError(null);
-    pollAttempts.current = 0;
     const to = new Date();
     const from = new Date(to);
     if (days === 0) from.setTime(to.getTime() - elapsedSinceMidnight(to, timezone));
     else from.setDate(from.getDate() - days);
     try {
-      setJob(await api<ExportJobView>('/v1/exports', {
+      setRequested(await api<ExportJobView>('/v1/exports', {
         method: 'POST',
         body: { format: 'CSV', from: from.toISOString(), to: to.toISOString(), includeVoided: false },
       }));
     } catch (createError) {
       setError((createError as Error).message);
-    }
+    } finally { setCreating(false); }
   };
 
   const preparing = job?.status === 'PENDING' || job?.status === 'RUNNING';
@@ -76,10 +59,12 @@ export default function Exports() {
       </Text>
       <Group title="Date range">
         {RANGES.map((range) => (
-          <ListRow key={range.key} icon="calendar-range" title={range.label} subtitle="CSV" onPress={() => void create(range.days)} />
+            <ListRow key={range.key} icon="calendar-range" title={range.label} subtitle="CSV" onPress={creating || preparing ? undefined : () => void create(range.days)} />
         ))}
       </Group>
       {error ? <Notice kind="error">{error}</Notice> : null}
+      {query.error ? <Notice kind="warning">Could not refresh the export. Your request is retained; check its status when connected.</Notice> : null}
+      {creating ? <ActivityIndicator accessibilityLabel="Requesting export" /> : null}
 
       {job ? (
         <View style={[styles.status, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]} accessibilityLiveRegion="polite">
@@ -93,7 +78,12 @@ export default function Exports() {
           {job.rowCount !== null ? <Row label="Records" value={String(job.rowCount)} /> : null}
           {job.expiresAt && job.status === 'READY' ? <Row label="Link expires" value={manilaTime(job.expiresAt, undefined, timezone)} /> : null}
           {job.status === 'FAILED' ? <Text variant="bodySmall" style={{ color: theme.colors.error }}>Try creating the export again.</Text> : null}
-          {job.downloadUrl ? <Button mode="contained" icon="download" onPress={() => void Linking.openURL(job.downloadUrl!)} style={{ minHeight: TOUCH_TARGET }}>Download CSV</Button> : null}
+          {preparing || query.error ? <Button icon="refresh" disabled={query.isFetching} loading={query.isFetching} onPress={() => void query.refetch()} contentStyle={{ minHeight: TOUCH_TARGET }}>Check export status</Button> : null}
+          {job.downloadUrl && job.status === 'READY' ? <>
+            <Button mode="contained" icon="download" onPress={() => void Linking.openURL(job.downloadUrl!).catch(() => setError('Could not open the download. Try sharing the link.'))} contentStyle={{ minHeight: TOUCH_TARGET }}>Download CSV</Button>
+            <Button icon="share-variant" onPress={() => void Share.share({ message: job.downloadUrl!, title: 'PayTsek records CSV' }).catch(() => setError('Could not open sharing. Try downloading the CSV.'))} contentStyle={{ minHeight: TOUCH_TARGET }}>Share download link</Button>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Anyone with this link can download the CSV until it expires. Share only with people who should have access.</Text>
+          </> : null}
         </View>
       ) : null}
     </Screen>

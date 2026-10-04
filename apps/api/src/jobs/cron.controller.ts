@@ -1,6 +1,5 @@
-import { Controller, ForbiddenException, Get, Headers, Query } from '@nestjs/common';
-import { createHash, timingSafeEqual } from 'node:crypto';
-import { loadEnv } from '../config/env';
+import { Controller, Get, Headers, Query } from '@nestjs/common';
+import { authorizeCron } from './cron-auth';
 import { WorkerService } from './worker.service';
 import { BillingService } from '../billing/billing.service';
 
@@ -20,18 +19,7 @@ import { BillingService } from '../billing/billing.service';
  */
 @Controller('v1/internal/cron')
 export class CronController {
-  private readonly env = loadEnv();
-
   constructor(private readonly worker: WorkerService, private readonly billing: BillingService) {}
-
-  private authorize(header: string | undefined): void {
-    const secret = this.env.CRON_SECRET;
-    if (!secret) throw new ForbiddenException('CRON_SECRET is not configured');
-    // Hash both sides to fixed length so the comparison is timing-safe regardless of input length.
-    const expected = createHash('sha256').update(`Bearer ${secret}`).digest();
-    const provided = createHash('sha256').update(header ?? '').digest();
-    if (!timingSafeEqual(expected, provided)) throw new ForbiddenException('Invalid cron credentials');
-  }
 
   /** Process queued jobs. Scheduled every minute. */
   @Get('drain')
@@ -39,7 +27,7 @@ export class CronController {
     @Headers('authorization') authorization: string | undefined,
     @Query('maxJobs') maxJobs?: string,
   ): Promise<{ processed: number; timedOut: boolean }> {
-    this.authorize(authorization);
+    authorizeCron(authorization);
     const parsed = maxJobs ? Number.parseInt(maxJobs, 10) : undefined;
     return this.worker.drain(Number.isFinite(parsed) ? { maxJobs: parsed } : {});
   }
@@ -47,7 +35,7 @@ export class CronController {
   /** Enqueue retention purge, then drain the queue. Scheduled daily on Vercel. */
   @Get('maintenance')
   async maintenance(@Headers('authorization') authorization: string | undefined): Promise<{ ok: true }> {
-    this.authorize(authorization);
+    authorizeCron(authorization);
     await this.billing.expireEndedAccess();
     await this.worker.enqueueMaintenance();
     // Reconciliation runs inline at record-create/ingest time; this drain is

@@ -52,7 +52,7 @@ function serviceWith(query: (sql: string, params: unknown[]) => Promise<{ rows: 
   const reconcile = {
     scheduleEvent: vi.fn(async () => undefined),
     scheduleRecord: vi.fn(async () => undefined),
-    reconcileEvent: vi.fn(async () => undefined),
+    reconcileEventInline: vi.fn(async () => undefined),
   } as unknown as ReconcileService;
   return { service: new EvidenceWebhookService(db, audit, reconcile), client, audit, reconcile };
 }
@@ -69,7 +69,7 @@ describe('signed evidence webhook', () => {
 
     await expect(fixture.service.receive(connector.id, body, signature(body))).resolves.toEqual({ ok: true, outcome: 'ACCEPTED' });
     expect(fixture.reconcile.scheduleEvent).toHaveBeenCalledWith(eventId, expect.anything());
-    expect(fixture.reconcile.reconcileEvent).toHaveBeenCalledWith(eventId);
+    expect(fixture.reconcile.reconcileEventInline).toHaveBeenCalledWith(eventId);
     const insert = fixture.client.query.mock.calls.find(([sql]) => String(sql).includes('insert into notification_events'));
     expect(insert?.[1]).not.toContain(body.toString('utf8'));
   });
