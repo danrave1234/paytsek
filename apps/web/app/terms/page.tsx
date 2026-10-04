@@ -59,7 +59,7 @@ const sections: LegalSection[] = [
     body: (
       <p>
         No reverse engineering of provider apps, no scraping or automating wallet apps, no sharing of collector credentials,
-        and no use that violates GCash, GoTyme or Maya terms or Philippine law.
+        and no use that violates applicable provider terms or Philippine or other applicable law. Inform affected customers and employees about recordkeeping, collect only necessary evidence, and honour applicable privacy rights. App permissions are not a substitute for a lawful basis.
       </p>
     ),
   },
@@ -79,7 +79,7 @@ const sections: LegalSection[] = [
     title: 'Trademarks',
     body: (
       <p>
-        GCash, GoTyme and Maya are trademarks of their respective owners. PayTsek is an independent product and is not
+        GCash, GoTyme, Maya and MariBank are trademarks of their respective owners. PayTsek is an independent product and is not
         affiliated with or endorsed by them.
       </p>
     ),
@@ -91,7 +91,7 @@ export default function Terms() {
     <LegalPage
       eyebrow="Legal · 02"
       title="Terms of use"
-      updated="2026-09-14"
+      updated="2026-10-04"
       lead="What PayTsek is, what it does not promise, and what you are responsible for."
       summary={[
         { label: 'Moves money', value: 'No', tone: 'ok' },

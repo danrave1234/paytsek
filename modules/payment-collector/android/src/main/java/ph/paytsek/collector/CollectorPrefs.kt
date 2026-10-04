@@ -75,6 +75,11 @@ class CollectorPrefs(context: Context) {
     get() = prefs.getString("lastObservedEventAt", null)
     set(v) = prefs.edit().putString("lastObservedEventAt", v).apply()
 
+  /** Local-only listener diagnostic. Never a payment event or upload payload. */
+  var lastDiagnosticId: String?
+    get() = prefs.getString("lastDiagnosticId", null)
+    set(v) = prefs.edit().putString("lastDiagnosticId", v).apply()
+
   var lastUploadAt: String?
     get() = prefs.getString("lastUploadAt", null)
     set(v) = prefs.edit().putString("lastUploadAt", v).apply()

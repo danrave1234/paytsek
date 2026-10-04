@@ -173,6 +173,7 @@ export const JobKind = z.enum([
   'GENERATE_EXPORT',
   'PURGE_RETENTION',
   'RECONCILE_ENTITLEMENT',
+  'DELETE_ACCOUNT',
 ]);
 export type JobKind = z.infer<typeof JobKind>;
 

@@ -69,6 +69,7 @@ async function latestRelease(): Promise<AppUpdate | null> {
   if (!apk || !isNewerVersion(release.tag_name, APP_VERSION)) return null;
   // The release workflow publishes a sha256sum file named "<apk>.sha256" next to every APK.
   const checksum = release.assets.find((asset) => asset.name === `${apk.name}.sha256`);
+  if (!checksum) return null;
   const version = release.tag_name.replace(/^v/i, '');
   return {
     version,
@@ -135,6 +136,7 @@ export async function downloadAndInstallUpdate(
   // APK rather than deleting it and downloading it a second time.
   const existing = await FileSystem.getInfoAsync(destination);
   const expected = update.checksumUrl ? await expectedSha256(update.checksumUrl) : null;
+  if (!expected) throw new Error('The update checksum could not be verified. Try again when online.');
   let apkUri = existing.exists && existing.size === update.sizeBytes ? destination : null;
 
   // A reused cached APK must pass the same SHA-256 verification as a fresh download.

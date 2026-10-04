@@ -7,13 +7,15 @@ import { ProviderLogo } from '@/components/provider-logo';
 import { AppearMotion } from '@/components/motion';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PaymentRecordRow } from '@/components/payment-record-row';
-import { EmptyState, ErrorState, Loading } from '@/components/ui';
+import { SyncStatus } from '@/components/sync-status';
+import { parseMoneyExact } from '@paytsek/receipt-parsers';
+import { EmptyState, ErrorState, Loading, Notice } from '@/components/ui';
 import { listDrafts, type Draft } from '@/lib/drafts';
 import { draftOccurredAt, providerLabel, recordOccurredAt } from '@/lib/feed';
 import { getFormatter } from '@/lib/format';
 import { prefetchRecord, useDraftsSignal, useInfiniteRecords } from '@/lib/queries';
 import { useSession } from '@/lib/session';
-import { RADIUS, SPACING, TAB_BAR_CLEARANCE } from '@/theme';
+import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET } from '@/theme';
 
 type RowItem =
   | { kind: 'draft'; id: string; draft: Draft; at: string; source: string; amount: number; state: EvidenceState; onPress: () => void; onPressIn?: () => void }
@@ -77,6 +79,7 @@ export default function Records() {
   const [text, setText] = useState('');
   const [search, setSearch] = useState('');
   const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [localError, setLocalError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [evidenceFilter, setEvidenceFilter] = useState<EvidenceFilter>('ALL');
   const [provider, setProvider] = useState<Provider | undefined>();
@@ -91,7 +94,7 @@ export default function Records() {
   const draftsSignal = useDraftsSignal();
   const refreshLocal = useCallback(() => {
     if (!workspace) return;
-    void listDrafts(workspace.id, true).then(setDrafts).catch(() => setDrafts([]));
+    void listDrafts(workspace.id, true).then((rows) => { setDrafts(rows); setLocalError(false); }).catch(() => setLocalError(true));
   }, [workspace]);
   useFocusEffect(useCallback(() => { refreshLocal(); }, [refreshLocal, draftsSignal]));
 
@@ -103,8 +106,7 @@ export default function Records() {
       if (evidenceStates && !evidenceStates.includes('UNVERIFIED')) return false;
       if (!normalizedSearch) return true;
       const source = providerLabel(draft.request.corrected.receiptProvider).toLowerCase();
-      const amount = (draft.request.corrected.amountCentavos / 100).toFixed(2);
-      return source.includes(search.toLowerCase()) || amount.includes(normalizedSearch);
+      return source.includes(search.toLowerCase()) || parseMoneyExact(normalizedSearch)?.centavos === draft.request.corrected.amountCentavos;
     }).map((draft) => ({
       kind: 'draft',
       id: draft.clientRecordId,
@@ -120,13 +122,14 @@ export default function Records() {
       id: record.id,
       record,
       at: recordOccurredAt(record),
-      source: record.sourceLabel,
+      source: providerLabel(record.receiptProvider),
       amount: record.amountCentavos,
       state: record.evidenceState,
       onPress: () => router.push(`/record/${record.id}`),
       onPressIn: () => { void prefetchRecord(record.id); },
     }));
-    return [...localRows, ...remoteRows].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+    const canonicalIds = new Set(remote.map((record) => record.clientRecordId));
+    return [...localRows.filter((row) => !canonicalIds.has(row.id)), ...remoteRows].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   }, [drafts, evidenceStates, provider, query.data?.pages, router, search]);
 
   const hasFilters = Boolean(search || provider || evidenceFilter !== 'ALL');
@@ -166,8 +169,11 @@ export default function Records() {
           <View style={styles.header}>
             <View style={styles.titleRow}>
               <Text variant="headlineSmall" style={styles.title}>Records</Text>
-              {hasFilters ? <Pressable onPress={clearFilters} hitSlop={10}><Text variant="labelLarge" style={{ color: theme.colors.primary }}>Clear</Text></Pressable> : null}
+              {hasFilters ? <Pressable onPress={clearFilters} accessibilityRole="button" accessibilityLabel="Clear record filters" style={{ minHeight: TOUCH_TARGET, minWidth: TOUCH_TARGET, justifyContent: 'center' }}><Text variant="labelLarge" style={{ color: theme.colors.primary }}>Clear</Text></Pressable> : null}
             </View>
+            <SyncStatus drafts={drafts} />
+            {localError ? <Notice kind="error">Saved scans could not be read. Pull to retry; their files remain on this phone.</Notice> : null}
+            {query.error && rows.length > 0 ? <Notice kind="error">Could not refresh server records. Pull to retry.</Notice> : null}
             <Searchbar
               placeholder="Search wallet or amount"
               value={text}
@@ -253,8 +259,8 @@ const styles = StyleSheet.create({
   searchInput: { minHeight: 0, fontSize: 15 },
   filterLabel: { marginTop: SPACING.sm, letterSpacing: 0.7 },
   filters: { gap: 8, paddingVertical: 2, paddingRight: SPACING.md },
-  filter: { minHeight: 38, minWidth: 58, paddingHorizontal: SPACING.md, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth },
-  sourceFilter: { minHeight: 42, maxWidth: 180, paddingHorizontal: SPACING.sm, flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: RADIUS.md, borderWidth: StyleSheet.hairlineWidth },
+  filter: { minHeight: TOUCH_TARGET, minWidth: 58, paddingHorizontal: SPACING.md, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth },
+  sourceFilter: { minHeight: TOUCH_TARGET, maxWidth: 180, paddingHorizontal: SPACING.sm, flexDirection: 'row', alignItems: 'center', gap: 7, borderRadius: RADIUS.md, borderWidth: StyleSheet.hairlineWidth },
   day: { marginTop: SPACING.lg, marginBottom: SPACING.xs, textTransform: 'uppercase', letterSpacing: 0.7 },
   footer: { minHeight: 56, justifyContent: 'center' },
 });

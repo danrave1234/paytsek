@@ -6,8 +6,18 @@ packages:
 # pnpm 11: explicit approval of dependencies allowed to run install scripts.
 allowBuilds:
   '@nestjs/core': true
+  # Reports are metadata-only; source-map upload/native crash collection is not enabled.
+  '@sentry/cli': false
   esbuild: true
   sharp: true
+
+# Security patches within existing API/major versions; remove as upstream ranges catch up.
+overrides:
+  'qs@6.14.2': 6.16.0
+  'brace-expansion@5.0.9': 5.0.12
+
+patchedDependencies:
+  'decode-uri-component@0.2.2': patches/decode-uri-component@0.2.2.patch
 
 minimumReleaseAgeExclude:
   - '@supabase/auth-js@2.116.0'

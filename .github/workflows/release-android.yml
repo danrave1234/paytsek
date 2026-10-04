@@ -1,30 +1,34 @@
 name: Release Android APK
 on: { workflow_dispatch: {}, push: { tags: ['v*'] } }
-permissions: { contents: write }
+permissions: { contents: read, actions: read }
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: android-release-build
+      cancel-in-progress: true
+    outputs:
+      version: ${{ steps.metadata.outputs.version }}
+      sha: ${{ steps.metadata.outputs.sha }}
     steps:
       - uses: actions/checkout@v5
+        with: { fetch-depth: 0 }
+      - uses: ./.github/actions/setup
+      - name: Validate new immutable version, current main and exact CI commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/ci/release-gate.mjs --wait
+      - id: metadata
+        run: |
+          echo "version=$RELEASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha=$RELEASE_SHA" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-java@v5
         with: { distribution: temurin, java-version: '17' }
-      - run: npm install --global pnpm@11.9.0
-      # Release builds must be able to resolve all workspace package renames.
-      - run: pnpm install --no-frozen-lockfile
+      - uses: gradle/actions/setup-gradle@v4
       - run: |
           pnpm --filter @paytsek/contracts run build
           pnpm --filter @paytsek/receipt-parsers run build
-      - name: Resolve release version
-        shell: bash
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            RELEASE_VERSION="${GITHUB_REF_NAME}"
-          else
-            APP_VERSION=$(sed -n "s/.*version: '\([^']*\)'.*/\1/p" apps/mobile/app.config.ts | head -n 1)
-            test -n "${APP_VERSION}"
-            RELEASE_VERSION="v${APP_VERSION}"
-          fi
-          echo "RELEASE_VERSION=${RELEASE_VERSION}" >> "${GITHUB_ENV}"
       - name: Build signed APK
         working-directory: apps/mobile
         env:
@@ -40,6 +44,7 @@ jobs:
           test -n "$EXPO_PUBLIC_API_URL"
           test -n "$EXPO_PUBLIC_SUPABASE_URL"
           test -n "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
+          trap 'rm -f android/app/paytsek-release.jks android/app/signing.gradle' EXIT
           pnpm exec expo prebuild --platform android --no-install
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/paytsek-release.jks
           cat > android/app/signing.gradle <<'EOF'
@@ -47,19 +52,60 @@ jobs:
           android.buildTypes.release.signingConfig = android.signingConfigs.release
           EOF
           echo "apply from: 'signing.gradle'" >> android/app/build.gradle
-          cd android && ./gradlew app:assembleRelease
-          cp app/build/outputs/apk/release/app-release.apk "../PayTsek-${RELEASE_VERSION}.apk"
-          cd .. && sha256sum "PayTsek-${RELEASE_VERSION}.apk" > "PayTsek-${RELEASE_VERSION}.apk.sha256"
-      - name: Publish GitHub release
+          (cd android && ./gradlew app:assembleRelease :payment-collector:testReleaseUnitTest --no-daemon)
+          cp android/app/build/outputs/apk/release/app-release.apk "PayTsek-${RELEASE_VERSION}.apk"
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "PayTsek-${RELEASE_VERSION}.apk" > apk-signature.txt
+          EXPECTED_CERT=$(keytool -exportcert -keystore android/app/paytsek-release.jks -alias "$ANDROID_KEY_ALIAS" -storepass:env ANDROID_KEYSTORE_PASSWORD | openssl dgst -sha256 | awk '{print $NF}')
+          ACTUAL_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' apk-signature.txt)
+          test -n "$EXPECTED_CERT" && test "$EXPECTED_CERT" = "$ACTUAL_CERT"
+          "$BUILD_TOOLS/aapt" dump badging "PayTsek-${RELEASE_VERSION}.apk" > apk-badging.txt
+          grep -q "name='ph.paytsek.app'" apk-badging.txt
+          grep -q "versionCode='$RELEASE_VERSION_CODE'" apk-badging.txt
+          grep -q "versionName='${RELEASE_VERSION#v}'" apk-badging.txt
+          sha256sum "PayTsek-${RELEASE_VERSION}.apk" > "PayTsek-${RELEASE_VERSION}.apk.sha256"
+          export APK_CERT_SHA256="$ACTUAL_CERT"
+          node ../../scripts/ci/release-manifest.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-android-release
+          path: |
+            apps/mobile/PayTsek-*.apk
+            apps/mobile/PayTsek-*.apk.sha256
+            apps/mobile/release-manifest.json
+          if-no-files-found: error
+          retention-days: 3
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: { contents: write, actions: read }
+    concurrency:
+      group: android-release-publication
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with: { node-version: 24.21.0 }
+      - uses: actions/download-artifact@v5
+        with:
+          name: signed-android-release
+          path: release-artifacts
+      - name: Recheck supersession and immutable release immediately before publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/ci/release-gate.mjs
+      - name: Publish verified APK and manifest
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          APK="apps/mobile/PayTsek-${RELEASE_VERSION}.apk"
+          APK="release-artifacts/PayTsek-${RELEASE_VERSION}.apk"
           CHECKSUM="${APK}.sha256"
           NOTES="apps/mobile/RELEASE_NOTES.md"
-          if gh release view "${RELEASE_VERSION}" >/dev/null 2>&1; then
-            gh release edit "${RELEASE_VERSION}" --title "PayTsek ${RELEASE_VERSION}" --notes-file "${NOTES}"
-            gh release upload "${RELEASE_VERSION}" "${APK}" "${CHECKSUM}" --clobber
-          else
-            gh release create "${RELEASE_VERSION}" "${APK}" "${CHECKSUM}" --title "PayTsek ${RELEASE_VERSION}" --notes-file "${NOTES}"
-          fi
+          (cd release-artifacts && sha256sum --check "PayTsek-${RELEASE_VERSION}.apk.sha256")
+          # A failed upload leaves a non-public draft; no prior release is overwritten.
+          gh release create "$RELEASE_VERSION" "$APK" "$CHECKSUM" release-artifacts/release-manifest.json --draft --target "$RELEASE_SHA" --title "PayTsek $RELEASE_VERSION" --notes-file "$NOTES"
+          gh release edit "$RELEASE_VERSION" --draft=false --latest

@@ -95,7 +95,7 @@ export default function RecordDetail() {
   }, [goBack]));
 
   if (rec.isLoading) return <Screen scroll={false}><Loading variant="detail" label="Loading payment record" /></Screen>;
-  if (rec.error || !rec.data) return <Screen scroll={false}><ErrorState error={rec.error} retry={() => void rec.refetch()} /></Screen>;
+  if (!rec.data) return <Screen scroll={false}><ErrorState error={rec.error} retry={() => void rec.refetch()} /></Screen>;
   const r = rec.data;
   const open = r.evidenceState === 'UNVERIFIED' || r.evidenceState === 'REVIEW_REQUIRED';
   const cands = r.candidates;
@@ -162,6 +162,8 @@ export default function RecordDetail() {
           {occurredAt} · Sent from {receiptWallet}{receivingWallet ? ` · Received in ${receivingWallet}` : ''}
         </Text>
         <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>{STATUS_COPY[r.evidenceState].detail}</Text>
+        {rec.error ? <Notice kind="warning">Could not refresh. Showing the last saved record.</Notice> : null}
+        <Button icon="refresh" onPress={() => void rec.refetch()} loading={rec.isFetching} disabled={rec.isFetching} contentStyle={{ minHeight: TOUCH_TARGET }}>Refresh evidence</Button>
       </View>
 
       {r.flags.length ? <Notice kind="warning">Review note: {r.flags.map((f) => f.replace(/_/g, ' ').toLowerCase()).join(', ')}.</Notice> : null}

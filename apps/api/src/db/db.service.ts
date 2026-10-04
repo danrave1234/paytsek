@@ -21,8 +21,15 @@ export class DbService implements OnModuleDestroy {
     // Pair this with Supabase's pooled connection string (port 6543), not the
     // direct one (5432) -- see docs/run-and-release.md.
     const serverless = process.env.VERCEL === '1';
+    const connection = new URL(env.DATABASE_URL);
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(connection.hostname);
+    if (!local && connection.searchParams.get('sslmode') === 'disable') throw new Error('Remote database connections require verified TLS');
+    // pg connection-string SSL options override the explicit ssl object.
+    for (const key of ['sslmode', 'sslrootcert', 'sslcert', 'sslkey']) connection.searchParams.delete(key);
     this.pool = new Pool({
-      connectionString: env.DATABASE_URL,
+      connectionString: connection.toString(),
+      ssl: local ? false : { rejectUnauthorized: true, ...(env.DATABASE_SSL_CA ? { ca: env.DATABASE_SSL_CA } : {}) },
+      connectionTimeoutMillis: 3_500,
       max: serverless ? 1 : env.DATABASE_POOL_MAX,
       idleTimeoutMillis: serverless ? 10_000 : undefined,
       application_name: 'paytsek-api',
@@ -30,8 +37,8 @@ export class DbService implements OnModuleDestroy {
     });
     // An idle client can error (e.g. server-side disconnect); without a
     // listener `pg` re-emits it on the pool and crashes the process.
-    this.pool.on('error', (err) => {
-      this.logger.error(`pg pool idle client error: ${err.message}`);
+    this.pool.on('error', () => {
+      this.logger.error('DATABASE_IDLE_CONNECTION_ERROR');
     });
   }
 

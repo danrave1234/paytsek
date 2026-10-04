@@ -5,6 +5,7 @@ interface Extra {
   supabaseUrl: string;
   supabaseAnonKey: string;
   sentryDsn: string;
+  monitoringEnabled: boolean;
 }
 
 const extra = (Constants.expoConfig?.extra ?? {}) as Partial<Extra>;
@@ -14,6 +15,7 @@ export const env: Extra = {
   supabaseUrl: extra.supabaseUrl ?? '',
   supabaseAnonKey: extra.supabaseAnonKey ?? '',
   sentryDsn: extra.sentryDsn ?? '',
+  monitoringEnabled: extra.monitoringEnabled === true,
 };
 
 export const APP_VERSION = Constants.expoConfig?.version ?? '0.0.0';

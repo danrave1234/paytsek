@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Injectable, Module, Param, Post, Query } from '@nestjs/common';
-import { AnalyticsRange, CreateExportRequest, type AnalyticsSummary, type ExportJobView, type HomeSummary } from '@paytsek/contracts';
+import { AnalyticsRange, CreateExportRequest, HomeQuery, type AnalyticsSummary, type ExportJobView, type HomeSummary } from '@paytsek/contracts';
 import { z } from 'zod';
 import { CurrentUser, UserRoute, Workspace, WorkspaceRoute } from '../auth/decorators';
 import { OwnerOnly, type AuthUser, type WorkspaceContext } from '../auth/guards';
@@ -11,6 +11,7 @@ import { DbService } from '../db/db.service';
 import { StorageService } from '../db/storage.service';
 import { JobsService } from '../jobs/jobs.service';
 import { EFFECTIVE_AT_SQL, RECORD_SELECT, toSummary, type RecordRow } from '../records/records.rows';
+import { AccountDeletionService } from '../privacy/account-deletion.service';
 
 @Injectable()
 export class OperationsService {
@@ -24,10 +25,15 @@ export class OperationsService {
   ) {}
 
   /** Recorded-payment totals for "today" in the workspace timezone. Not wallet balance. */
-  async home(orgId: string, viewerUserId: string | null): Promise<HomeSummary> {
-    const [t, hourly, collectors, recent] = await Promise.all([
-      this.db.one<{
-        recorded_n: number; recorded_c: string; matched_n: number; matched_c: string; manual_n: number; manual_c: string; unverified_n: number; unverified_c: string; review_n: number;
+  async home(orgId: string, viewerUserId: string | null, pendingIds: string[] = []): Promise<HomeSummary> {
+    return this.db.tx(async (tx) => {
+    const context = await tx.query<{ timezone: string; local_date: string; as_of: Date }>(
+      `select timezone,to_char(now() at time zone timezone,'YYYY-MM-DD') as local_date,now() as as_of from organizations where id=$1`, [orgId]);
+    const workspace = context.rows[0];
+    if (!workspace) throw new ApiException('NOT_FOUND', 'Workspace not found');
+    const [totals, hourly, collectors, recent, acknowledged] = await Promise.all([
+      tx.query<{
+        recorded_n: number; recorded_c: string; matched_n: number; matched_c: string; manual_n: number; manual_c: string; unverified_n: number; unverified_c: string; review_n: number; review_c: string;
       }>(
         `with day as (
          select
@@ -51,11 +57,12 @@ export class OperationsService {
          coalesce(sum(amount_centavos) filter (where evidence_state = 'CONFIRMED_MANUALLY'),0)::text as manual_c,
          count(*) filter (where evidence_state = 'UNVERIFIED')::int as unverified_n,
          coalesce(sum(amount_centavos) filter (where evidence_state = 'UNVERIFIED'),0)::text as unverified_c,
-         count(*) filter (where evidence_state = 'REVIEW_REQUIRED')::int as review_n
+         count(*) filter (where evidence_state = 'REVIEW_REQUIRED')::int as review_n,
+         coalesce(sum(amount_centavos) filter (where evidence_state = 'REVIEW_REQUIRED'),0)::text as review_c
        from scoped`,
         [orgId, viewerUserId],
       ),
-      this.db.query<{ hour: number | string; amount_c: string }>(
+      tx.query<{ hour: number | string; amount_c: string }>(
         `with day as (
          select
            (date_trunc('day', now() at time zone o.timezone) at time zone o.timezone) as start,
@@ -75,7 +82,7 @@ export class OperationsService {
        order by 1`,
         [orgId, viewerUserId],
       ),
-      this.db.query<{ id: string; label: string; source_label: string; last: Date | null; pending: number | null; access: boolean | null }>(
+      tx.query<{ id: string; label: string; source_label: string; last: Date | null; pending: number | null; access: boolean | null }>(
         `select d.id, d.label, string_agg(distinct s.label, ', ' order by s.label) as source_label,
               d.last_server_contact_at as last, d.pending_upload_count as pending, d.notification_access_granted as access
          from device_bindings b join devices d on d.id = b.device_id join payment_sources s on s.id = b.source_id
@@ -83,17 +90,24 @@ export class OperationsService {
         group by d.id`,
         [orgId],
       ),
-      this.db.query<RecordRow>(
+      tx.query<RecordRow>(
         `${RECORD_SELECT} where r.organization_id = $1 and ($2::uuid is null or r.created_by = $2) order by r.created_at desc limit 6`,
         [orgId, viewerUserId],
       ),
+      tx.query<{ client_record_id: string }>(`select client_record_id from payment_records where organization_id=$1
+        and ($2::uuid is null or created_by=$2) and client_record_id=any($3::uuid[])`, [orgId,viewerUserId,pendingIds]),
     ]);
+    const t = totals.rows[0];
     const hourlyRecordedCentavos = Array.from({ length: 24 }, () => 0);
     for (const bucket of hourly.rows) {
       const hour = Number(bucket.hour);
       if (Number.isInteger(hour) && hour >= 0 && hour < 24) hourlyRecordedCentavos[hour] = Number(bucket.amount_c);
     }
     return {
+      workspaceLocalDate: workspace.local_date,
+      workspaceTimezone: workspace.timezone,
+      asOf: workspace.as_of.toISOString(),
+      acknowledgedClientRecordIds: acknowledged.rows.map((row) => row.client_record_id),
       today: {
         recordedCount: t?.recorded_n ?? 0,
         recordedCentavos: Number(t?.recorded_c ?? 0),
@@ -104,6 +118,7 @@ export class OperationsService {
         unverifiedCount: t?.unverified_n ?? 0,
         unverifiedCentavos: Number(t?.unverified_c ?? 0),
         reviewRequiredCount: t?.review_n ?? 0,
+        reviewRequiredCentavos: Number(t?.review_c ?? 0),
         hourlyRecordedCentavos,
       },
       collectors: viewerUserId ? [] : collectors.rows.map((c) => ({
@@ -112,6 +127,7 @@ export class OperationsService {
       })),
       recentRecords: recent.rows.map(toSummary),
     };
+    }, { isolation: 'REPEATABLE READ' });
   }
 
   /** Aggregates only facts present in the ledger: date, provider, amount and evidence. */
@@ -132,9 +148,8 @@ export class OperationsService {
              ((date_trunc('day', now() at time zone o.timezone) + interval '1 day') at time zone o.timezone) as end_at
         from organizations o where o.id = $1
     ), scoped as (
-      select r.*, coalesce(r.receipt_provider, s.provider) as provider, context.timezone
+      select r.*, r.receipt_provider as provider, context.timezone
         from payment_records r
-        left join payment_sources s on s.id = r.source_id
         cross join context
        where r.organization_id = $1
          and ($3::uuid is null or r.created_by = $3)
@@ -162,7 +177,7 @@ export class OperationsService {
       ),
       this.db.query<{ provider: AnalyticsSummary['byProvider'][number]['provider']; recorded_n: number; recorded_c: string }>(
         `${scope} select provider, count(*)::int as recorded_n, sum(amount_centavos)::text as recorded_c
-                    from scoped where provider is not null group by provider order by sum(amount_centavos) desc`,
+                    from scoped group by provider order by sum(amount_centavos) desc`,
         [orgId, days, viewerUserId],
       ),
       this.db.query<{ state: AnalyticsSummary['byEvidence'][number]['state']; recorded_n: number; recorded_c: string }>(
@@ -232,26 +247,6 @@ export class OperationsService {
     return { generatedAt: new Date().toISOString(), profile, memberships: memberships.rows, recordsCreated: records.rows };
   }
 
-  /**
-   * Delete a user account. Sole owners must transfer ownership or delete the
-   * workspace first. Business-owned records are retained (created_by keeps the id;
-   * profile row is removed so no display name remains).
-   */
-  async deleteAccount(userId: string): Promise<void> {
-    const sole = await this.db.query<{ organization_id: string }>(
-      `select m.organization_id from memberships m where m.user_id = $1 and m.role = 'OWNER'
-         and not exists (select 1 from memberships o where o.organization_id = m.organization_id and o.role = 'OWNER' and o.user_id <> $1)
-         and not exists (select 1 from organizations x where x.id = m.organization_id and x.deleted_at is not null)`,
-      [userId],
-    );
-    if (sole.rowCount) throw new ApiException('CONFLICT', 'You are the sole owner of a workspace. Transfer ownership or delete the workspace first.', { workspaces: sole.rows.map((r) => r.organization_id) });
-    await this.db.tx(async (c) => {
-      await c.query(`delete from memberships where user_id = $1`, [userId]);
-      await c.query(`delete from profiles where user_id = $1`, [userId]);
-      // Supabase Auth user deletion is performed via the admin API by the caller of this service (see privacy controller).
-    });
-  }
-
   /** Owner deletes the workspace: soft-delete immediately, purge assets via retention job. */
   async deleteWorkspace(orgId: string, ownerId: string): Promise<void> {
     await this.db.tx(async (c) => {
@@ -269,17 +264,17 @@ const AnalyticsQuery = z.object({ range: AnalyticsRange.default('7D') });
 
 @Controller('v1')
 export class OperationsController {
-  constructor(private readonly svc: OperationsService) {}
+  constructor(private readonly svc: OperationsService, private readonly deletion: AccountDeletionService) {}
 
   @Get('health')
   health() {
-    return { ok: true, service: 'paytsek-api', time: new Date().toISOString() };
+    return { ok: true, service: 'paytsek-api', buildSha: process.env.PAYTSEK_BUILD_SHA ?? null, time: new Date().toISOString() };
   }
 
   @Get('home')
   @WorkspaceRoute()
-  home(@Workspace() ws: WorkspaceContext, @CurrentUser() u: AuthUser) {
-    return this.svc.home(ws.organizationId, ws.role === 'OWNER' ? null : u.id);
+  home(@Workspace() ws: WorkspaceContext, @CurrentUser() u: AuthUser, @Query(zod(HomeQuery)) query: HomeQuery) {
+    return this.svc.home(ws.organizationId, ws.role === 'OWNER' ? null : u.id, query.pendingIds);
   }
 
   @Get('analytics')
@@ -311,8 +306,7 @@ export class OperationsController {
   @Delete('me')
   @UserRoute()
   async deleteAccount(@CurrentUser() u: AuthUser, @Body(zod(DeleteBody)) _b: { confirm: 'DELETE' }) {
-    await this.svc.deleteAccount(u.id);
-    return { ok: true, next: 'Auth user removal is completed by the account-deletion job using the Supabase admin API.' };
+    return this.deletion.request(u.id);
   }
 
   @Delete('workspaces/current')
@@ -324,5 +318,5 @@ export class OperationsController {
   }
 }
 
-@Module({ controllers: [OperationsController], providers: [OperationsService], exports: [OperationsService] })
+@Module({ controllers: [OperationsController], providers: [OperationsService, AccountDeletionService], exports: [OperationsService, AccountDeletionService] })
 export class OperationsModule {}

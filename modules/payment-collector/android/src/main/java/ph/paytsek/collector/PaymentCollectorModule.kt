@@ -70,6 +70,7 @@ class PaymentCollectorModule : Module() {
         "enabledProviders" to prefs.enabledProviders.toList().sorted(),
         "pendingUploadCount" to outbox.pendingCount(),
         "lastObservedEventAt" to prefs.lastObservedEventAt,
+        "lastDiagnosticId" to prefs.lastDiagnosticId,
         "lastUploadAt" to prefs.lastUploadAt,
         "lastUploadError" to prefs.lastUploadError,
         "unknownTemplateCount" to prefs.unknownTemplateCount.toInt(),
@@ -198,37 +199,29 @@ class PaymentCollectorModule : Module() {
     }
 
     /**
-     * Posts a local notification that mimics a real GCash incoming-money push so
-     * the owner can verify the listener end-to-end. The payer is pre-masked and
-     * there is deliberately no Ref No., so a test can only ever produce a
-     * Possible match — never an automatic Strong match.
+     * Content-free, local-only listener check. It is never payment evidence.
      */
     AsyncFunction("postTestNotification") {
       val manager = NotificationManagerCompat.from(context)
       // Covers both the Android 13+ POST_NOTIFICATIONS runtime permission and
       // notifications being blocked app-wide on older versions.
       if (!manager.areNotificationsEnabled()) {
-        return@AsyncFunction mapOf("posted" to false, "reason" to "PERMISSION", "amountCentavos" to null, "text" to null)
+        return@AsyncFunction mapOf("posted" to false, "reason" to "PERMISSION", "diagnosticId" to null)
       }
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         manager.createNotificationChannel(NotificationChannel("paytsek_test", "Listener test", NotificationManager.IMPORTANCE_DEFAULT))
       }
-      val amountCentavos = (5_000L..99_999L).random()
-      val text = String.format(
-        java.util.Locale.US,
-        "You have received PHP %d.%02d of GCash from JU\u2022N D. 0917\u2022\u2022\u2022\u2022123.",
-        amountCentavos / 100,
-        amountCentavos % 100,
-      )
+      val diagnosticId = java.util.UUID.randomUUID().toString()
       val icon = context.applicationInfo.icon.takeIf { it != 0 } ?: android.R.drawable.stat_notify_chat
       val notification = NotificationCompat.Builder(context, "paytsek_test")
         .setSmallIcon(icon)
-        .setContentTitle("You have received money in GCash!")
-        .setContentText(text)
-        .addExtras(Bundle().apply { putBoolean(PayTsekNotificationListener.EXTRA_TEST_GCASH, true) })
+        .setContentTitle("PayTsek listener check")
+        .setContentText("Local diagnostic only. This is not a payment.")
+        .setTimeoutAfter(30_000)
+        .addExtras(Bundle().apply { putString(PayTsekNotificationListener.EXTRA_DIAGNOSTIC_ID, diagnosticId) })
         .build()
       manager.notify((System.currentTimeMillis() and 0x7FFFFFFF).toInt(), notification)
-      mapOf("posted" to true, "reason" to null, "amountCentavos" to amountCentavos.toInt(), "text" to text)
+      mapOf("posted" to true, "reason" to null, "diagnosticId" to diagnosticId)
     }
 
     /**
