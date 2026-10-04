@@ -13,7 +13,10 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
-        with: { node-version: 24.21.0 }
+        with:
+          node-version: 24.21.0
+          # No dependencies or pnpm executable are needed by this HTTP monitor.
+          package-manager-cache: false
       - name: Check public availability and optional private readiness
         env:
           # Optional repository secret; must match Vercel's CRON_SECRET.
