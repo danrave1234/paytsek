@@ -21,6 +21,6 @@ async function main(): Promise<void> {
 
 main().catch((e) => {
   // eslint-disable-next-line no-console
-  console.error(e instanceof Error ? e.message : e);
+  console.error('WORKER_BOOTSTRAP_FAILED');
   process.exit(1);
 });

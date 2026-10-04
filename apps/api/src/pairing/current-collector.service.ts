@@ -26,16 +26,17 @@ export class CurrentCollectorService {
     return this.db.tx(async (tx) => {
       await tx.query(`select id from organizations where id = $1 for update`, [orgId]);
       const device = await tx.query<{ id: string }>(
-        `insert into devices (organization_id, install_id, label, platform, capability, status, app_version, os_version, device_model, provider_apps, credential_hash, credential_rotated_at, last_server_contact_at)
-         values ($1,$2,'This phone','ANDROID','BOTH','ACTIVE',$3,$4,$5,$6,$7,now(),now())
+        `insert into devices (organization_id, install_id, label, platform, capability, status, app_version, os_version, device_model, provider_apps, credential_hash, credential_rotated_at, last_server_contact_at,current_phone_user_id)
+         values ($1,$2,'This phone','ANDROID','BOTH','ACTIVE',$3,$4,$5,$6,$7,now(),now(),$8)
          on conflict (organization_id, install_id) do update set
            label = 'This phone', platform = 'ANDROID', capability = 'BOTH', status = 'ACTIVE',
            app_version = excluded.app_version, os_version = excluded.os_version,
            device_model = excluded.device_model, provider_apps = excluded.provider_apps,
            credential_hash = excluded.credential_hash, credential_rotated_at = now(),
            revoked_at = null, revoked_reason = null, last_server_contact_at = now()
+           ,current_phone_user_id=excluded.current_phone_user_id
          returning id`,
-        [orgId, input.deviceInstallId, input.appVersion, input.osVersion, input.deviceModel ?? null, JSON.stringify(input.detectedProviderApps), hashSecret(credential)],
+        [orgId, input.deviceInstallId, input.appVersion, input.osVersion, input.deviceModel ?? null, JSON.stringify(input.detectedProviderApps), hashSecret(credential),ownerId],
       );
       const deviceId = device.rows[0]!.id;
       const existing = await tx.query<SourceRow>(

@@ -14,8 +14,8 @@ vm.runInNewContext(compiled, {
   require: (name) => {
     if (name === '@paytsek/contracts') return { API_VERSION_HEADER: 'x-api-version', WORKSPACE_HEADER: 'x-workspace' };
     if (name === './env') return { env: { apiUrl: 'https://example.invalid' } };
-    if (name === './supabase') return { getAccessToken: async () => 'test-token' };
-    if (name === './workspace') return { getActiveWorkspaceId: async () => 'test-workspace' };
+    if (name === './supabase') return { supabase: () => ({ auth: { getSession: async () => ({ data: { session: { user: { id: 'test-user' }, access_token: 'synthetic-token' } } }) } }) };
+    if (name === './request-scope') return { requireRequestScope: () => ({ userId: 'test-user', workspaceId: 'test-workspace', generation: 1 }), assertScopeCurrent: () => {}, onScopeChange: () => () => {} };
     throw new Error(`Unexpected import ${name}`);
   },
 });

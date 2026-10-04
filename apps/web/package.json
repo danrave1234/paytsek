@@ -15,7 +15,7 @@
     "@paytsek/contracts": "workspace:*",
     "@paytsek/receipt-parsers": "workspace:*",
     "@supabase/supabase-js": "^2.116.0",
-    "next": "^16.3.5",
+    "next": "^16.3.8",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },

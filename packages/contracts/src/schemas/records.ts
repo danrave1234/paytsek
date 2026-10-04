@@ -179,6 +179,7 @@ export const MatchExplanation = z.object({
 export type MatchExplanation = z.infer<typeof MatchExplanation>;
 
 export const RecordSummary = z.object({
+  clientRecordId: uuid,
   id: uuid,
   organizationId: uuid,
   sourceId: uuid.nullable(),
@@ -200,7 +201,7 @@ export const RecordSummary = z.object({
   note: z.string().nullable(),
   capturedAt: z.string().datetime(),
   createdAt: z.string().datetime(),
-  createdByUserId: uuid,
+  createdByUserId: uuid.nullable(),
   createdByDisplayName: z.string(),
   receiptTransactionAt: z.string().datetime().nullable(),
   hasProofImage: z.boolean(),

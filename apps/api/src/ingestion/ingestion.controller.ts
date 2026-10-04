@@ -46,7 +46,7 @@ export class IngestionService {
     for (const ack of acks) {
       if ((ack.outcome !== 'ACCEPTED' && ack.outcome !== 'DUPLICATE') || !ack.eventId) continue;
       try {
-        await this.reconcile.reconcileEvent(ack.eventId);
+        await this.reconcile.reconcileEventInline(ack.eventId);
       } catch {
         // next cron drain retries the queued RECONCILE_EVENT job
       }
@@ -69,6 +69,7 @@ export class IngestionService {
     // The provider must be derivable from the authoritative package, and must equal the declared provider.
     const pkgProvider = providerForPackage(ev.sourcePackage);
     if (!pkgProvider || pkgProvider !== ev.provider) return reject('PROVIDER_NOT_ENABLED');
+    if (ev.originPackage !== undefined && ev.originPackage !== ev.sourcePackage) return reject('PROVIDER_NOT_ENABLED');
 
     const targets = sources.filter((s) => s.provider === ev.provider);
     if (targets.length === 0) return reject('SOURCE_NOT_BOUND');

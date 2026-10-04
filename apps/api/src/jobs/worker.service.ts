@@ -1,274 +1,88 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { EVIDENCE_STATE_LABELS, type EvidenceState } from '@paytsek/contracts';
-import { formatCentavos } from '@paytsek/receipt-parsers';
 import { hostname } from 'node:os';
-import { BillingService } from '../billing/billing.service';
 import { loadEnv } from '../config/env';
-import { DbService } from '../db/db.service';
-import { StorageService } from '../db/storage.service';
 import { ReconcileService } from '../matching/reconcile.service';
-import { EFFECTIVE_AT_SQL, PROVIDER_LABEL_SQL } from '../records/records.rows';
+import { AccountDeletionService } from '../privacy/account-deletion.service';
 import { JobsService, type JobRow } from './jobs.service';
+import { ExportService } from './export.service';
+import { RetentionService } from './retention.service';
+import { reportOperationalError } from '../common/monitoring';
+export { csvEscape } from './export.service';
 
-/**
- * Postgres-backed worker: leases jobs with SKIP LOCKED, runs them with bounded
- * retries, and schedules periodic retention maintenance. No Redis, no cron
- * daemon: run `pnpm api:worker` as a separate process (1..N replicas).
- */
 @Injectable()
 export class WorkerService {
   private readonly logger = new Logger(WorkerService.name);
   private readonly env = loadEnv();
   private readonly workerId = `${hostname()}:${process.pid}`;
   private stopping = false;
-
   constructor(
-    private readonly db: DbService,
     private readonly jobs: JobsService,
     private readonly reconcile: ReconcileService,
-    private readonly storage: StorageService,
-    private readonly billing: BillingService,
+    private readonly exports: ExportService,
+    private readonly retention: RetentionService,
+    private readonly deletion: AccountDeletionService,
   ) {}
 
   async runForever(): Promise<void> {
-    this.logger.log(`worker ${this.workerId} started`);
     let lastMaintenance = 0;
     while (!this.stopping) {
       try {
-        if (Date.now() - lastMaintenance > 60 * 60 * 1000) {
-          await this.jobs.enqueue('PURGE_RETENTION', {}, 'purge:periodic');
+        if (Date.now() - lastMaintenance > 3600_000) {
+          await this.enqueueMaintenance();
           lastMaintenance = Date.now();
         }
-        const leased = await this.jobs.lease(this.workerId, 10, this.env.WORKER_LEASE_SECONDS);
-        if (leased.length === 0) {
-          await sleep(this.env.WORKER_POLL_INTERVAL_MS);
-          continue;
-        }
-        for (const job of leased) await this.runOne(job);
-      } catch (e) {
-        this.logger.error(`worker loop error: ${(e as Error).message}`);
-        await sleep(this.env.WORKER_POLL_INTERVAL_MS);
+        const result = await this.drain({ maxJobs: 25 });
+        if (!result.processed) await new Promise((resolve) => setTimeout(resolve, this.env.WORKER_POLL_INTERVAL_MS));
+      } catch {
+        this.logger.error('WORKER_LOOP_RETRY');
+        await new Promise((resolve) => setTimeout(resolve, this.env.WORKER_POLL_INTERVAL_MS));
       }
     }
   }
+  stop(): void { this.stopping = true; }
 
-  stop(): void {
-    this.stopping = true;
-  }
-
-  /**
-   * One bounded pass over the queue, for a serverless cron invocation where
-   * `runForever` cannot be used. Stops on whichever comes first: no work left,
-   * `maxJobs`, or `budgetMs`. The budget defaults below Vercel's free-tier
-   * 10s function limit so the invocation returns rather than being killed
-   * mid-job -- a killed invocation would leave the lease held until it expires.
-   */
-  async drain({ maxJobs = 25, budgetMs = 8_000 }: { maxJobs?: number; budgetMs?: number } = {}): Promise<{
-    processed: number;
-    timedOut: boolean;
-  }> {
-    const startedAt = Date.now();
+  async drain({ maxJobs = 25, budgetMs = 8_000 }: { maxJobs?: number; budgetMs?: number } = {}): Promise<{ processed: number; timedOut: boolean }> {
+    const limit = Math.max(1, Math.min(100, Math.floor(maxJobs)));
+    const deadline = Date.now() + Math.max(1, Math.min(20_000, budgetMs));
     let processed = 0;
-
-    while (processed < maxJobs) {
-      const remaining = budgetMs - (Date.now() - startedAt);
-      if (remaining <= 0) return { processed, timedOut: true };
-
-      const leased = await this.jobs.lease(this.workerId, Math.min(10, maxJobs - processed), this.env.WORKER_LEASE_SECONDS);
-      if (leased.length === 0) break;
-
-      for (const job of leased) {
-        if (Date.now() - startedAt >= budgetMs) return { processed, timedOut: true };
-        await this.runOne(job);
-        processed += 1;
-      }
+    while (!this.stopping && processed < limit && Date.now() < deadline) {
+      // Do not lease a batch which the invocation cannot finish. Each job has
+      // an attempt token; an expired worker cannot acknowledge a newer lease.
+      const leased = await this.jobs.lease(this.workerId, 1, this.env.WORKER_LEASE_SECONDS);
+      if (!leased.length) break;
+      await this.runOne(leased[0]!);
+      processed += 1;
     }
-    return { processed, timedOut: false };
+    return { processed, timedOut: Date.now() >= deadline };
   }
 
-  /**
-   * Periodic maintenance that `runForever` folds into its loop. As a cron
-   * entrypoint it needs its own schedule; the dedupe key keeps repeated calls
-   * from queueing duplicates.
-   */
   async enqueueMaintenance(): Promise<void> {
     await this.jobs.enqueue('PURGE_RETENTION', {}, 'purge:periodic');
   }
 
-  /** Process one job (also usable from tests / one-shot CLI). */
   async runOne(job: JobRow): Promise<void> {
     try {
       switch (job.kind) {
-        case 'RECONCILE_RECORD':
-          await this.reconcile.reconcileRecord(String(job.payload.recordId));
-          break;
-        case 'RECONCILE_EVENT':
-          await this.reconcile.reconcileEvent(String(job.payload.eventId));
-          break;
-        case 'GENERATE_EXPORT':
-          await this.generateExport(String(job.payload.exportJobId));
-          break;
+        case 'RECONCILE_RECORD': await this.reconcile.reconcileRecord(String(job.payload.recordId)); break;
+        case 'RECONCILE_EVENT': await this.reconcile.reconcileEvent(String(job.payload.eventId)); break;
+        case 'GENERATE_EXPORT': await this.exports.generate(String(job.payload.exportJobId)); break;
+        case 'DELETE_ACCOUNT': await this.deletion.process(String(job.payload.requestId)); break;
         case 'PURGE_RETENTION':
-          await this.purgeRetention(job.payload.orgId ? String(job.payload.orgId) : null, Boolean(job.payload.hardDelete));
+          if (await this.retention.run(job.payload.orgId ? String(job.payload.orgId) : null, Boolean(job.payload.hardDelete))) {
+            await this.jobs.defer(job);
+            return;
+          }
           break;
-        case 'RECONCILE_ENTITLEMENT':
-          // Retire legacy entitlement retry jobs. PayMongo fulfills only from a
-          // signed webhook and does not have a polling reconciliation endpoint.
-          break;
-        default:
-          throw new Error(`unknown job kind ${String(job.kind)}`);
+        case 'RECONCILE_ENTITLEMENT': break;
+        default: throw new Error('UNKNOWN_JOB_KIND');
       }
-      await this.jobs.complete(job.id);
-    } catch (e) {
-      const msg = (e as Error).message ?? String(e);
-      this.logger.warn(`job ${job.id} (${job.kind}) failed attempt ${job.attempts}: ${msg}`);
-      try {
-        await this.jobs.fail(job, msg);
-      } catch (failErr) {
-        // A transient DB error while recording the failure must not abort the drain pass; the lease expiry retries the job.
-        this.logger.error(`could not record failure for job ${job.id}: ${(failErr as Error).message}`);
-      }
+      await this.jobs.complete(job);
+    } catch {
+      // Payloads and arbitrary exception messages may contain personal data.
+      this.logger.warn(`JOB_RETRY id=${job.id} kind=${job.kind} attempt=${job.attempts}`);
+      await reportOperationalError('WORKER_FAILED');
+      try { await this.jobs.fail(job, 'JOB_FAILED'); }
+      catch { this.logger.error(`JOB_RETRY_PERSIST_FAILED id=${job.id}`); }
     }
   }
-
-  // ---- Exports ---------------------------------------------------------------
-  private async generateExport(exportJobId: string): Promise<void> {
-    const job = await this.db.one<{ organization_id: string; format: 'CSV' | 'XLSX'; params: { from: string; to: string; sourceId?: string; includeVoided: boolean }; status: string }>(
-      `select organization_id, format, params, status from export_jobs where id = $1`,
-      [exportJobId],
-    );
-    if (!job || job.status === 'READY' || job.status === 'EXPIRED') return;
-    await this.db.query(`update export_jobs set status = 'RUNNING' where id = $1`, [exportJobId]);
-    try {
-      const params: unknown[] = [job.organization_id, job.params.from, job.params.to];
-      // Same timestamp basis as Home/Analytics bucketing; half-open so adjacent exports never double-count a record.
-      let where = `r.organization_id = $1 and ${EFFECTIVE_AT_SQL} >= $2 and ${EFFECTIVE_AT_SQL} < $3`;
-      if (job.params.sourceId) { params.push(job.params.sourceId); where += ` and r.source_id = $${params.length}`; }
-      if (!job.params.includeVoided) where += ` and r.evidence_state <> 'VOIDED'`;
-      const rows = await this.db.query<{
-        id: string; created_at: Date; captured_at: Date; source_label: string; amount_centavos: string; evidence_state: EvidenceState; flags: string[];
-        reference_namespace: string | null; reference_value: string | null; payer_name: string | null; payee_name: string | null; customer_label: string | null; note: string | null;
-        receipt_transaction_at: Date | null; created_by_name: string | null; match_kind: string | null;
-      }>(
-        `select r.id, r.created_at, r.captured_at,
-                ${PROVIDER_LABEL_SQL} as source_label,
-                r.amount_centavos, r.evidence_state, r.flags, r.reference_namespace, r.reference_value,
-                r.payer_name, r.payee_name, r.customer_label, r.note, r.receipt_transaction_at, p.display_name as created_by_name,
-                (select kind from payment_matches pm where pm.record_id = r.id and pm.active) as match_kind
-           from payment_records r left join payment_sources s on s.id = r.source_id left join profiles p on p.user_id = r.created_by
-          where ${where} order by ${EFFECTIVE_AT_SQL}`,
-        params,
-      );
-      // XLSX is delivered as CSV in the MVP (opens in Excel/Sheets); the format flag is retained for a future writer.
-      const header = ['record_id', 'created_at_utc', 'captured_at_utc', 'source', 'amount_php', 'amount_centavos', 'evidence_state', 'evidence_label', 'match_kind', 'flags', 'reference_namespace', 'reference_value', 'payer_name', 'payee_name', 'customer_label', 'note', 'receipt_transaction_at_utc', 'recorded_by'];
-      const lines = [header.join(',')];
-      for (const r of rows.rows) {
-        lines.push(
-          [
-            r.id, r.created_at.toISOString(), r.captured_at.toISOString(), r.source_label, formatCentavos(Number(r.amount_centavos)).replace('₱', ''), r.amount_centavos,
-            r.evidence_state, EVIDENCE_STATE_LABELS[r.evidence_state], r.match_kind ?? '', (r.flags ?? []).join('|'), r.reference_namespace ?? '', r.reference_value ?? '',
-            r.payer_name ?? '', r.payee_name ?? '', r.customer_label ?? '', r.note ?? '', r.receipt_transaction_at?.toISOString() ?? '', r.created_by_name ?? '',
-          ].map(csvEscape).join(','),
-        );
-      }
-      const disclaimer = `# PayTsek export. "Notification matched" means matched to an incoming notification on the seller's phone; not confirmed directly with the payment provider. Totals are recorded payments, not wallet balance.`;
-      const body = `${disclaimer}\n${lines.join('\n')}\n`;
-      const path = `${job.organization_id}/${exportJobId}.csv`;
-      await this.storage.upload(this.storage.exportsBucket, path, body, 'text/csv');
-      const expires = new Date(Date.now() + this.env.RETENTION_EXPORT_HOURS * 3600 * 1000);
-      await this.db.query(`update export_jobs set status = 'READY', storage_path = $2, row_count = $3, expires_at = $4, finished_at = now() where id = $1`, [exportJobId, path, rows.rowCount ?? 0, expires]);
-    } catch (e) {
-      await this.db.query(`update export_jobs set status = 'FAILED', error_code = 'EXPORT_GENERATION_FAILED', finished_at = now() where id = $1`, [exportJobId]);
-      throw e;
-    }
-  }
-
-  // ---- Retention -------------------------------------------------------------
-  private async purgeRetention(orgId: string | null, hardDelete: boolean): Promise<void> {
-    // Each step runs independently so one failing step/org cannot starve the rest;
-    // failures are collected and rethrown so the job still retries.
-    const errors: Error[] = [];
-    const step = async (label: string, fn: () => Promise<void>) => {
-      try {
-        await fn();
-      } catch (e) {
-        const err = e as Error;
-        this.logger.warn(`purgeRetention step ${label} failed: ${err.message}`);
-        errors.push(err);
-      }
-    };
-    // 1. Unlinked, unsaved events past purge_after.
-    await step('events', async () => {
-      await this.db.query(
-        `update notification_events e set purged_at = now(), payer_masked_name = null, payer_masked_phone = null, reference_value = null
-          where e.purged_at is null and e.purge_after < now() and e.saved_as_record_id is null
-            and not exists (select 1 from payment_matches pm where pm.event_id = e.id and pm.active)
-            ${orgId ? 'and e.organization_id = $1' : ''}`,
-        orgId ? [orgId] : [],
-      );
-    });
-    // 2. Proof images past their retention entitlement (records keep structured data).
-    //    Loop in batches so a hard delete never orphans files beyond the first 500.
-    await step('proofs', async () => {
-      for (;;) {
-        const proofs = await this.db.query<{ id: string; storage_path: string | null }>(
-          `select id, storage_path from payment_proofs where purged_at is null and (retention_until < now() ${hardDelete && orgId ? 'or organization_id = $1' : ''}) ${orgId && !hardDelete ? 'and organization_id = $1' : ''} limit 500`,
-          orgId ? [orgId] : [],
-        );
-        if (!proofs.rowCount) break;
-        await this.storage.remove(this.storage.proofsBucket, proofs.rows.map((p) => p.storage_path).filter((p): p is string => !!p));
-        await this.db.query(`update payment_proofs set purged_at = now() where id = any($1::uuid[])`, [proofs.rows.map((p) => p.id)]);
-        if (proofs.rowCount < 500) break;
-      }
-    });
-    // 3. Expired exports.
-    await step('exports', async () => {
-      const exp = await this.db.query<{ id: string; storage_path: string | null }>(`select id, storage_path from export_jobs where status = 'READY' and expires_at < now() limit 500`);
-      if (exp.rowCount) {
-        await this.storage.remove(this.storage.exportsBucket, exp.rows.map((p) => p.storage_path).filter((p): p is string => !!p));
-        await this.db.query(`update export_jobs set status = 'EXPIRED', storage_path = null where id = any($1::uuid[])`, [exp.rows.map((p) => p.id)]);
-      }
-    });
-    // 4. Structured records older than the retention policy (default 12 months) for soft-deleted workspaces,
-    //    then hard-delete the workspace when requested. Remove ALL of the org's export files first:
-    //    the cascade would otherwise orphan still-READY exports in storage.
-    if (hardDelete && orgId) {
-      await step('hard-delete', async () => {
-        for (;;) {
-          const orgExports = await this.db.query<{ id: string; storage_path: string | null }>(
-            `select id, storage_path from export_jobs where organization_id = $1 and storage_path is not null limit 500`,
-            [orgId],
-          );
-          if (!orgExports.rowCount) break;
-          await this.storage.remove(this.storage.exportsBucket, orgExports.rows.map((p) => p.storage_path).filter((p): p is string => !!p));
-          await this.db.query(`update export_jobs set status = 'EXPIRED', storage_path = null where id = any($1::uuid[])`, [orgExports.rows.map((p) => p.id)]);
-          if (orgExports.rowCount < 500) break;
-        }
-        await this.db.query(`delete from organizations where id = $1 and deleted_at is not null`, [orgId]);
-      });
-    }
-    // 5. Rate-limit table hygiene.
-    await step('pairing-attempts', async () => {
-      await this.db.query(`delete from pairing_attempts where attempted_at < now() - interval '1 day'`);
-    });
-    // 6. Ingestion batch replay window hygiene.
-    await step('ingest-batches', async () => {
-      await this.db.query(`delete from ingest_batches where created_at < now() - interval '30 days'`);
-    });
-    // 7. Finished job rows hygiene.
-    await step('jobs', async () => {
-      await this.db.query(`delete from jobs where status in ('DONE','DEAD') and finished_at < now() - interval '14 days'`);
-    });
-    if (errors.length) throw new Error(`purgeRetention: ${errors.length} step(s) failed: ${errors.map((e) => e.message).join('; ')}`);
-  }
-}
-
-export function csvEscape(v: string): string {
-  // Neutralize spreadsheet formula injection before quoting.
-  const safe = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
-  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
 }

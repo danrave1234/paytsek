@@ -43,12 +43,16 @@ The Data Privacy Act and its IRR require transparency, legitimate purpose, propo
 | Proportionality | Strict webhook schema; rejected auto-capture frames deleted locally; raw notification/webhook text excluded from logs and analytics | Contract tests and device storage inspection |
 | Security | Private proof bucket, short-lived signed URLs, tenant authorization, HMAC webhooks, replay window, idempotency, audit trail | API tests, DB scope tests, key-rotation exercise |
 | Data-subject rights | Authenticated privacy export and account/workspace deletion flows | Access/export/deletion runbook exercise |
-| Retention | Unlinked evidence 7 days; proofs 30–90 days; records/history 12 months; exports 24 hours | Purge job test and deletion verification |
+| Retention | Unlinked evidence 7 days; beta proofs 30 days; records/history 12-month eligibility dry-run (no automatic purge); exports 24 hours | Purge job test and deletion verification |
 | Breach management | Maintain an incident register and assess notification to NPC/data subjects within 72 hours where the legal test is met | Tabletop exercise and named incident owner |
 
 Primary references: [Data Privacy Act of 2012](https://privacy.gov.ph/data-privacy-act/), [Implementing Rules and Regulations](https://privacy.gov.ph/implementing-rules-regulations-data-privacy-act-2012/), [NPC data-subject rights](https://privacy.gov.ph/data-subject-rights/), and [NPC breach reporting](https://privacy.gov.ph/pips-and-pics/breach-reporting/).
 
 ## NPC registration analysis gate
+
+The operator confirmed no registered operating business on 2026-10-04. Identity,
+privacy responsibility and applicability remain unresolved. See the maintained
+[privacy operations and launch-gate register](privacy-operations.md).
 
 NPC Circular No. 2022-04 requires registration when any mandatory criterion applies, including processing sensitive personal information of at least 1,000 individuals or processing likely to pose a risk to data-subject rights and freedoms. Otherwise, voluntary registration or the prescribed sworn declaration may apply. PayTsek processes financial/transaction evidence, so the organization must document its threshold and risk analysis with its DPO or Philippine privacy counsel before public-beta scale; do not assume a small headcount creates an exemption. Covered new systems/DPO appointments have a 20-day registration rule. See the [NPC registration FAQ](https://privacy.gov.ph/pips-and-pics/faqs/) and [Circular No. 2022-04](https://privacy.gov.ph/wp-content/uploads/2023/05/Circular-2022-04-1.pdf).
 

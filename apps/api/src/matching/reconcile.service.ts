@@ -73,6 +73,19 @@ export class ReconcileService {
     await this.jobs.enqueue('RECONCILE_EVENT', { eventId }, `event:${eventId}`, q);
   }
 
+  async reconcileRecordInline(recordId: string): Promise<EvidenceState | null> {
+    const token = await this.jobs.pendingToken(`record:${recordId}`);
+    const result = await this.reconcileRecord(recordId);
+    await this.jobs.completeInline(token);
+    return result;
+  }
+
+  async reconcileEventInline(eventId: string): Promise<void> {
+    const token = await this.jobs.pendingToken(`event:${eventId}`);
+    await this.reconcileEvent(eventId);
+    await this.jobs.completeInline(token);
+  }
+
   async reconcileEvent(eventId: string): Promise<void> {
     const recs = await this.db.query<{ id: string }>(
       `select r.id from payment_records r

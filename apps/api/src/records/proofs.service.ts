@@ -4,6 +4,16 @@ import { ApiException } from '../common/errors';
 import { loadEnv } from '../config/env';
 import { DbService, isUniqueViolation } from '../db/db.service';
 import { StorageService } from '../db/storage.service';
+import { MAX_PROOF_BYTES, validateProofBytes } from './proof-validation';
+
+type ExistingProof = { id: string; upload_finalized_at: Date | null; purged_at: Date | null; sha256: string; content_type: string; byte_length: number };
+
+function checkExistingProof(proof: ExistingProof, input: InitProofUploadRequest) {
+  if (proof.sha256 !== input.sha256 || proof.content_type !== input.contentType || proof.byte_length !== input.byteLength) {
+    throw new ApiException('IDEMPOTENCY_CONFLICT', 'This proof identifier already belongs to different image bytes.');
+  }
+  if (proof.purged_at) throw new ApiException('PROOF_UPLOAD_NOT_FINALIZED', 'This stored proof has expired. Your new local copy has not been uploaded.');
+}
 
 @Injectable()
 export class ProofsService {
@@ -16,6 +26,7 @@ export class ProofsService {
 
   /** Retention entitlement fixed at creation: paid plan or any prepaid credit => paid retention. */
   private async retentionDays(orgId: string): Promise<number> {
+    if (this.env.BETA_MODE) return this.env.RETENTION_PROOF_IMAGE_FREE_DAYS;
     const r = await this.db.one<{ plan_code: string; credits: number }>(
       `select o.plan_code, prepaid_credits_remaining(o.id) as credits from organizations o where o.id = $1`,
       [orgId],
@@ -27,10 +38,12 @@ export class ProofsService {
   async init(orgId: string, userId: string, input: InitProofUploadRequest): Promise<InitProofUploadResponse> {
     const expiresAt = new Date(Date.now() + this.env.STORAGE_SIGNED_UPLOAD_TTL_SECONDS * 1000).toISOString();
     // Exact-bytes duplicate within the workspace -> reuse the stored proof; no second upload.
-    const dup = await this.db.one<{ id: string; upload_finalized_at: Date | null }>(
-      `select id, upload_finalized_at from payment_proofs where organization_id = $1 and (sha256 = $2 or client_proof_id = $3)`,
+    const dup = await this.db.one<ExistingProof>(
+      `select id, upload_finalized_at, purged_at, sha256, content_type, byte_length from payment_proofs where organization_id = $1 and (sha256 = $2 or client_proof_id = $3)
+        order by (client_proof_id=$3) desc limit 1`,
       [orgId, input.sha256, input.clientProofId],
     );
+    if (dup) checkExistingProof(dup, input);
     if (dup?.upload_finalized_at) return { proofId: dup.id, uploadUrl: null, uploadHeaders: {}, alreadyStored: true, expiresAt };
 
     let proofId = dup?.id ?? null;
@@ -45,8 +58,12 @@ export class ProofsService {
         proofId = ins.rows[0]!.id;
       } catch (e) {
         if (!isUniqueViolation(e)) throw e;
-        const again = await this.db.one<{ id: string }>(`select id from payment_proofs where organization_id = $1 and (sha256 = $2 or client_proof_id = $3)`, [orgId, input.sha256, input.clientProofId]);
-        proofId = again!.id;
+        const again = await this.db.one<ExistingProof>(`select id, upload_finalized_at, purged_at, sha256, content_type, byte_length from payment_proofs
+          where organization_id = $1 and (sha256 = $2 or client_proof_id = $3) order by (client_proof_id=$3) desc limit 1`, [orgId, input.sha256, input.clientProofId]);
+        if (!again) throw e;
+        checkExistingProof(again, input);
+        if (again.upload_finalized_at) return { proofId: again.id, uploadUrl: null, uploadHeaders: {}, alreadyStored: true, expiresAt };
+        proofId = again.id;
       }
     }
     const path = this.storage.proofPath(orgId, proofId, input.contentType);
@@ -59,8 +76,8 @@ export class ProofsService {
 
   /** Verify the object exists and its size matches, then mark finalized. */
   async finalize(orgId: string, proofId: string): Promise<{ proofId: string; finalized: boolean }> {
-    const p = await this.db.one<{ storage_path: string | null; byte_length: number; content_type: string; upload_finalized_at: Date | null }>(
-      `select storage_path, byte_length, content_type, upload_finalized_at from payment_proofs where id = $1 and organization_id = $2`,
+    const p = await this.db.one<{ storage_path: string | null; byte_length: number; content_type: string; sha256: string; upload_finalized_at: Date | null }>(
+      `select storage_path, byte_length, content_type, sha256, upload_finalized_at from payment_proofs where id = $1 and organization_id = $2 and purged_at is null`,
       [proofId, orgId],
     );
     if (!p) throw new ApiException('NOT_FOUND', 'Proof not found');
@@ -79,6 +96,12 @@ export class ProofsService {
     }
     if (stat.contentType && stat.contentType !== p.content_type) {
       throw new ApiException('PROOF_UPLOAD_NOT_FINALIZED', 'Uploaded content type does not match the declared type; retry the upload');
+    }
+    const bytes = await this.storage.downloadBounded(this.storage.proofsBucket, p.storage_path, Math.min(p.byte_length, MAX_PROOF_BYTES));
+    try {
+      await validateProofBytes(bytes, { size: p.byte_length, contentType: p.content_type, sha256: p.sha256 });
+    } catch {
+      throw new ApiException('VALIDATION_FAILED', 'The proof must be a readable JPEG, PNG or WebP image with matching bytes. Capture or import it again.');
     }
     await this.db.query(`update payment_proofs set upload_finalized_at = now() where id = $1`, [proofId]);
     return { proofId, finalized: true };

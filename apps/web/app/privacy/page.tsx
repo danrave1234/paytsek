@@ -12,15 +12,15 @@ const sections: LegalSection[] = [
         <p>
           <strong>Confirmation images.</strong> When you scan or import a customer&apos;s payment confirmation, the image is
           stored in a private bucket for your workspace with location metadata removed. Text is extracted on your phone. Images
-          are kept for 30 days during the public beta, then deleted; the structured record stays.
+          are scheduled for deletion after 30 days during the public beta; the structured record stays.
         </p>
         <p>
-          <strong>Payment notifications (Android payment phone only).</strong> If a workspace owner pairs an Android phone and
+          <strong>Payment notifications (Android only).</strong> If a workspace owner enables listening on their phone or pairs a separate payment phone and
           you grant Notification Access, PayTsek reads notifications from the wallet apps enabled for that workspace
           (GCash, GoTyme, Maya and MariBank). Only positive incoming-payment notifications are parsed; the
           amount, masked sender, reference (when shown), and timestamps are uploaded. OTPs, security prompts, outgoing
           payments, promotions, other apps and unrecognised formats are discarded on the phone and never uploaded. Unmatched
-          notifications are deleted after 7 days unless linked to a record.
+          notifications are scheduled for deletion after 7 days unless linked to a record. A listener diagnostic stays local and never becomes payment evidence.
         </p>
       </>
     ),
@@ -30,8 +30,9 @@ const sections: LegalSection[] = [
     title: 'Who is responsible and why we process data',
     body: (
       <p>
-        PayTsek is the personal information controller for account and service data. We process it to provide the service you
-        request, secure accounts, keep auditable payment records, support your team, and meet legal obligations. Questions or
+        PayTsek is an independently developed beta; an operating business has not yet been registered. The responsible operator&apos;s formal identity and privacy arrangements are still being finalized; this notice is not a certification of compliance.
+        Account and service data is used to provide the service you request, secure accounts, and support your team.
+        Workspace owners determine the business purpose for their payment records and must have a lawful basis to collect customer or employee data. Questions or
         privacy requests can be sent to <a href="mailto:support@paytsek.online">support@paytsek.online</a>.
       </p>
     ),
@@ -43,7 +44,7 @@ const sections: LegalSection[] = [
       <ul>
         <li>Wallet login, MPIN, OTP, balance or transaction history.</li>
         <li>
-          GPS location, contacts, installed-app inventory, IMEI or other hardware identifiers. Devices use an app-generated ID.
+          GPS location, contacts, a general installed-app inventory, IMEI or other hardware identifiers. The collector checks only supported wallet packages and versions. Devices use an app-generated ID.
         </li>
         <li>SMS messages. PayTsek does not read Messages notifications as a workaround.</li>
       </ul>
@@ -65,11 +66,12 @@ const sections: LegalSection[] = [
     title: 'Retention summary',
     body: (
       <ul>
-        <li>Unmatched notifications: 7 days.</li>
+        <li>Unmatched notifications: scheduled for deletion after 7 days.</li>
         <li>Confirmation images: 30 days during the public beta, fixed when the image is saved.</li>
         <li>
-          Structured records and audit trail: 12 months by default, exportable and deletable. This is operational
-          recordkeeping, not a tax-record guarantee.
+          Structured records and audit trail: reviewed for retention after 12 months. Automatic record purging is not active;
+          these remain until an approved deletion or workspace deletion. Contact support for a retention or erasure request.
+          This is operational recordkeeping, not a tax-record guarantee.
         </li>
         <li>Export files: 24 hours.</li>
       </ul>
@@ -82,8 +84,8 @@ const sections: LegalSection[] = [
       <p>
         Under the Philippine Data Privacy Act, you may ask to be informed, access or correct your data, object to or request
         erasure of qualifying processing, request portability where applicable, and raise a complaint with the National
-        Privacy Commission. Contact us first at <a href="mailto:support@paytsek.online">support@paytsek.online</a> so we can
-        verify and act on the request.
+        Privacy Commission. You may contact <a href="mailto:support@paytsek.online">support@paytsek.online</a> so we can
+        verify and act on a request; contacting us is not a prerequisite to complaining to the regulator. Applicable rights in other countries are not waived.
       </p>
     ),
   },
@@ -95,6 +97,8 @@ const sections: LegalSection[] = [
         You can delete your account from Settings → Privacy &amp; data in the app, or by request at{' '}
         <a href="mailto:support@paytsek.online">support@paytsek.online</a>. Workspace owners can delete an entire workspace. Sole
         owners must transfer ownership or delete the workspace first so business records are never silently orphaned.
+        Account deletion removes access immediately and queues removal of the authentication account. Existing business records remain in their workspace with personal authorship removed; this does not erase personal information shown in someone else&apos;s receipt. Those requests need a separate scoped review.
+        Unsynced scans remain on the phone to avoid accidental loss. Backups may retain deleted data until their own expiry.
       </p>
     ),
   },
@@ -103,10 +107,9 @@ const sections: LegalSection[] = [
     title: 'Processors',
     body: (
       <p>
-        Hosting, database, private file storage and authentication: Supabase. Service infrastructure may process data outside
-        the Philippines under the provider&apos;s contractual and security safeguards. PayTsek does not process payments or
-        collect wallet credentials. Error monitoring is configured to scrub amounts, names, phone numbers, references, tokens
-        and image URLs.
+        Supabase provides database, private storage and authentication; Vercel hosts the API and website. Google provides optional sign-in and on-device text recognition. GitHub hosts source, builds and public app releases, not private receipts.
+        These services may process service data outside the Philippines. Processing locations, agreements and transfer safeguards require operator review before expanding the beta.
+        Optional Sentry reporting is disabled by default and requires a separate activation review. The integration accepts only fixed error codes, app release and surface, not receipts, notification text, names, amounts, references, tokens, screenshots or session replay. Infrastructure providers may process network metadata such as IP addresses.
       </p>
     ),
   },
@@ -138,12 +141,12 @@ export default function Privacy() {
     <LegalPage
       eyebrow="Legal · 01"
       title="Privacy policy"
-      updated="2026-09-14"
+      updated="2026-10-04"
       lead="What PayTsek collects, why, how long it is kept, and how to delete it."
       summary={[
         { label: 'Wallet credentials', value: 'Never collected', tone: 'ok' },
         { label: 'Notifications read', value: 'Incoming payments only' },
-        { label: 'Unmatched notifications', value: 'Deleted after 7 days' },
+        { label: 'Unmatched notifications', value: '7-day deletion schedule' },
         { label: 'Data sold', value: 'Never', tone: 'ok' },
       ]}
       sections={sections}

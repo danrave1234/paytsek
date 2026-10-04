@@ -19,6 +19,8 @@ export interface CollectorStatus {
   enabledProviders: Array<'GCASH' | 'GOTYME' | 'MAYA' | 'MARIBANK'>;
   pendingUploadCount: number;
   lastObservedEventAt: string | null;
+  /** Local-only diagnostic acknowledgment; never uploaded as payment evidence. */
+  lastDiagnosticId: string | null;
   lastUploadAt: string | null;
   lastUploadError: string | null;
   /** Content-free counter of unrecognized templates since install (for diagnostics). */
@@ -65,16 +67,13 @@ export interface TemplateSample {
 }
 
 /**
- * Result of posting a listener-test notification. The test mimics a GCash
- * incoming-money push with a pre-masked payer and no Ref No., so matching can
- * only ever produce a Possible match.
+ * Result of a content-free local listener diagnostic, isolated from matching.
  */
 export interface TestNotificationResult {
   posted: boolean;
   /** Why nothing was posted: POST_NOTIFICATIONS denied/blocked, or not Android. */
   reason: 'PERMISSION' | 'UNSUPPORTED' | null;
-  amountCentavos: number | null;
-  text: string | null;
+  diagnosticId: string | null;
 }
 
 /** A pending notification event from the native outbox (matching fields only). */
@@ -104,7 +103,7 @@ interface NativeModule {
   reportHealth(): Promise<boolean>;
   /** Deduplicated recovery: enumerate currently active notifications after reconnect. Not history. */
   recoverActiveNotifications(): Promise<number>;
-  /** Post a GCash-style test notification on this phone to verify the listener end-to-end. */
+  /** Check the local Android listener only; does not test bank delivery or upload. */
   postTestNotification(): Promise<TestNotificationResult>;
   /** Get pending (unacknowledged) notification events for local matching. */
   getPendingNotifications(): Promise<PendingNotificationEvent[]>;
@@ -128,6 +127,7 @@ const unsupportedStatus = (): CollectorStatus => ({
   enabledProviders: [],
   pendingUploadCount: 0,
   lastObservedEventAt: null,
+  lastDiagnosticId: null,
   lastUploadAt: null,
   lastUploadError: null,
   unknownTemplateCount: 0,
@@ -153,7 +153,7 @@ export const PaymentCollector = {
   reportHealth: (): Promise<boolean> => native?.reportHealth() ?? Promise.resolve(false),
   recoverActiveNotifications: (): Promise<number> => native?.recoverActiveNotifications() ?? Promise.resolve(0),
   postTestNotification: (): Promise<TestNotificationResult> =>
-    native?.postTestNotification() ?? Promise.resolve({ posted: false, reason: 'UNSUPPORTED', amountCentavos: null, text: null }),
+    native?.postTestNotification() ?? Promise.resolve({ posted: false, reason: 'UNSUPPORTED', diagnosticId: null }),
   getPendingNotifications: (): Promise<PendingNotificationEvent[]> =>
     native?.getPendingNotifications() ?? Promise.resolve([]),
 

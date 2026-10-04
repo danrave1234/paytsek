@@ -1,0 +1,3 @@
+# Unified patch context contains significant leading spaces and blank lines.
+# Validate these via pnpm patch application and decoder regression tests.
+patches/*.patch -whitespace

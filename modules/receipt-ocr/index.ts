@@ -40,6 +40,6 @@ const native = requireNativeModule<NativeModule>('ReceiptOcr');
 
 export const ReceiptOcr = {
   recognize: (fileUri: string): Promise<OcrOutput> => native.recognize(fileUri),
-  stripMetadata: (fileUri: string, quality = 0.92): Promise<{ uri: string; byteLength: number; contentType: string }> => native.stripMetadata(fileUri, quality),
+  stripMetadata: (fileUri: string, quality = 0.88): Promise<{ uri: string; byteLength: number; contentType: string }> => native.stripMetadata(fileUri, quality),
   drainSharedInbox: (): Promise<SharedImage[]> => native.drainSharedInbox(),
 };

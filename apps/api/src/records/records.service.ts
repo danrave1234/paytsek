@@ -6,7 +6,7 @@ import { AuditService } from '../db/audit.service';
 import { DbService, isUniqueViolation } from '../db/db.service';
 import { ReconcileService } from '../matching/reconcile.service';
 import { ProofsService } from './proofs.service';
-import { RECORD_SELECT, toDetail, toSummary, type RecordRow } from './records.rows';
+import { PROVIDER_LABEL_SQL, RECORD_SELECT, toDetail, toSummary, type RecordRow } from './records.rows';
 import { loadEnv } from '../config/env';
 
 @Injectable()
@@ -24,21 +24,26 @@ export class RecordsService {
    * Public beta never meters or blocks records; the future paid path keeps
    * the atomic quota operation below for when billing is deliberately enabled.
    */
-  async create(orgId: string, userId: string, input: CreateRecordRequest): Promise<CreateRecordResponse> {
+  async create(orgId: string, userId: string, input: CreateRecordRequest, isOwner = false): Promise<CreateRecordResponse> {
+    const deduplicated = (row: RecordRow): CreateRecordResponse => {
+      if (!isOwner && row.created_by !== userId) throw new ApiException('FORBIDDEN', 'This proof or record is already recorded by another team member. Ask an owner to review it.');
+      return { record: toSummary(row), deduplicated: true, quotaConsumed: false };
+    };
     const existing = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.organization_id = $1 and r.client_record_id = $2`, [orgId, input.clientRecordId]);
-    if (existing) return { record: toSummary(existing), deduplicated: true, quotaConsumed: false };
+    if (existing) return deduplicated(existing);
 
     if (input.proofId) {
-      const p = await this.db.one<{ upload_finalized_at: Date | null; linked: string | null }>(
-        `select p.upload_finalized_at, (select id from payment_records where proof_id = p.id and evidence_state <> 'VOIDED' limit 1) as linked
+      const p = await this.db.one<{ upload_finalized_at: Date | null; purged_at: Date | null; linked: string | null }>(
+        `select p.upload_finalized_at, p.purged_at, (select id from payment_records where proof_id = p.id and evidence_state <> 'VOIDED' limit 1) as linked
            from payment_proofs p where p.id = $1 and p.organization_id = $2`,
         [input.proofId, orgId],
       );
       if (!p) throw new ApiException('NOT_FOUND', 'Proof not found');
+      if (p.purged_at) throw new ApiException('PROOF_UPLOAD_NOT_FINALIZED', 'The proof image has expired. Your local copy has not been acknowledged.');
       if (!p.upload_finalized_at) throw new ApiException('PROOF_UPLOAD_NOT_FINALIZED', 'Finalize the image upload first');
       if (p.linked) {
         const rec = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.id = $1`, [p.linked]);
-        return { record: toSummary(rec!), deduplicated: true, quotaConsumed: false };
+        return deduplicated(rec!);
       }
     }
     const c = input.corrected;
@@ -56,7 +61,7 @@ export class RecordsService {
       if (!(e instanceof ApiException) || e.code !== 'IDEMPOTENCY_CONFLICT') throw e;
       // Two clients raced the same clientRecordId: the loser returns the winner's record idempotently.
       const winner = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.organization_id = $1 and r.client_record_id = $2`, [orgId, input.clientRecordId]);
-      if (winner) return { record: toSummary(winner), deduplicated: true, quotaConsumed: false };
+      if (winner) return deduplicated(winner);
       throw e;
     }
   }
@@ -123,7 +128,7 @@ export class RecordsService {
       // The server is the sole matching authority. Even when the scanner has
       // already uploaded a notification, the full ambiguity, timing, edit,
       // source and approval policy is evaluated before evidence is elevated.
-      await this.reconcile.reconcileRecord(recordId);
+      await this.reconcile.reconcileRecordInline(recordId);
       const row = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.id = $1`, [recordId]);
       return row ? toSummary(row) : null;
     } catch {
@@ -155,7 +160,7 @@ export class RecordsService {
       const raw = q.q.trim();
       params.push(`%${raw}%`);
       const textParam = params.length;
-      const visibleFields = [`s.label ilike $${textParam}`, `r.receipt_provider::text ilike $${textParam}`];
+      const visibleFields = [`(${PROVIDER_LABEL_SQL}) ilike $${textParam}`];
       const pesos = Number(raw.replace(/[PHP\s,₱]/gi, ''));
       if (Number.isFinite(pesos) && pesos > 0) {
         params.push(Math.round(pesos * 100));
@@ -203,7 +208,7 @@ export class RecordsService {
     if (pre && (pre.evidence_state === 'UNVERIFIED' || pre.evidence_state === 'REVIEW_REQUIRED')) {
       const sinceLastReconcile = pre.last_reconciled_at ? Date.now() - pre.last_reconciled_at.getTime() : Infinity;
       if (pre.last_reconciled_at === null || sinceLastReconcile > 20_000) {
-        try { await this.reconcile.reconcileRecord(id); } catch { /* next drain retries */ }
+        try { await this.reconcile.reconcileRecordInline(id); } catch { /* next drain retries */ }
       }
     }
     const row = await this.db.one<RecordRow>(`${RECORD_SELECT} where r.organization_id = $1 and r.id = $2 and ($3::boolean or r.created_by = $4)`, [orgId, id, isOwner, userId]);

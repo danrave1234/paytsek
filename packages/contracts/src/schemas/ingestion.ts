@@ -14,6 +14,8 @@ export const IncomingPaymentEventInput = z.object({
   provider: Provider,
   /** Originating package as reported by the OS callback, e.g. com.globe.gcash.android */
   sourcePackage: z.string().max(200),
+  /** Original OS package, present on new collectors; cannot be rewritten as a wallet. */
+  originPackage: z.string().max(200).optional(),
   sourceAppVersionName: z.string().max(60).nullable(),
   sourceAppVersionCode: z.number().int().nullable(),
   /** Parser identity so server/native parity can be audited. */
@@ -48,7 +50,10 @@ export const IncomingPaymentEventInput = z.object({
   normalizedTextSha256: z.string().length(64),
   /** Whether the notification was part of a group summary (summaries are not uploaded). */
   wasGroupChild: z.boolean().default(false),
-});
+}).strict().refine((event) =>
+  event.sourcePackage !== 'ph.paytsek.app' &&
+  (!event.originPackage || event.originPackage === event.sourcePackage),
+{ message: 'Notification origin must be the source application', path: ['originPackage'] });
 export type IncomingPaymentEventInput = z.infer<typeof IncomingPaymentEventInput>;
 
 export const IngestBatchRequest = z.object({

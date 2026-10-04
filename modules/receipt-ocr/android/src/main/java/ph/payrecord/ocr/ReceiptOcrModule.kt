@@ -58,23 +58,45 @@ class ReceiptOcrModule : Module() {
       }
     }
 
-    /** Decode, apply EXIF orientation, re-encode as JPEG without any metadata (drops GPS). */
+    /** Bounded decode, EXIF orientation, JPEG without metadata (drops GPS). */
     AsyncFunction("stripMetadata") { fileUri: String, quality: Double ->
       val path = Uri.parse(fileUri).path ?: throw IllegalArgumentException("bad uri")
       val exif = ExifInterface(path)
-      val rotation = when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
-        ExifInterface.ORIENTATION_ROTATE_90 -> 90f
-        ExifInterface.ORIENTATION_ROTATE_180 -> 180f
-        ExifInterface.ORIENTATION_ROTATE_270 -> 270f
-        else -> 0f
+      val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+      BitmapFactory.decodeFile(path, bounds)
+      require(bounds.outWidth > 0 && bounds.outHeight > 0 && bounds.outWidth.toLong() * bounds.outHeight <= 64_000_000L) { "Unsupported image dimensions" }
+      // Keep text legible (up to 4096px) without decoding arbitrary full-size images.
+      val options = BitmapFactory.Options().apply {
+        inSampleSize = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / inSampleSize > 8192 ||
+          bounds.outWidth.toLong() * bounds.outHeight / inSampleSize / inSampleSize > 16_000_000L) inSampleSize *= 2
       }
-      var bmp = BitmapFactory.decodeFile(path) ?: throw IllegalStateException("decode failed")
-      if (rotation != 0f) {
-        val m = Matrix().apply { postRotate(rotation) }
-        bmp = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
+      var bmp = BitmapFactory.decodeFile(path, options) ?: throw IllegalStateException("decode failed")
+      val transform = Matrix().apply {
+        when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+          ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> setScale(-1f, 1f)
+          ExifInterface.ORIENTATION_ROTATE_180 -> setRotate(180f)
+          ExifInterface.ORIENTATION_FLIP_VERTICAL -> setScale(1f, -1f)
+          ExifInterface.ORIENTATION_TRANSPOSE -> { setRotate(90f); postScale(-1f, 1f) }
+          ExifInterface.ORIENTATION_ROTATE_90 -> setRotate(90f)
+          ExifInterface.ORIENTATION_TRANSVERSE -> { setRotate(270f); postScale(-1f, 1f) }
+          ExifInterface.ORIENTATION_ROTATE_270 -> setRotate(270f)
+        }
+        val scale = minOf(1f, 4096f / maxOf(bmp.width, bmp.height))
+        postScale(scale, scale)
       }
-      val out = File(context.cacheDir, "clean-${System.currentTimeMillis()}.jpg")
-      FileOutputStream(out).use { bmp.compress(Bitmap.CompressFormat.JPEG, (quality * 100).toInt().coerceIn(50, 100), it) }
+      val normalized = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, transform, true)
+      if (normalized !== bmp) bmp.recycle()
+      bmp = normalized
+      val out = File(context.cacheDir, "clean-${java.util.UUID.randomUUID()}.jpg")
+      try {
+        FileOutputStream(out).use {
+          check(bmp.compress(Bitmap.CompressFormat.JPEG, (quality * 100).toInt().coerceIn(80, 90), it)) { "Encode failed" }
+        }
+      } catch (e: Exception) {
+        out.delete()
+        throw e
+      } finally { bmp.recycle() }
       mapOf("uri" to Uri.fromFile(out).toString(), "byteLength" to out.length().toInt(), "contentType" to "image/jpeg")
     }
 

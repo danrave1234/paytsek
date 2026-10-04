@@ -1,5 +1,6 @@
 export * from './enums';
 export * from './errors';
+export * from './diagnostics';
 export * from './plans';
 export * from './schemas/pairing';
 export * from './schemas/ingestion';

@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { PermissionsAndroid, Platform } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { AppState, PermissionsAndroid, Platform } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { Switch } from 'react-native-paper';
 import { PaymentCollector, type CollectorStatus } from 'payment-collector';
 import { Group, ListRow, Notice, Screen } from '@/components/ui';
@@ -14,6 +15,9 @@ export default function Notifications() {
   const [testBusy, setTestBusy] = useState(false);
   const [testNotice, setTestNotice] = useState<string | null>(null);
   const [testError, setTestError] = useState<string | null>(null);
+  const [diagnostic, setDiagnostic] = useState<{ id: string; deadline: number } | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
+  useFocusEffect(useCallback(() => { setIsFocused(true); return () => setIsFocused(false); }, []));
 
   useEffect(() => {
     if (!session || !workspace) return;
@@ -24,6 +28,35 @@ export default function Notifications() {
     if (Platform.OS !== 'android') return;
     void PaymentCollector.getStatus().then(setCollector).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!diagnostic || !isFocused) return;
+    let active = true;
+    const check = async () => {
+      if (AppState.currentState !== 'active') return;
+      if (Date.now() > diagnostic.deadline) {
+        setDiagnostic(null);
+        setTestBusy(false);
+        setTestError('No acknowledgment yet. Check notification access and battery settings. This check cannot guarantee wallet notification delivery.');
+        return;
+      }
+      try {
+        const status = await PaymentCollector.getStatus();
+        if (!active) return;
+        setCollector(status);
+        if (status.lastDiagnosticId === diagnostic.id) {
+          setDiagnostic(null);
+          setTestBusy(false);
+          setTestNotice('The Android listener received this local check. No payment record or matching evidence was created. Wallet delivery and uploads are separate checks.');
+        }
+      } catch {
+        // The bounded check continues; no native error details enter the UI/logs.
+      }
+    };
+    void check();
+    const timer = setInterval(() => void check(), 1_000);
+    return () => { active = false; clearInterval(timer); };
+  }, [diagnostic, isFocused]);
 
   const sendTest = async () => {
     if (testBusy) return;
@@ -45,10 +78,14 @@ export default function Notifications() {
           : 'Could not post the test notification on this phone.');
         return;
       }
-      const pesos = ((result.amountCentavos ?? 0) / 100).toFixed(2);
-      setTestNotice(`Test sent: \u20b1${pesos}. If listening works it appears in the Notification inbox within a minute. Scan a proof for the same amount: one safe candidate becomes a Strong match; multiple candidates stay Possible match.`);
-    } catch (sendError) {
-      setTestError((sendError as Error).message);
+      if (result.diagnosticId) {
+        setDiagnostic({ id: result.diagnosticId, deadline: Date.now() + 20_000 });
+        setTestNotice('Local check sent. Waiting for the Android listener…');
+      } else {
+        setTestError('Update the app to use the isolated listener check.');
+      }
+    } catch {
+      setTestError('Could not run the local listener check.');
     } finally {
       setTestBusy(false);
     }
@@ -82,8 +119,8 @@ export default function Notifications() {
           <ListRow
             icon="bell-ring-outline"
             title="Send test notification"
-            subtitle={testBusy ? 'Sending\u2026' : 'Posts a GCash-style incoming-payment notification on this phone'}
-            onPress={testBusy ? undefined : () => void sendTest()}
+            subtitle={testBusy || diagnostic ? 'Checking…' : 'Local diagnostic only; never creates payment evidence'}
+            onPress={testBusy || diagnostic ? undefined : () => void sendTest()}
           />
         </Group>
       ) : null}

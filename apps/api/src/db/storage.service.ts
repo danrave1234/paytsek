@@ -14,6 +14,7 @@ export class StorageService {
   constructor() {
     this.client = createClient(this.env.SUPABASE_URL, this.env.SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
+      global: { fetch: (url, init) => fetch(url, { ...init, signal: init?.signal ?? AbortSignal.timeout(5_000) }) },
     });
   }
 
@@ -56,6 +57,38 @@ export class StorageService {
     if (paths.length === 0) return;
     const { error } = await this.client.storage.from(bucket).remove(paths);
     if (error) throw new Error(`storage remove failed: ${error.message}`);
+  }
+
+  async downloadBounded(bucket: string, path: string, maxBytes: number): Promise<Buffer> {
+    const { url } = await this.createSignedDownload(bucket, path, 30);
+    const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+    if (!response.ok || !response.body) throw new Error('PROOF_DOWNLOAD_FAILED');
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        length += value.byteLength;
+        if (length > maxBytes) throw new Error('PROOF_SIZE_LIMIT');
+        chunks.push(value);
+      }
+      return Buffer.concat(chunks, length);
+    } finally {
+      await reader.cancel().catch(() => undefined);
+    }
+  }
+
+  async privateBucketsReady(): Promise<boolean> {
+    const buckets = await Promise.all([this.proofsBucket, this.exportsBucket].map((name) => this.client.storage.getBucket(name)));
+    return buckets.every(({ data, error }) => !error && data?.public === false);
+  }
+
+  async deleteAuthUser(userId: string): Promise<void> {
+    const { error } = await this.client.auth.admin.deleteUser(userId);
+    // Retrying after successful Auth deletion must remain idempotent.
+    if (error && error.status !== 404 && error.code !== 'user_not_found') throw new Error('AUTH_DELETE_FAILED');
   }
 
   get proofsBucket(): string {

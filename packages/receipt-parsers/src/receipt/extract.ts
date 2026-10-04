@@ -17,6 +17,8 @@ export interface ReceiptExtraction {
   readabilityScore: number;
   providerDetection: ReceiptProviderDetection;
   warnings: string[];
+  /** Multiple explicitly labelled principal values are uncertain even when one was parsed. */
+  conflictingAmountLabels?: boolean;
 }
 
 const EMPTY_FIELDS: ReceiptFields = {
@@ -118,6 +120,14 @@ export function extractReceiptFields(
   const fee = valueAfterLabel(lines, /\b(?:Service\s+Fee|Transaction\s+Fee|Convenience\s+Fee|Fee)\b/i);
   // "Amount" that is not part of "Total Amount ..." — the transfer principal.
   const amount = valueAfterLabel(lines, /(?<!Total\s)\bAmount\b(?:\s+(?:Sent|Paid|Transferred))?/i);
+  const labelledAmounts = new Set<number>();
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index]!;
+    const label = /^(?:Transfer\s+|Transaction\s+)?Amount\b(?:\s+(?:Sent|Paid|Transferred))?/i.exec(line);
+    if (!label) continue;
+    const value = line.slice(label[0].length).trim() || lines[index + 1] || '';
+    for (const candidate of findMoneyCandidates(value)) labelledAmounts.add(candidate.centavos);
+  }
 
   const firstMoney = (v: string | undefined) => (v ? findMoneyCandidates(v)[0]?.centavos ?? null : null);
 
@@ -214,5 +224,5 @@ export function extractReceiptFields(
   const readabilityScore = Math.round((found / expected.length) * 100) / 100;
   if (readabilityScore < 0.6) warnings.push('Low readability: several expected fields were not found.');
 
-  return { parserId: RECEIPT_PARSER_ID, parserVersion: RECEIPT_PARSER_VERSION, fields, provenance, readabilityScore, providerDetection, warnings };
+  return { parserId: RECEIPT_PARSER_ID, parserVersion: RECEIPT_PARSER_VERSION, fields, provenance, readabilityScore, providerDetection, warnings, conflictingAmountLabels: labelledAmounts.size > 1 };
 }

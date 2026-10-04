@@ -26,6 +26,7 @@ export const EnvSchema = z.object({
   SUPABASE_JWT_SECRET: z.string().optional().default(''),
   DATABASE_URL: z.string().min(10),
   DATABASE_POOL_MAX: int(10),
+  DATABASE_SSL_CA: z.string().optional().default(''),
 
   STORAGE_BUCKET_PROOFS: z.string().default('proof-images'),
   STORAGE_BUCKET_EXPORTS: z.string().default('exports'),
@@ -60,7 +61,7 @@ export const EnvSchema = z.object({
   /** Public dashboard destination after a hosted PayMongo checkout completes. */
   PAYTSEK_WEB_URL: z.string().url().default('https://www.paytsek.online'),
   /** Public beta has no checkout or paid quota enforcement. Opt out only when billing is formally launched. */
-  BETA_MODE: z.string().optional().default('true').transform((v) => v === 'true' || v === '1'),
+  BETA_MODE: z.enum(['true', '1', 'false', '0', '']).optional().default('true').transform((v) => v !== 'false' && v !== '0'),
 
   RETENTION_UNLINKED_EVENTS_DAYS: int(7),
   RETENTION_PROOF_IMAGE_FREE_DAYS: int(30),
@@ -69,6 +70,10 @@ export const EnvSchema = z.object({
   RETENTION_EXPORT_HOURS: int(24),
 
   SENTRY_DSN: z.string().optional().default(''),
+  SENTRY_ENABLED: bool,
+  // Structured-record expiry is reporting-only until a reviewed retention
+  // migration establishes deletion scope and preservation/legal-hold rules.
+  RETENTION_RECORDS_PURGE_ENABLED: z.string().optional().default('false').refine((value) => value === 'false' || value === '0', 'Historical record deletion is not activated; use the retention dry-run report.'),
   DEMO_MODE_ENABLED: bool,
 });
 

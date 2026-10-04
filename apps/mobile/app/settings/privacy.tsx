@@ -67,8 +67,8 @@ export default function Privacy() {
         <List.Accordion title="How long data is kept" description="Tap to view retention periods">
           <View style={{ paddingHorizontal: 24, paddingBottom: 16 }}>
             <Row label="Unmatched notifications" value="7 days" />
-            <Row label="Receipt images" value="30–90 days" />
-            <Row label="Records and history" value="12 months" />
+            <Row label="Receipt images" value="30 days during beta" />
+            <Row label="Records and history" value="Review after 12 months; retained until an approved purge or workspace deletion" />
             <Row label="Export files" value="24 hours" />
           </View>
         </List.Accordion>
@@ -85,7 +85,7 @@ export default function Privacy() {
         <Dialog visible={dialog !== null} onDismiss={closeDialog}>
           <Dialog.Title>{dialog === 'workspace' ? 'Delete workspace' : 'Delete account'}</Dialog.Title>
           <Dialog.Content style={{ gap: 8 }}>
-            <Text variant="bodySmall">{dialog === 'workspace' ? 'This removes its records, images, notifications and devices.' : 'This removes your profile and memberships. Business records stay with their workspace without your name.'}</Text>
+            <Text variant="bodySmall">{dialog === 'workspace' ? 'This removes its records, images, notifications and devices.' : 'Access is removed immediately and account deletion finishes in the background. Business records stay with their workspace with your authorship de-identified.'}</Text>
             <TextInput label="Type DELETE to confirm" mode="outlined" value={confirm} onChangeText={setConfirm} autoCapitalize="characters" />
           </Dialog.Content>
           <Dialog.Actions>
