@@ -68,6 +68,14 @@ in the production monitor. Rotate configured consumers together. If a private
 database CA is required, configure its PEM as `DATABASE_SSL_CA` for migrations
 and API runtime; never disable remote certificate verification.
 
+In Vercel production, set the non-secret server flag `BETA_MODE` to the exact
+string `true` as a readable **plain** environment variable, not a write-only
+sensitive value. This lets the deployment preflight verify the flag after
+`vercel pull`; private readiness also verifies the actual runtime value. Keep
+credentials such as `CRON_SECRET` sensitive; leave `DATABASE_SSL_CA` in its
+existing protected configuration.
+Do not weaken the beta gate or print environment files to diagnose a failure.
+
 Migration locks and SQL checksums guard repeated/concurrent application. CI
 applies the complete migration set twice against disposable Supabase and tests
 tenant/staff authorization, idempotency, job leases and retained authorship.
