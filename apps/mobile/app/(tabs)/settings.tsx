@@ -11,6 +11,7 @@ import { useAppUpdate } from '@/lib/release-update';
 import { useIsOwner, useSession } from '@/lib/session';
 import { useThemeMode } from '@/lib/theme-mode';
 import { DEFAULT_CAPTURE_PREFERENCES, getCapturePreferences, setCapturePreferences, type CapturePreferences } from '@/lib/capture-preferences';
+import { SIGN_OUT_RETRY_MESSAGE } from '@/lib/sign-out';
 
 export default function Settings() {
   const router = useRouter();
@@ -22,6 +23,7 @@ export default function Settings() {
   const update = useAppUpdate();
   const [cacheMessage, setCacheMessage] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [showUpdate, setShowUpdate] = useState(false);
   const [capturePreferences, setLocalCapturePreferences] = useState<CapturePreferences>(DEFAULT_CAPTURE_PREFERENCES);
   useEffect(() => { void getCapturePreferences().then(setLocalCapturePreferences); }, []);
@@ -41,6 +43,13 @@ export default function Settings() {
       setCacheMessage('Unused cache cleared. Pending scans are safe.');
     } catch { setCacheMessage('Could not finish cleanup. Try again.'); }
     finally { setClearing(false); }
+  };
+  const leave = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try { await signOut(); }
+    catch { setCacheMessage(SIGN_OUT_RETRY_MESSAGE); }
+    finally { setSigningOut(false); }
   };
 
   return (
@@ -131,7 +140,7 @@ export default function Settings() {
         <ListRow icon="broom" title={clearing ? 'Clearing cache…' : 'Clear unused cache'} onPress={() => void clearCache()} />
       </Group>
 
-      <ListRow icon="logout" title="Sign out" destructive onPress={() => void signOut()} />
+      <ListRow icon="logout" title={signingOut ? 'Signing out…' : 'Sign out'} destructive onPress={signingOut ? undefined : () => void leave()} />
 
       <Text variant="bodySmall" style={{ opacity: 0.5, textAlign: 'center' }}>
         PayTsek {APP_VERSION}

@@ -6,6 +6,7 @@ import { Notice, Screen, ScreenTitle } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TOUCH_TARGET } from '@/theme';
+import { SIGN_OUT_RETRY_MESSAGE } from '@/lib/sign-out';
 
 export default function Workspaces() {
   const theme = useTheme();
@@ -15,11 +16,20 @@ export default function Workspaces() {
   const [joining, setJoining] = useState(false);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const emailName = session?.user.email?.split('@')[0]?.replace(/[._-]+/g, ' ').trim();
   const metadataName = session?.user.user_metadata?.full_name;
   const displayName = typeof metadataName === 'string' && metadataName.trim() ? metadataName.trim() : (emailName || 'Owner');
   const deviceTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Manila';
+  const leave = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    setError(null);
+    try { await signOut(); }
+    catch { setError(SIGN_OUT_RETRY_MESSAGE); }
+    finally { setSigningOut(false); }
+  };
 
   const create = async () => {
     if (busy) return;
@@ -108,7 +118,7 @@ export default function Workspaces() {
         </View>
       )}
 
-      <Button icon="logout" onPress={() => void signOut()} style={{ alignSelf: 'center' }}>Sign out</Button>
+      <Button icon="logout" loading={signingOut} disabled={signingOut || busy} onPress={() => void leave()} style={{ alignSelf: 'center' }}>Sign out</Button>
     </Screen>
   );
 }

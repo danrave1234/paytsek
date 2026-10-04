@@ -67,12 +67,14 @@ export class WorkerService {
         case 'RECONCILE_EVENT': await this.reconcile.reconcileEvent(String(job.payload.eventId)); break;
         case 'GENERATE_EXPORT': await this.exports.generate(String(job.payload.exportJobId)); break;
         case 'DELETE_ACCOUNT': await this.deletion.process(String(job.payload.requestId)); break;
-        case 'PURGE_RETENTION':
-          if (await this.retention.run(job.payload.orgId ? String(job.payload.orgId) : null, Boolean(job.payload.hardDelete))) {
-            await this.jobs.defer(job);
+        case 'PURGE_RETENTION': {
+          const progress = await this.retention.run(job.payload.orgId ? String(job.payload.orgId) : null, Boolean(job.payload.hardDelete));
+          if (progress.more) {
+            await this.jobs.defer(job, progress.runAfterSeconds);
             return;
           }
           break;
+        }
         case 'RECONCILE_ENTITLEMENT': break;
         default: throw new Error('UNKNOWN_JOB_KIND');
       }

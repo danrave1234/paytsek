@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import type { InitProofUploadRequest, InitProofUploadResponse } from '@paytsek/contracts';
 import { ApiException } from '../common/errors';
 import { loadEnv } from '../config/env';
-import { DbService, isUniqueViolation } from '../db/db.service';
+import { DbService, type Queryable } from '../db/db.service';
 import { StorageService } from '../db/storage.service';
 import { MAX_PROOF_BYTES, validateProofBytes } from './proof-validation';
 
@@ -25,53 +25,72 @@ export class ProofsService {
   ) {}
 
   /** Retention entitlement fixed at creation: paid plan or any prepaid credit => paid retention. */
-  private async retentionDays(orgId: string): Promise<number> {
+  private async retentionDays(orgId: string, tx: Queryable): Promise<number> {
     if (this.env.BETA_MODE) return this.env.RETENTION_PROOF_IMAGE_FREE_DAYS;
-    const r = await this.db.one<{ plan_code: string; credits: number }>(
+    const result = await tx.query<{ plan_code: string; credits: number }>(
       `select o.plan_code, prepaid_credits_remaining(o.id) as credits from organizations o where o.id = $1`,
       [orgId],
     );
+    const r = result.rows[0];
     const paid = r && (r.plan_code !== 'FREE' || r.credits > 0);
     return paid ? this.env.RETENTION_PROOF_IMAGE_PAID_DAYS : this.env.RETENTION_PROOF_IMAGE_FREE_DAYS;
   }
 
   async init(orgId: string, userId: string, input: InitProofUploadRequest): Promise<InitProofUploadResponse> {
-    const expiresAt = new Date(Date.now() + this.env.STORAGE_SIGNED_UPLOAD_TTL_SECONDS * 1000).toISOString();
+    return this.db.tx(async (tx) => {
+      // Serialize issuance with workspace/account deletion; the earlier request
+      // guard is not a transaction lock. Do not mint capabilities for a removed
+      // member or after soft deletion, even if this request authenticated first.
+      const live = await tx.query(`select id from organizations where id=$1 and deleted_at is null for update`, [orgId]);
+      if (!live.rowCount) throw new ApiException('NOT_A_MEMBER', 'This workspace is no longer available.');
+      // A separate READ COMMITTED statement sees membership removal that may
+      // have committed while the organization lock above was waiting.
+      const member = await tx.query(`select 1 from memberships where organization_id=$1 and user_id=$2`, [orgId,userId]);
+      if (!member.rowCount) throw new ApiException('NOT_A_MEMBER', 'This workspace is no longer available.');
+      return this.initLocked(orgId,userId,input,tx);
+    });
+  }
+
+  private async initLocked(orgId: string, userId: string, input: InitProofUploadRequest, tx: Queryable): Promise<InitProofUploadResponse> {
+    // No upload capability is issued for an already-stored response.
+    const expiresAt = new Date().toISOString();
     // Exact-bytes duplicate within the workspace -> reuse the stored proof; no second upload.
-    const dup = await this.db.one<ExistingProof>(
+    const duplicate = await tx.query<ExistingProof>(
       `select id, upload_finalized_at, purged_at, sha256, content_type, byte_length from payment_proofs where organization_id = $1 and (sha256 = $2 or client_proof_id = $3)
-        order by (client_proof_id=$3) desc limit 1`,
+        order by (client_proof_id=$3) desc limit 1 for update`,
       [orgId, input.sha256, input.clientProofId],
     );
+    const dup = duplicate.rows[0];
     if (dup) checkExistingProof(dup, input);
     if (dup?.upload_finalized_at) return { proofId: dup.id, uploadUrl: null, uploadHeaders: {}, alreadyStored: true, expiresAt };
 
     let proofId = dup?.id ?? null;
     if (!proofId) {
-      const days = await this.retentionDays(orgId);
-      try {
-        const ins = await this.db.query<{ id: string }>(
-          `insert into payment_proofs (organization_id, client_proof_id, uploaded_by, content_type, byte_length, sha256, perceptual_hash, retention_days, retention_until)
-           values ($1,$2,$3,$4,$5,$6,$7,$8, now() + make_interval(days => $8)) returning id`,
-          [orgId, input.clientProofId, userId, input.contentType, input.byteLength, input.sha256, input.perceptualHash ?? null, days],
-        );
-        proofId = ins.rows[0]!.id;
-      } catch (e) {
-        if (!isUniqueViolation(e)) throw e;
-        const again = await this.db.one<ExistingProof>(`select id, upload_finalized_at, purged_at, sha256, content_type, byte_length from payment_proofs
-          where organization_id = $1 and (sha256 = $2 or client_proof_id = $3) order by (client_proof_id=$3) desc limit 1`, [orgId, input.sha256, input.clientProofId]);
-        if (!again) throw e;
+      const days = await this.retentionDays(orgId,tx);
+      const ins = await tx.query<{ id: string }>(
+        `insert into payment_proofs (organization_id, client_proof_id, uploaded_by, content_type, byte_length, sha256, perceptual_hash, retention_days, retention_until)
+         values ($1,$2,$3,$4,$5,$6,$7,$8, now() + make_interval(days => $8)) on conflict do nothing returning id`,
+        [orgId, input.clientProofId, userId, input.contentType, input.byteLength, input.sha256, input.perceptualHash ?? null, days],
+      );
+      proofId = ins.rows[0]?.id ?? null;
+      if (!proofId) {
+        const raced = await tx.query<ExistingProof>(`select id, upload_finalized_at, purged_at, sha256, content_type, byte_length from payment_proofs
+          where organization_id = $1 and (sha256 = $2 or client_proof_id = $3) order by (client_proof_id=$3) desc limit 1 for update`, [orgId, input.sha256, input.clientProofId]);
+        const again = raced.rows[0];
+        if (!again) throw new ApiException('IDEMPOTENCY_CONFLICT', 'The proof changed while uploading. Retry sync.');
         checkExistingProof(again, input);
         if (again.upload_finalized_at) return { proofId: again.id, uploadUrl: null, uploadHeaders: {}, alreadyStored: true, expiresAt };
         proofId = again.id;
       }
     }
     const path = this.storage.proofPath(orgId, proofId, input.contentType);
-    await this.db.query(`update payment_proofs set storage_path = $2 where id = $1 and storage_path is null`, [proofId, path]);
+    await tx.query(`update payment_proofs set storage_path = $2 where id = $1 and storage_path is null`, [proofId, path]);
     // A retry may carry a different contentType; always sign for the path actually stored.
-    const stored = await this.db.one<{ storage_path: string }>(`select storage_path from payment_proofs where id = $1`, [proofId]);
-    const signed = await this.storage.createSignedUpload(this.storage.proofsBucket, stored!.storage_path);
-    return { proofId, uploadUrl: signed.url, uploadHeaders: { 'x-upsert': 'false' }, alreadyStored: false, expiresAt };
+    const stored = await tx.query<{ storage_path: string }>(`select storage_path from payment_proofs where id = $1`, [proofId]);
+    const signed = await this.storage.createSignedUpload(this.storage.proofsBucket, stored.rows[0]!.storage_path);
+    await tx.query(`update payment_proofs set upload_authorized_until=greatest(upload_authorized_until,$2::timestamptz) where id=$1`, [proofId,signed.expiresAt]);
+    // Only return the capability after its real expiry has committed durably.
+    return { proofId, uploadUrl: signed.url, uploadHeaders: { 'x-upsert': 'false' }, alreadyStored: false, expiresAt: signed.expiresAt.toISOString() };
   }
 
   /** Verify the object exists and its size matches, then mark finalized. */

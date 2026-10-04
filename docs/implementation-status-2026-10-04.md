@@ -19,6 +19,13 @@ not legal certification or a claim that every Android notification is delivered.
   identified from old stored payloads; do not guess-delete them.
 - Server byte/hash/type/decode validation and bounded image normalization;
   duplicate-record responses now respect staff authorship restrictions.
+- Actual signed-upload expiry is persisted, issuance is serialized with workspace
+  deletion, and cleanup retains its manifest through expiry plus an in-flight
+  margin. A 24-hour legacy-token hold supports cutover; the margin is not a
+  provider transfer-time guarantee. Do not restore an unpatched public API.
+- Sign-out is acknowledged only after the Auth SDK confirms local removal;
+  an expired-session/offline failure remains visibly signed in with a retry
+  message. SecureStore serializes cleanup and removes obsolete token chunks.
 - Durable account deletion blocks old sessions, removes account access promptly,
   preserves business history, and retries Auth deletion. Unexpected legacy
   personally owned Storage objects pause for supported-API operator review.
@@ -37,13 +44,14 @@ not legal certification or a claim that every Android notification is delivered.
 | Check | Result |
 | --- | --- |
 | Contracts build and monorepo TypeScript | Passed |
-| API | 77 tests passed |
+| API | 90 tests passed |
 | Contracts | 15 tests passed |
 | Receipt parsers | 58 tests passed |
-| Mobile | 32 tests passed, including real SQLite lease/restart fixtures |
+| Mobile | 44 tests passed, including real SQLite and installed Auth SDK regressions |
 | CI utility regressions | Passed, including bounded malformed URI decoding |
 | Android native compilation | Collector, OCR and app Kotlin compile passed |
 | Native parser tests | 26 passed |
+| Android JavaScript bundle | Expo/Hermes production export passed; not an installed APK/device test |
 | Disposable Supabase/Postgres | Migrations, repeat application, RLS, private columns, idempotency, unique/scope-safe matching, deletion and worker leases passed |
 | Web | Next production build passed; Privacy, Terms and home navigation checked in browser without console errors |
 | Physical phone / iOS build | Not performed; no Android device connected, Windows host |

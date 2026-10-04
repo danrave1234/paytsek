@@ -55,6 +55,25 @@ for scoped erasure, retained workspace records and backup copies. Structured
 record retention is a count-only dry run; automatic historical deletion cannot
 be enabled by changing an environment variable.
 
+Signed proof-upload URLs are bearer capabilities. Supabase currently grants
+them for two hours; the old `STORAGE_SIGNED_UPLOAD_TTL_SECONDS=300` was only a
+display estimate and is removed. The API now persists the provider token's actual
+expiry (never the token), and serializes issuance with live workspace membership
+and deletion. Cleanup retains and rechecks proof manifests until the last issued
+expiry plus a 15-minute in-flight margin, including previously purged manifests.
+Access is revoked immediately, but physical cleanup is deliberately asynchronous.
+Future cleanup jobs wait until their deadline without consuming failure retries;
+readiness reports overdue work rather than intentionally scheduled-job age.
+
+Migration `20261004000200` places existing proofs under a conservative 24-hour
+cutover hold for old untracked upload links. Retire old API revisions well before
+the final two hours of that window; if rollout stalls, extend the hold through a
+reviewed migration before expiry. Do not clear manifests to accelerate deletion.
+The 15-minute margin is an operational safeguard, not a verified maximum hosted
+Storage transfer duration; verify provider request limits during rollout and
+investigate any late/orphan object with scoped supported Storage APIs. This change
+does not discover or delete historical orphan files whose manifest is already gone.
+
 ## Queue scheduling (without adding a queue service)
 
 The existing Postgres jobs table is authoritative. Inline reconciliation marks
@@ -89,7 +108,7 @@ a controlled failure/recovery drill.
 
 Sentry is optional, manually instrumented and **off by default**. Enable the
 server/mobile flags only after the [privacy gate](privacy-operations.md). Events
-are rebuilt from four fixed codes plus release and surface, with no request,
+are rebuilt from allowlisted fixed codes plus release and surface, with no request,
 exception text, user, amount, URL, screenshot, replay, native dump or breadcrumb.
 Automatic tracing/source-map upload is not configured. It is not full native
 crash coverage. No SDK field is a substitute for testing the outgoing event.

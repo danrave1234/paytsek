@@ -17,16 +17,20 @@ export class ReadinessService {
     let queue: QueueHealth | null = null;
     const databaseCheck = async () => {
       const schema = await this.db.one<{ ready: boolean }>(`select exists (
-        select 1 from supabase_migrations.schema_migrations where version='20261004000100')
+        select 1 from supabase_migrations.schema_migrations where version='20261004000200')
         and to_regclass('public.account_deletions') is not null
-        and to_regclass('public.maintenance_reports') is not null as ready`);
+        and to_regclass('public.maintenance_reports') is not null
+        and exists (select 1 from pg_attribute where attrelid=to_regclass('public.payment_proofs')
+          and attname='upload_authorized_until' and not attisdropped) as ready`);
       checks.database = true;
       checks.schema = schema?.ready === true;
       if (!checks.schema) return;
       const health = await this.db.one<QueueHealth>(`select
         count(*) filter(where status in ('PENDING','LEASED'))::int as pending,
         count(*) filter(where status='DEAD')::int as dead,
-        coalesce(extract(epoch from now()-min(created_at) filter(where status in ('PENDING','LEASED'))),0)::int as "oldestAgeSeconds",
+        coalesce(extract(epoch from now()-min(case
+          when status='PENDING' and run_after<=now() then run_after
+          when status='LEASED' and leased_until<=now() then leased_until end)),0)::int as "oldestAgeSeconds",
         (select count(*)::int from account_deletions where status='FAILED') as "failedDeletions" from jobs`);
       queue = health;
       checks.queue = !!health && health.dead === 0 && health.failedDeletions === 0 && health.oldestAgeSeconds < 900;

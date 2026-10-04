@@ -40,6 +40,8 @@ jobs:
       - run: pnpm --filter @paytsek/receipt-parsers test
       - run: pnpm --filter @paytsek/mobile test
       - run: node --test scripts/ci/*.test.mjs
+      - name: Verify Android JavaScript and Hermes bundle
+        run: pnpm --filter @paytsek/mobile exec expo export --platform android --output-dir .expo/export-ci
       - run: pnpm --filter @paytsek/web run build
       - run: git diff --check
   database:

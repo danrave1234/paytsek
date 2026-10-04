@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { loadEnv } from '../config/env';
+import { uploadTokenExpiresAt } from '../records/upload-capability';
 
 /**
  * Private Supabase Storage access. Uses the service role on the server only;
@@ -23,10 +24,10 @@ export class StorageService {
     return `${organizationId}/${proofId}.${ext}`;
   }
 
-  async createSignedUpload(bucket: string, path: string): Promise<{ url: string; token: string }> {
+  async createSignedUpload(bucket: string, path: string): Promise<{ url: string; expiresAt: Date }> {
     const { data, error } = await this.client.storage.from(bucket).createSignedUploadUrl(path, { upsert: false });
     if (error || !data) throw new Error(`storage signed upload failed: ${error?.message ?? 'unknown'}`);
-    return { url: data.signedUrl, token: data.token };
+    return { url: data.signedUrl, expiresAt: uploadTokenExpiresAt(data.token) };
   }
 
   async createSignedDownload(bucket: string, path: string, ttlSeconds?: number): Promise<{ url: string; expiresAt: Date }> {

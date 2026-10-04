@@ -1,6 +1,7 @@
 // Deliberately refuses remote databases. Fixtures never leave this rolled-back local transaction.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { connectionOptions } from '../../supabase/apply-migrations.mjs';
@@ -15,6 +16,7 @@ const client = new Client(connectionOptions(url));
 const jobs = new JobsService({
   query: (sql, values) => client.query(sql, values),
   one: async (sql, values) => (await client.query(sql, values)).rows[0] ?? null,
+  tx: (action) => action(client), // This suite already owns the outer rollback transaction.
 });
 const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const owner = id(1), cashier = id(2), other = id(3), org = id(10), otherOrg = id(11), source = id(20), otherSource = id(21), device = id(30);
@@ -84,10 +86,45 @@ try {
   assert.equal((await client.query('select status from jobs where id=$1', [oldLease.id])).rows[0].status, 'LEASED', 'An expired worker must not acknowledge a newer lease');
   await jobs.complete(newLease);
 
+  // Progress resets attempts, so attempts alone cannot fence an older worker.
+  // Exercise the real lease/defer SQL through the rev1/attempt1 -> rev2/attempt1 ABA.
+  const deletion = (await client.query('insert into account_deletions(subject_hash,user_id) values ($1,$2) returning id',
+    [createHash('sha256').update(owner).digest('hex'), owner])).rows[0];
+  await jobs.enqueue('DELETE_ACCOUNT', { requestId: deletion.id }, 'synthetic-aba', client);
+  await client.query("update jobs set max_attempts=1 where dedupe_key='synthetic-aba'");
+  const [originalLease] = await jobs.lease('synthetic-aba-old', 1, 60);
+  await client.query("update jobs set leased_until=now()-interval '1 second' where id=$1", [originalLease.id]);
+  const [resumedLease] = await jobs.lease('synthetic-aba-resumed', 1, 60);
+  await jobs.defer(resumedLease, 1);
+  await client.query('update jobs set run_after=now() where id=$1', [originalLease.id]);
+  const [freshLease] = await jobs.lease('synthetic-aba-fresh', 1, 60);
+  assert.equal(freshLease.attempts, originalLease.attempts);
+  assert.ok(freshLease.revision > originalLease.revision, 'Progress defer must fence the old lease before resetting attempts');
+  await jobs.complete(originalLease);
+  await jobs.fail(originalLease, 'synthetic obsolete failure');
+  await jobs.defer(originalLease);
+  const fenced = (await client.query('select status,revision,attempts from jobs where id=$1', [freshLease.id])).rows[0];
+  assert.deepEqual(fenced, { status: 'LEASED', revision: freshLease.revision, attempts: freshLease.attempts });
+  assert.equal((await client.query('select status from account_deletions where id=$1', [deletion.id])).rows[0].status, 'PENDING',
+    'An obsolete terminal worker must not mark account deletion failed');
+  await jobs.complete(freshLease);
+  assert.equal((await client.query('select status from jobs where id=$1', [freshLease.id])).rows[0].status, 'DONE');
+  await client.query('delete from account_deletions where id=$1', [deletion.id]);
+
   await client.query("insert into payment_records(id,organization_id,created_by,client_record_id,capture_origin,amount_centavos,captured_at) values ($1,$2,$3,$1,'CAMERA',10000,now())", [id(44), org, cashier]);
   assert.equal((await client.query('select source_id from payment_records where id=$1', [id(44)])).rows[0].source_id, null, 'A proof record must persist before supplementary evidence identifies a receiving wallet');
 
   await client.query("insert into payment_proofs(id,organization_id,client_proof_id,uploaded_by,content_type,byte_length,sha256,retention_days,retention_until) values ($1,$2,$1,$3,'image/jpeg',1,$4,30,now()+interval '30 days')", [id(60), org, cashier, '1'.repeat(64)]);
+  // Replay the actual additive SQL against a pre-expiry schema inside a local
+  // savepoint, including an already-purged legacy manifest, then restore it.
+  await client.query('savepoint legacy_upload_expiry');
+  await client.query('alter table payment_proofs drop column upload_authorized_until');
+  await client.query("insert into payment_proofs(id,organization_id,client_proof_id,uploaded_by,content_type,byte_length,sha256,retention_days,retention_until,purged_at) values ($1,$2,$1,$3,'image/jpeg',1,$4,30,now()-interval '1 day',now()-interval '1 day')", [id(61), org, cashier, '2'.repeat(64)]);
+  await client.query(readFileSync(new URL('../../supabase/migrations/20261004000200_proof_upload_expiry.sql', import.meta.url), 'utf8'));
+  assert.equal((await client.query("select count(*)::int as n from payment_proofs where upload_authorized_until=now()+interval '24 hours'")).rows[0].n, 2,
+    'Migration must place both active and already-purged legacy manifests on the full 24-hour cutover hold');
+  await client.query('rollback to savepoint legacy_upload_expiry');
+  await client.query('release savepoint legacy_upload_expiry');
   await client.query('insert into account_deletions(subject_hash,user_id) values ($1,$2)', [createHash('sha256').update(cashier).digest('hex'), cashier]);
   await rejectsSql("insert into profiles(user_id,display_name) values ($1,'Synthetic re-entry')", [cashier], '42501');
   await rejectsSql("insert into payment_records(organization_id,created_by,client_record_id,capture_origin,amount_centavos,captured_at) values ($1,$2,$3,'CAMERA',10000,now())", [org, cashier, id(43)], '42501');
@@ -100,3 +137,5 @@ try {
   await client.query('rollback');
   await client.end();
 }
+
+await import('./proof-retention-invariants.mjs');

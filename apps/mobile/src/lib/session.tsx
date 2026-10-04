@@ -7,6 +7,7 @@ import { supabase } from './supabase';
 import { clearWorkspaceCache, readWorkspaceCache, setActiveWorkspaceId, writeWorkspaceCache } from './workspace';
 import { queryClient } from './queries';
 import { getRequestScope, isScopeCurrent, setRequestScope } from './request-scope';
+import { signOutConfirmed } from './sign-out';
 
 interface SessionState {
   ready: boolean;
@@ -27,6 +28,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const initializingUser = useRef<string | null | undefined>(undefined);
+  const signingOut = useRef<Promise<void> | null>(null);
+  const signedOutRevision = useRef(0);
 
   const refreshWorkspaces = useCallback(async () => {
     const scope = getRequestScope();
@@ -80,7 +83,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       }, 0);
     };
     const client = supabase();
-    const { data: subscription } = client.auth.onAuthStateChange((_event, next) => installSession(next));
+    const { data: subscription } = client.auth.onAuthStateChange((event, next) => {
+      if (event === 'SIGNED_OUT') signedOutRevision.current += 1;
+      installSession(next);
+    });
     // An auth event may beat getSession; never overwrite that newer session.
     void client.auth.getSession().then(({ data }) => {
       if (initializingUser.current === undefined) installSession(data.session);
@@ -98,17 +104,21 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     await setActiveWorkspaceId(scope.userId, id);
   }, [workspaces]);
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(() => {
+    if (signingOut.current) return signingOut.current;
     const userId = getRequestScope()?.userId;
-    setRequestScope(null);
-    setSession(null);
-    setWorkspaces([]);
-    setActiveId(null);
-    await queryClient.cancelQueries();
-    queryClient.clear();
-    try { await supabase().auth.signOut({ scope: 'local' }); } finally {
-      if (userId) await clearWorkspaceCache(userId);
-    }
+    const revision = signedOutRevision.current;
+    const operation = signOutConfirmed(
+      () => supabase().auth.signOut({ scope: 'local' }),
+      () => signedOutRevision.current > revision && getRequestScope() === null,
+      async () => {
+        await queryClient.cancelQueries();
+        queryClient.clear();
+        if (userId) await clearWorkspaceCache(userId);
+      },
+    ).finally(() => { signingOut.current = null; });
+    signingOut.current = operation;
+    return operation;
   }, []);
 
   const value = useMemo<SessionState>(() => ({

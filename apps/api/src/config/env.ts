@@ -30,7 +30,6 @@ export const EnvSchema = z.object({
 
   STORAGE_BUCKET_PROOFS: z.string().default('proof-images'),
   STORAGE_BUCKET_EXPORTS: z.string().default('exports'),
-  STORAGE_SIGNED_UPLOAD_TTL_SECONDS: int(300),
   STORAGE_SIGNED_DOWNLOAD_TTL_SECONDS: int(120),
 
   COLLECTOR_TOKEN_HASH_SECRET: z.string().min(32),
