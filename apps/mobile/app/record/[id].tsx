@@ -5,7 +5,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { BackHandler, Image, Pressable, StyleSheet, View } from 'react-native';
 import { Button, Chip, Dialog, Icon, IconButton, Portal, Snackbar, Text, TextInput, TouchableRipple, useTheme } from 'react-native-paper';
 import { ProviderLogo } from '@/components/provider-logo';
-import { AppearMotion, FadeIn, ScreenEnter, ValueChangeMotion } from '@/components/motion';
+import { AppearMotion, FadeIn, ValueChangeMotion } from '@/components/motion';
 import { animateNextLayout } from '@/components/motion-feedback';
 import { ErrorState, Loading, Notice, Screen, StateChip } from '@/components/ui';
 import { isApiError } from '@/lib/api';
@@ -151,7 +151,7 @@ export default function RecordDetail() {
   const occurredAt = manilaTime(r.corrected.receiptTransactionAt ?? r.capturedAt, r.corrected.receiptTransactionPrecision, workspace?.timezone);
 
   return <Screen>
-    <ScreenEnter>
+    <>
       <View style={styles.topBar}><IconButton icon="arrow-left" accessibilityLabel="Back to records" onPress={goBack} /><Text variant="titleMedium" style={{ fontWeight: '700' }}>Payment record</Text><View style={{ width: 48 }} /></View>
 
       <View style={styles.hero}>
@@ -206,7 +206,7 @@ export default function RecordDetail() {
             const origin = c.evidenceOrigin === 'SIGNED_WEBHOOK' ? 'Signed integration evidence' : 'Android notification';
             const meta = [PROVIDER_LABELS[c.provider], origin, deltaLabel(c.deltaSeconds), payer].filter(Boolean).join(' · ');
             return (
-              <AppearMotion key={c.eventId} itemKey={`candidate.${c.eventId}`}>
+              <AppearMotion key={c.eventId} itemKey={`candidate.${c.eventId}`} index={index}>
                 <View style={[styles.candidateRow, index > 0 && { borderTopColor: theme.colors.outlineVariant, borderTopWidth: StyleSheet.hairlineWidth }]}>
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text variant="titleSmall" style={{ fontVariant: ['tabular-nums'] }}>{peso(c.amountCentavos)}</Text>
@@ -261,7 +261,7 @@ export default function RecordDetail() {
           {isOwner ? <ActionRow icon="delete-outline" label="Void record" onPress={() => setDialog('void')} divider destructive /> : null}
         </View>
       ) : null}
-    </ScreenEnter>
+    </>
 
     <Portal>
       <Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}><Dialog.Title>{dialog === 'edit' ? 'Correct record' : dialog === 'unlink' ? 'Unlink association' : dialog === 'void' ? 'Void record' : 'Confirm after wallet check'}</Dialog.Title><Dialog.Content style={{ gap: 8 }}>{dialog === 'edit' ? <><Text variant="bodySmall">The proof and correction stay in History.</Text><TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} /><Text variant="labelMedium">Sent from</Text><View style={styles.providerChoices}>{PROVIDERS.map((item) => <Chip key={item.value} selected={providerValue === item.value} onPress={() => setProviderValue(item.value)}>{item.label}</Chip>)}</View></> : <><Text variant="bodySmall">{dialog === 'manual' ? 'Use this only after checking the receiving wallet. It is recorded as an owner confirmation, not a provider verification.' : dialog === 'void' ? 'This removes the record from active totals while preserving the proof and History.' : 'The previous state remains in History.'}</Text><TextInput label={dialog === 'void' ? 'Reason' : dialog === 'manual' ? 'Note (optional)' : 'Reason (optional)'} mode="outlined" value={reason} onChangeText={setReason} /></>}</Dialog.Content><Dialog.Actions><Button onPress={() => setDialog(null)}>Cancel</Button><Button onPress={() => void runDialog()} disabled={dialog === 'void' && reason.trim().length < 3}>{dialog === 'edit' ? 'Save' : 'Confirm'}</Button></Dialog.Actions></Dialog>

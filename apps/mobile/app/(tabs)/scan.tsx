@@ -8,9 +8,8 @@ import { ActivityIndicator, Animated, AppState, Image, Platform, StyleSheet, Vie
 import { Button, IconButton, Text, TextInput, useTheme } from 'react-native-paper';
 import { ReceiptOcr } from 'receipt-ocr';
 import { CaptureSurface } from '@/components/capture-surface';
-import { FadeIn } from '@/components/motion';
 import { ScanSweep } from '@/components/motion-effects';
-import { useShake } from '@/components/motion-feedback';
+import { RiseIn, useShake } from '@/components/motion-feedback';
 import { ProviderLogo } from '@/components/provider-logo';
 import { haptics } from '@/lib/haptics';
 import { Notice, Screen, ScreenTitle } from '@/components/ui';
@@ -338,15 +337,17 @@ export default function Scan() {
     return (
       <Screen scroll={false} tabbed style={styles.processingPage}>
         {imageUri ? (
-          <View style={styles.processingImage}>
+          <RiseIn distance={0} scaleFrom={1.05} style={styles.processingImage}>
             <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} resizeMode="contain" accessibilityLabel="Captured payment proof" />
             <ScanSweep active color={theme.colors.primary} inset={SPACING.md} />
-          </View>
+          </RiseIn>
         ) : null}
-        <View style={[styles.processingIndicator, { backgroundColor: theme.colors.surface }]} accessibilityLiveRegion="polite">
-          <ActivityIndicator color={theme.colors.primary} />
-          <Text variant="labelLarge">Reading proof</Text>
-        </View>
+        <RiseIn delay={120} distance={12} style={[styles.processingIndicator, { backgroundColor: theme.colors.surface }]}>
+          <View accessibilityLiveRegion="polite" style={styles.processingLabel}>
+            <ActivityIndicator color={theme.colors.primary} />
+            <Text variant="labelLarge">Reading proof</Text>
+          </View>
+        </RiseIn>
       </Screen>
     );
   }
@@ -358,7 +359,7 @@ export default function Scan() {
   if (stage === 'review' && fields && extraction) {
     return (
       <Screen tabbed>
-        <FadeIn>
+        <>
           <ScreenTitle title="Confirm amount" />
           {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="contain" accessibilityLabel="Captured payment proof" /> : null}
           <Notice kind="info">We'll save the proof now. You can edit details later.</Notice>
@@ -377,7 +378,7 @@ export default function Scan() {
           {error ? <Notice kind="error">{error}</Notice> : null}
           <Button mode="contained" onPress={() => void saveReview()} disabled={busy} loading={busy} style={{ minHeight: TOUCH_TARGET }}>Save proof</Button>
           <Button onPress={reset}>Retake</Button>
-        </FadeIn>
+        </>
       </Screen>
     );
   }
@@ -432,6 +433,7 @@ const styles = StyleSheet.create({
   processingPage: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   processingImage: { width: '100%', height: '82%', borderRadius: RADIUS.lg, backgroundColor: '#000000', overflow: 'hidden' },
   processingIndicator: { position: 'absolute', bottom: 128, minHeight: 48, borderRadius: RADIUS.full, paddingHorizontal: SPACING.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm },
+  processingLabel: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   preview: { width: '100%', height: 210, borderRadius: RADIUS.lg, backgroundColor: '#000000' },
   detected: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   sourceHealth: { minHeight: 24, flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: -SPACING.xs },
