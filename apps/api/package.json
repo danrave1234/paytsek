@@ -20,7 +20,7 @@
     "@paytsek/receipt-parsers": "workspace:*",
     "@sentry/node": "^11.4.0",
     "@supabase/supabase-js": "^2.116.0",
-    "jose": "^5.9.6",
+    "jose": "^6.2.12",
     "pg": "^8.13.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
