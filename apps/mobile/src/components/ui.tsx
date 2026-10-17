@@ -15,17 +15,30 @@ function useIsDark() {
 /** Evidence-state badge: colour + icon + text (never colour alone). */
 export function StateChip({ state, compact = false }: { state: EvidenceState; compact?: boolean }) {
   const c = stateColorsFor(useIsDark())[state];
+  const reduced = useReducedMotion();
+  const previous = useRef(state);
+  const pop = useRef(new Animated.Value(1)).current;
+  // New evidence settles into place instead of silently swapping labels.
+  useEffect(() => {
+    if (previous.current === state) return;
+    previous.current = state;
+    if (reduced) return;
+    pop.setValue(0.82);
+    const animation = Animated.spring(pop, { toValue: 1, damping: 11, stiffness: 260, mass: 0.6, useNativeDriver: true });
+    animation.start();
+    return () => animation.stop();
+  }, [pop, reduced, state]);
   return (
-    <View
+    <Animated.View
       accessibilityRole="text"
       accessibilityLabel={`Status: ${stateLabel(state)}`}
-      style={[styles.chip, { backgroundColor: c.bg }, compact && styles.chipCompact]}
+      style={[styles.chip, { backgroundColor: c.bg, transform: [{ scale: pop }] }, compact && styles.chipCompact]}
     >
       <Icon source={c.icon} size={compact ? 14 : 16} color={c.fg} />
       <Text variant={compact ? 'labelSmall' : 'labelMedium'} style={{ color: c.fg, fontWeight: '600' }}>
         {stateLabel(state)}
       </Text>
-    </View>
+    </Animated.View>
   );
 }
 

@@ -1,8 +1,55 @@
 import { CameraView } from 'expo-camera';
-import React from 'react';
-import { Linking, Pressable, StyleSheet, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { Button, Icon, Text, useTheme } from 'react-native-paper';
+import { haptics } from '@/lib/haptics';
 import type { AutoCaptureStatus } from '@/lib/use-receipt-auto-capture';
+import { successColorFor } from '@/theme';
+import { useReducedMotion } from './motion';
+import { ScanSweep } from './motion-effects';
+
+const CORNERS = ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'] as const;
+// Direction each corner moves to "close in" on a found proof.
+const INWARD = { topLeft: [1, 1], topRight: [-1, 1], bottomLeft: [1, -1], bottomRight: [-1, -1] } as const;
+
+/**
+ * The PayTsek aperture. When a readable proof is found the corners close in
+ * and turn green, so "hold steady" is visible as well as written.
+ */
+function ApertureCorners({ locked, color, lockedColor }: { locked: boolean; color: string; lockedColor: string }) {
+  const reduced = useReducedMotion();
+  const progress = useRef(new Animated.Value(locked ? 1 : 0)).current;
+  useEffect(() => {
+    if (locked) haptics.select();
+    if (reduced) { progress.setValue(locked ? 1 : 0); return; }
+    const animation = Animated.spring(progress, { toValue: locked ? 1 : 0, damping: 14, stiffness: 220, mass: 0.6, useNativeDriver: true });
+    animation.start();
+    return () => animation.stop();
+  }, [locked, progress, reduced]);
+  return (
+    <>
+      {CORNERS.map((corner) => {
+        const [x, y] = INWARD[corner];
+        return (
+          <Animated.View
+            key={corner}
+            style={[
+              styles.corner,
+              styles[corner],
+              {
+                borderColor: locked ? lockedColor : color,
+                transform: [
+                  { translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [0, x * 7] }) },
+                  { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, y * 7] }) },
+                ],
+              },
+            ]}
+          />
+        );
+      })}
+    </>
+  );
+}
 
 export function CaptureSurface({ granted, canAskAgain, active, ready, busy, onPermission, onCapture, onImport, cameraRef, onReady, torch, onTorch, autoCapture, autoStatus, onAutoCapture }: {
   granted: boolean; canAskAgain: boolean; active: boolean; ready: boolean; busy: boolean;
@@ -18,10 +65,10 @@ export function CaptureSurface({ granted, canAskAgain, active, ready, busy, onPe
     {granted && active ? <CameraView ref={cameraRef} onCameraReady={onReady} enableTorch={torch} facing="back" style={StyleSheet.absoluteFill} /> : null}
     {granted ? (
       <>
-        <View style={[styles.corner, styles.topLeft, { borderColor: theme.colors.primary }]} />
-        <View style={[styles.corner, styles.topRight, { borderColor: theme.colors.primary }]} />
-        <View style={[styles.corner, styles.bottomLeft, { borderColor: theme.colors.primary }]} />
-        <View style={[styles.corner, styles.bottomRight, { borderColor: theme.colors.primary }]} />
+        <View pointerEvents="none" style={styles.sweepFrame}>
+          <ScanSweep active={active && ready && !busy && autoStatus !== 'CAPTURING'} color={autoStatus === 'HOLD_STILL' ? successColorFor(true) : '#8DB4FF'} inset={10} />
+        </View>
+        <ApertureCorners locked={autoStatus === 'HOLD_STILL' || autoStatus === 'CAPTURING'} color={theme.colors.primary} lockedColor={successColorFor(true)} />
       </>
     ) : null}
     <View style={styles.topLine}>
@@ -53,7 +100,7 @@ export function CaptureSurface({ granted, canAskAgain, active, ready, busy, onPe
       <Pressable accessibilityRole="button" accessibilityLabel="Import payment screenshot" disabled={busy} onPress={onImport} style={({ pressed }) => [styles.sideAction, { opacity: pressed || busy ? 0.5 : 1 }]}>
         <Icon source="image-multiple-outline" size={27} color="#FFFFFF" />
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Capture payment proof" accessibilityHint="Takes one photo when you tap" accessibilityState={{ disabled: captureDisabled, busy }} disabled={captureDisabled} onPress={onCapture} style={({ pressed }) => [styles.shutter, { opacity: captureDisabled ? 0.4 : 1, transform: [{ scale: pressed ? 0.93 : 1 }] }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Capture payment proof" accessibilityHint="Takes one photo when you tap" accessibilityState={{ disabled: captureDisabled, busy }} disabled={captureDisabled} onPressIn={() => haptics.press()} onPress={onCapture} style={({ pressed }) => [styles.shutter, { opacity: captureDisabled ? 0.4 : 1, transform: [{ scale: pressed ? 0.93 : 1 }] }]}>
         <View style={styles.shutterInner}><Icon source="line-scan" size={32} color="#101828" /></View>
       </Pressable>
       <View style={styles.sideAction} />
@@ -77,6 +124,7 @@ const styles = StyleSheet.create({
   shutter: { width: 84, height: 84, borderRadius: 42, borderWidth: 2, borderColor: '#FFFFFF99', padding: 5 },
   shutterInner: { flex: 1, borderRadius: 40, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   corner: { position: 'absolute', width: 34, height: 34, zIndex: 2 },
+  sweepFrame: { position: 'absolute', top: 22, left: 22, right: 22, bottom: 118 },
   topLeft: { top: 22, left: 22, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 12 },
   topRight: { top: 22, right: 22, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 12 },
   bottomLeft: { bottom: 118, left: 22, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 12 },

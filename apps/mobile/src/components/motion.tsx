@@ -1,12 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated } from 'react-native';
+import { AccessibilityInfo, Animated, Easing } from 'react-native';
+
+// The system setting is read asynchronously. Remember the last answer so a
+// screen mounted later starts with the real value instead of assuming
+// reduced motion for one frame (which skipped entrances and caused flashes).
+let knownReducedMotion: boolean | null = null;
 
 export function useReducedMotion() {
-  const [reduced, setReduced] = useState(true);
+  const [reduced, setReduced] = useState(knownReducedMotion ?? true);
   useEffect(() => {
     let mounted = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then((value) => { if (mounted) setReduced(value); });
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduced);
+    const update = (value: boolean) => {
+      knownReducedMotion = value;
+      if (mounted) setReduced(value);
+    };
+    void AccessibilityInfo.isReduceMotionEnabled().then(update);
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', update);
     return () => { mounted = false; subscription.remove(); };
   }, []);
   return reduced;
@@ -28,7 +37,7 @@ export function SelectionMotion({ selected, children }: { selected: boolean; chi
  * Fade + slight rise when a list item first appears. Tracks which keys have
  * already animated so the initial page load does not cascade-animate every row.
  */
-export function AppearMotion({ itemKey, children }: { itemKey: string; children: React.ReactNode }) {
+export function AppearMotion({ itemKey, index = 0, children }: { itemKey: string; index?: number; children: React.ReactNode }) {
   const reduced = useReducedMotion();
   const seen = useRef(new Set<string>()).current;
   const opacity = useRef(new Animated.Value(1)).current;
@@ -40,10 +49,15 @@ export function AppearMotion({ itemKey, children }: { itemKey: string; children:
     if (reduced) return;
     opacity.setValue(0);
     translateY.setValue(8);
+    // A short cascade for the first screenful reads as one settling list;
+    // capping the delay keeps long pages from feeling slow.
+    const delay = Math.min(index, 7) * 35;
     Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 220, delay, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 220, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
+    // index only staggers the first appearance; later changes must not replay it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemKey, reduced, opacity, translateY]);
 
   return (

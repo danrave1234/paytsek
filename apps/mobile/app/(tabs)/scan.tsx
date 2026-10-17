@@ -9,6 +9,8 @@ import { Button, IconButton, Text, TextInput, useTheme } from 'react-native-pape
 import { ReceiptOcr } from 'receipt-ocr';
 import { CaptureSurface } from '@/components/capture-surface';
 import { FadeIn } from '@/components/motion';
+import { ScanSweep } from '@/components/motion-effects';
+import { haptics } from '@/lib/haptics';
 import { Notice, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
 import { newId } from '@/lib/device';
@@ -222,6 +224,8 @@ export default function Scan() {
     setAmountWarning(assessment.ready ? null : assessment.reason === 'MISSING' ? 'Enter the amount shown on the proof.' : 'Check the amount against the proof. The reading is uncertain.');
     // Only uncertainty in the required amount opens a form; optional evidence never does.
     if (assessment.ready && await persist(receipt, prepared.imageUri, from, receipt.fields, ocr.fullText, ocr.blocks)) return;
+    // Only an uncertain amount reaches this form; a light nudge says "look here".
+    haptics.warning();
     setStage('review');
   }, [home.data?.recentRecords, persist]);
 
@@ -326,7 +330,12 @@ export default function Scan() {
   if (stage === 'processing') {
     return (
       <Screen scroll={false} tabbed style={styles.processingPage}>
-        {imageUri ? <Image source={{ uri: imageUri }} style={styles.processingImage} resizeMode="contain" accessibilityLabel="Captured payment proof" /> : null}
+        {imageUri ? (
+          <View style={styles.processingImage}>
+            <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} resizeMode="contain" accessibilityLabel="Captured payment proof" />
+            <ScanSweep active color={theme.colors.primary} inset={SPACING.md} />
+          </View>
+        ) : null}
         <View style={[styles.processingIndicator, { backgroundColor: theme.colors.surface }]} accessibilityLiveRegion="polite">
           <ActivityIndicator color={theme.colors.primary} />
           <Text variant="labelLarge">Reading proof</Text>
@@ -405,7 +414,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   processingPage: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  processingImage: { width: '100%', height: '82%', borderRadius: RADIUS.lg, backgroundColor: '#000000' },
+  processingImage: { width: '100%', height: '82%', borderRadius: RADIUS.lg, backgroundColor: '#000000', overflow: 'hidden' },
   processingIndicator: { position: 'absolute', bottom: 128, minHeight: 48, borderRadius: RADIUS.full, paddingHorizontal: SPACING.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm },
   preview: { width: '100%', height: 210, borderRadius: RADIUS.lg, backgroundColor: '#000000' },
   sourceHealth: { minHeight: 24, flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: -SPACING.xs },

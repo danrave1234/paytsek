@@ -4,6 +4,8 @@ import { Animated, Platform, Pressable, StyleSheet, View, type GestureResponderE
 import { Icon, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from '@/components/motion';
+import { TabFocusMotion } from '@/components/motion-effects';
+import { haptics } from '@/lib/haptics';
 import { SHADOW_COLOR, navBarBackgroundFor } from '@/theme';
 
 type ScanButtonProps = {
@@ -48,7 +50,7 @@ function ScanTabButton({ children, onPress, onLongPress, accessibilityLabel, acc
         <Pressable
           onPress={onPress ?? undefined}
           onLongPress={onLongPress ?? undefined}
-          onPressIn={() => animate(0.94)}
+          onPressIn={() => { haptics.press(); animate(0.94); }}
           onPressOut={() => animate(1)}
           accessibilityRole="tab"
           accessibilityLabel={accessibilityLabel ?? 'Scan payment proof'}
@@ -109,6 +111,8 @@ export default function TabsLayout() {
         tabBarLabelStyle: styles.label,
         tabBarItemStyle: styles.item,
       }}
+      // Scan gives its own firmer press feedback; the other tabs tick on selection.
+      screenListeners={({ route }) => ({ tabPress: () => { if (route.name !== 'scan') haptics.select(); } })}
     >
       <Tabs.Screen
         name="index"
@@ -116,9 +120,9 @@ export default function TabsLayout() {
           title: 'Today',
           tabBarAccessibilityLabel: 'Today tab',
           tabBarIcon: ({ focused, color }) => (
-            <View style={styles.regularIcon}>
-              <Icon source={focused ? 'home-variant' : 'home-variant-outline'} size={25} color={String(color)} />
-            </View>
+            <TabFocusMotion focused={focused} color={String(color)}>
+              <Icon source={focused ? 'home-variant' : 'home-variant-outline'} size={24} color={String(color)} />
+            </TabFocusMotion>
           ),
         }}
       />
@@ -128,9 +132,9 @@ export default function TabsLayout() {
           title: 'Records',
           tabBarAccessibilityLabel: 'Records tab',
           tabBarIcon: ({ focused, color }) => (
-            <View style={styles.regularIcon}>
-              <Icon source={focused ? 'receipt-text' : 'receipt-text-outline'} size={23} color={String(color)} />
-            </View>
+            <TabFocusMotion focused={focused} color={String(color)}>
+              <Icon source={focused ? 'receipt-text' : 'receipt-text-outline'} size={24} color={String(color)} />
+            </TabFocusMotion>
           ),
         }}
       />
@@ -150,9 +154,9 @@ export default function TabsLayout() {
           title: 'Analytics',
           tabBarAccessibilityLabel: 'Analytics tab',
           tabBarIcon: ({ focused, color }) => (
-            <View style={styles.regularIcon}>
-              <Icon source={focused ? 'chart-box' : 'chart-box-outline'} size={23} color={String(color)} />
-            </View>
+            <TabFocusMotion focused={focused} color={String(color)}>
+              <Icon source={focused ? 'chart-box' : 'chart-box-outline'} size={24} color={String(color)} />
+            </TabFocusMotion>
           ),
         }}
       />
@@ -162,9 +166,9 @@ export default function TabsLayout() {
           title: 'Settings',
           tabBarAccessibilityLabel: 'Settings tab',
           tabBarIcon: ({ focused, color }) => (
-            <View style={styles.regularIcon}>
-              <Icon source={focused ? 'cog' : 'cog-outline'} size={23} color={String(color)} />
-            </View>
+            <TabFocusMotion focused={focused} color={String(color)}>
+              <Icon source={focused ? 'cog' : 'cog-outline'} size={24} color={String(color)} />
+            </TabFocusMotion>
           ),
         }}
       />
@@ -176,7 +180,6 @@ const styles = StyleSheet.create({
   item: { minHeight: 64 },
   label: { marginTop: 2, fontSize: 10.5, fontWeight: '700' },
   scanSlot: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  regularIcon: { height: 30, alignItems: 'center', justifyContent: 'center' },
   scanOuter: { width: 76, height: 76, padding: 6, borderRadius: 23 },
   scanInner: {
     flex: 1,

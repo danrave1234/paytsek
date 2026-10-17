@@ -8,6 +8,7 @@ import { ProviderLogo } from '@/components/provider-logo';
 import { AppearMotion, FadeIn, ScreenEnter, ValueChangeMotion } from '@/components/motion';
 import { ErrorState, Loading, Notice, Screen, StateChip } from '@/components/ui';
 import { isApiError } from '@/lib/api';
+import { haptics } from '@/lib/haptics';
 import { lastSeenWithTime, manilaTime, peso } from '@/lib/format';
 import { useConfirmCandidate, useConfirmManually, useCorrectRecord, useRecord, useUnlink, useVoid } from '@/lib/queries';
 import { useIsOwner, useSession } from '@/lib/session';
@@ -104,8 +105,9 @@ export default function RecordDetail() {
 
   const onConfirm = async (eventId: string) => {
     setMsg(null);
-    try { await confirm.mutateAsync(eventId); setMsg({ kind: 'info', text: 'Payment evidence linked. The status was updated.' }); }
+    try { await confirm.mutateAsync(eventId); haptics.success(); setMsg({ kind: 'info', text: 'Payment evidence linked. The status was updated.' }); }
     catch (e) {
+      haptics.warning();
       if (isApiError(e, 'MATCH_CONFLICT')) setMsg({ kind: 'warning', text: 'That evidence was just linked to another record. The list has been refreshed.' });
       else if (isApiError(e, 'CONFIRMATION_REQUIRES_OWNER_APPROVAL')) setMsg({ kind: 'warning', text: (e as Error).message });
       else setMsg({ kind: 'error', text: (e as Error).message });
@@ -128,10 +130,11 @@ export default function RecordDetail() {
         });
         setMsg({ kind: 'info', text: 'Record updated.' });
       }
+      if (dialog === 'manual' || dialog === 'edit') haptics.success();
       setDialog(null);
       setReason('');
     }
-    catch (e) { setMsg({ kind: 'error', text: (e as Error).message }); }
+    catch (e) { haptics.warning(); setMsg({ kind: 'error', text: (e as Error).message }); }
   };
 
   const openEdit = () => {
