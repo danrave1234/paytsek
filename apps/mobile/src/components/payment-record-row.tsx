@@ -1,6 +1,7 @@
 import type { EvidenceState } from '@paytsek/contracts';
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, View } from 'react-native';
+import { useReducedMotion } from '@/components/motion';
 import { Icon, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { ProviderLogo } from '@/components/provider-logo';
 import { peso, stateLabel, transactionTime } from '@/lib/format';
@@ -33,6 +34,20 @@ export const PaymentRecordRow = React.memo(function PaymentRecordRow({
 }: Props) {
   const theme = useTheme();
   const evidence = stateColorsFor(theme.dark)[state];
+  const reduced = useReducedMotion();
+  const previousState = useRef(state);
+  const glow = useRef(new Animated.Value(0)).current;
+  // When wallet evidence lands on a row already on screen, wash it with the
+  // new state's colour once so the change is noticed (the label still says it).
+  useEffect(() => {
+    if (previousState.current === state) return;
+    previousState.current = state;
+    if (reduced) return;
+    glow.setValue(1);
+    const animation = Animated.timing(glow, { toValue: 0, duration: 1400, useNativeDriver: true });
+    animation.start();
+    return () => animation.stop();
+  }, [glow, reduced, state]);
   const content = (
     <View
       style={[
@@ -40,6 +55,7 @@ export const PaymentRecordRow = React.memo(function PaymentRecordRow({
         divider && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.outlineVariant },
       ]}
     >
+      <Animated.View pointerEvents="none" style={[styles.glow, { backgroundColor: evidence.bg, opacity: glow }]} />
       <Text variant="bodyMedium" style={[styles.time, { color: theme.colors.onSurfaceVariant }]}>
         {transactionTime(occurredAt, timezone)}
       </Text>
@@ -112,6 +128,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  glow: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: -SPACING.sm,
+    right: -SPACING.sm,
+    borderRadius: 12,
   },
   evidenceDot: {
     width: 7,

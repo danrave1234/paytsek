@@ -47,7 +47,9 @@
 - Support System, Light, and Dark modes from the same semantic tokens. Resolve the saved/system theme before hiding the native splash to prevent a color flash.
 - Prefer typography, spacing, alignment, dividers, and compact sheets over card grids. Avoid nested cards, pill-shaped everything, glass, decorative gradients, mascot loading screens, oversized greetings, and marketing copy inside operational screens.
 - Ask only for missing or uncertain required fields. If OCR confidently provides the amount, persist locally without a form whether or not notification listening is configured.
-- Use restrained motion for press feedback, capture settling, save confirmation, and evidence insertion. Honor the system reduced-motion setting and do not add a second animation framework for decoration.
+- Use restrained motion for press feedback, capture settling, save confirmation, and evidence insertion. Honor the system reduced-motion setting and do not add a second animation framework for decoration. Shared primitives live in `apps/mobile/src/components/motion.tsx` and `motion-effects.tsx` (React Native `Animated`); reuse them instead of one-off animations.
+- Interface icons are PayTsek's own glyph set in `apps/mobile/src/components/icons/`, drawn on a 24-unit grid with one stroke weight and routed through Paper's `settings.icon`, so string icon names render PayTsek glyphs. Add a glyph and alias for every new icon name; `glyphs.test.ts` fails on unmapped names. Brand marks such as Google keep their owners' artwork.
+- Haptics go through `apps/mobile/src/lib/haptics.ts` and are reserved for presses, selection changes, saved proofs and attention-needed states. They never block or fail a flow.
 - Status must never rely on color alone. Support large text, screen readers, keyboard/focus behavior where relevant, and 48 dp Android / 44 pt iOS targets.
 
 ## Time and offline rules

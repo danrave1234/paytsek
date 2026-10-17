@@ -13,6 +13,7 @@ import { EmptyState, ErrorState, Loading, Notice } from '@/components/ui';
 import { listDrafts, type Draft } from '@/lib/drafts';
 import { draftOccurredAt, providerLabel, recordOccurredAt } from '@/lib/feed';
 import { getFormatter } from '@/lib/format';
+import { haptics } from '@/lib/haptics';
 import { prefetchRecord, useDraftsSignal, useInfiniteRecords } from '@/lib/queries';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET } from '@/theme';
@@ -61,7 +62,7 @@ function FilterChip({ selected, onPress, style, children }: {
   const theme = useTheme();
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => { if (!selected) haptics.select(); onPress(); }}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       style={[style, { borderColor: selected ? theme.colors.primary : theme.colors.outlineVariant, backgroundColor: selected ? theme.colors.primaryContainer : theme.colors.surface }]}
@@ -230,7 +231,7 @@ export default function Records() {
                   {dayLabel(item.at, timezone)}
                 </Text>
               ) : null}
-              <AppearMotion itemKey={`${item.kind}.${item.id}`}>
+              <AppearMotion itemKey={`${item.kind}.${item.id}`} index={index}>
                 <PaymentRecordRow
                   amountCentavos={item.amount}
                   occurredAt={item.at}

@@ -4,7 +4,11 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { useColorScheme, View } from 'react-native';
 import { PaperProvider, useTheme } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
+import { renderPaperIcon } from '@/components/icons/pay-icon';
 import { darkTheme, lightTheme } from '@/theme';
+
+// Paper draws every string icon through this hook; see components/icons.
+const PAPER_SETTINGS = { icon: renderPaperIcon };
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 
@@ -52,7 +56,7 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeModeContext.Provider value={value}>
-      <PaperProvider theme={resolvedMode === 'dark' ? darkTheme : lightTheme}>
+      <PaperProvider theme={resolvedMode === 'dark' ? darkTheme : lightTheme} settings={PAPER_SETTINGS}>
         <ThemeSurface>{children}</ThemeSurface>
       </PaperProvider>
     </ThemeModeContext.Provider>

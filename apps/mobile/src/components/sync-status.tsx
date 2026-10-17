@@ -9,6 +9,7 @@ import { useSession } from '@/lib/session';
 import { EMPTY_SYNC_PROGRESS, SYNC_PROGRESS_KEY, syncWorkspace, type SyncProgress } from '@/lib/sync-coordinator';
 import { transactionTime } from '@/lib/format';
 import { SPACING, TOUCH_TARGET } from '@/theme';
+import { WorkingPulse } from './motion-feedback';
 import { Notice } from './ui';
 
 /** Sync is distinct from payment evidence. Every role sees only its own saved scans. */
@@ -55,7 +56,9 @@ export function SyncStatus({ drafts }: { drafts: Draft[] }) {
     <View style={{ gap: SPACING.xs }}>
       {(drafts.length > 0 || progress.lastSyncedAt) ? (
         <View style={{ minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm }} accessibilityLiveRegion="polite">
-          <Icon source={!online ? 'cloud-off-outline' : failed ? 'cloud-alert-outline' : drafts.length ? 'cloud-upload-outline' : 'cloud-check-outline'} size={20} color={theme.colors.onSurfaceVariant} />
+          <WorkingPulse active={online && progress.syncing}>
+            <Icon source={!online ? 'cloud-off-outline' : failed ? 'cloud-alert-outline' : drafts.length ? 'cloud-upload-outline' : 'cloud-check-outline'} size={20} color={theme.colors.onSurfaceVariant} />
+          </WorkingPulse>
           <View style={{ flex: 1 }}>
             <Text variant="bodySmall">{drafts.length ? `${drafts.length} saved on this phone${failed ? ` · ${failed} need attention` : ''}` : 'All saved scans synced'}</Text>
             <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>{!online ? 'Offline · reconnect to sync' : progress.syncing ? 'Uploading saved proofs…' : progress.lastSyncedAt ? `Last synced ${transactionTime(progress.lastSyncedAt, workspace?.timezone)}` : 'Ready to sync'}</Text>

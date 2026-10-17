@@ -2,10 +2,13 @@ import { EVIDENCE_STATE_LABELS, PROVIDER_LABELS, type EvidenceState, type Provid
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, Platform, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { Button, Dialog, Icon, Portal, Snackbar, Text, TouchableRipple, useTheme } from 'react-native-paper';
+import { Button, Dialog, Icon, Portal, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppUpdateDialog } from '@/components/app-update-dialog';
-import { AppearMotion, GrowBar, ValueChangeMotion } from '@/components/motion';
+import { AppearMotion } from '@/components/motion';
+import { animateNextLayout } from '@/components/motion-feedback';
+import { CountUpText, SaveToast, type Toast } from '@/components/motion-effects';
+import { RhythmChart } from '@/components/rhythm-chart';
 import { PaymentRecordRow } from '@/components/payment-record-row';
 import { SyncStatus } from '@/components/sync-status';
 import { Loading, Notice } from '@/components/ui';
@@ -13,42 +16,17 @@ import { OfflineError } from '@/lib/api';
 import { listDrafts, type Draft } from '@/lib/drafts';
 import { draftOccurredAt, providerLabel, recordOccurredAt } from '@/lib/feed';
 import { peso, workspaceDate } from '@/lib/format';
+import { haptics } from '@/lib/haptics';
+import { hourlyBuckets } from '@/lib/rhythm';
 import { todayWithPending, unacknowledgedDrafts } from '@/lib/record-totals';
 import { prefetchRecord, useDraftsSignal, useHome } from '@/lib/queries';
 import { useAppUpdate } from '@/lib/release-update';
 import { useSession } from '@/lib/session';
-import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET, successColorFor } from '@/theme';
+import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET } from '@/theme';
 
 type FeedItem =
   | { kind: 'local'; id: string; draft: Draft; at: string; source: string; state: EvidenceState; amount: number; onPress: () => void; onPressIn?: () => void }
   | { kind: 'remote'; id: string; record: RecordSummary; at: string; source: string; state: EvidenceState; amount: number; onPress: () => void; onPressIn?: () => void };
-
-function HourlyRhythm({ values }: { values: number[] }) {
-  const theme = useTheme();
-  const grouped = Array.from({ length: 12 }, (_, index) => (values[index * 2] ?? 0) + (values[index * 2 + 1] ?? 0));
-  const max = Math.max(...grouped, 1);
-  return (
-    <View accessible accessibilityLabel="Recorded amount by time of day" style={styles.rhythm}>
-      <View style={styles.bars} importantForAccessibility="no-hide-descendants">
-        {grouped.map((value, index) => {
-          const barHeight = value > 0 ? Math.max(7, Math.round((value / max) * 58)) : 3;
-          return (
-            <View key={index} style={styles.barSlot}>
-              <GrowBar height={barHeight} color={value > 0 ? theme.colors.primary : theme.colors.outlineVariant} />
-            </View>
-          );
-        })}
-      </View>
-      <View style={styles.axis} importantForAccessibility="no-hide-descendants">
-        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>12 AM</Text>
-        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>6 AM</Text>
-        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>12 PM</Text>
-        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>6 PM</Text>
-        <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>11 PM</Text>
-      </View>
-    </View>
-  );
-}
 
 export default function Today() {
   const theme = useTheme();
@@ -64,7 +42,7 @@ export default function Today() {
   const [localError, setLocalError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showUpdate, setShowUpdate] = useState(false);
-  const [savedToast, setSavedToast] = useState<string | null>(null);
+  const [savedToast, setSavedToast] = useState<Toast | null>(null);
   const [showCloseDay, setShowCloseDay] = useState(false);
   const [healthDismissed, setHealthDismissed] = useState(false);
 
@@ -121,7 +99,8 @@ export default function Today() {
   const today = todayWithPending(home.data, drafts, timezone);
   const totalCentavos = today.recordedCentavos;
   const recordCount = today.recordedCount;
-  const hourly = today.hourlyRecordedCentavos;
+  const hourlyBars = hourlyBuckets(today.hourlyRecordedCentavos);
+  const dismissToast = useCallback(() => setSavedToast(null), []);
 
   // Day-close summary: evidence breakdown from server today counts + drafts
   const closeDaySummary = (() => {
@@ -141,7 +120,8 @@ export default function Today() {
     const providerLabel = savedProvider && Object.hasOwn(PROVIDER_LABELS, savedProvider)
       ? PROVIDER_LABELS[savedProvider]
       : null;
-    setSavedToast(`${peso(savedAmount)}${providerLabel ? ` · ${providerLabel}` : ''} recorded · checking wallet evidence`);
+    setSavedToast({ id: Date.now(), text: `${peso(savedAmount)}${providerLabel ? ` · ${providerLabel}` : ''} recorded · checking wallet evidence` });
+    haptics.success();
     // Route parameters outlive a render. Clear this one immediately so the
     // confirmation cannot stick around or replay after later navigation.
     router.setParams({ savedAmount: '', savedProvider: '' });
@@ -189,7 +169,7 @@ export default function Today() {
             <Text variant="labelLarge" style={{ color: theme.colors.onErrorContainer, flex: 1 }}>
               {healthWarning}
             </Text>
-            <TouchableRipple onPress={() => setHealthDismissed(true)} accessibilityRole="button">
+            <TouchableRipple onPress={() => { animateNextLayout(); setHealthDismissed(true); }} accessibilityRole="button" accessibilityLabel="Dismiss listening warning">
               <View style={{ minHeight: TOUCH_TARGET, minWidth: TOUCH_TARGET, alignItems: 'center', justifyContent: 'center' }}>
                 <Icon source="close" size={18} color={theme.colors.onErrorContainer} />
               </View>
@@ -202,17 +182,16 @@ export default function Today() {
             {workspaceDate(new Date(), timezone)}
           </Text>
           <Text variant="headlineSmall" style={styles.heroTitle}>Recorded today</Text>
-          <ValueChangeMotion value={totalCentavos}>
-            <Text
-              variant="displayMedium"
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.72}
-              style={styles.total}
-            >
-              {peso(totalCentavos)}
-            </Text>
-          </ValueChangeMotion>
+          <CountUpText
+            value={totalCentavos}
+            format={peso}
+            animate={home.isSuccess}
+            variant="displayMedium"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
+            style={styles.total}
+          />
           <View style={styles.countRow}>
             <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant }}>
               {recordCount} {recordCount === 1 ? 'record' : 'records'}
@@ -224,7 +203,16 @@ export default function Today() {
               </View>
             ) : null}
           </View>
-          <HourlyRhythm values={hourly} />
+          <View style={styles.rhythm}>
+            <RhythmChart
+              bars={hourlyBars}
+              height={58}
+              axis={['12 AM', '6 AM', '12 PM', '6 PM', '11 PM']}
+              accessibilityLabel="Recorded amount by time of day"
+              peakLabel="Busiest"
+              emptyLabel="Your day's rhythm appears as you record"
+            />
+          </View>
           <TouchableRipple
             onPress={() => setShowCloseDay(true)}
             accessibilityRole="button"
@@ -255,7 +243,7 @@ export default function Today() {
 
         <View>
           {feed.map((item, index) => (
-            <AppearMotion key={`${item.kind}.${item.id}`} itemKey={`${item.kind}.${item.id}`}>
+            <AppearMotion key={`${item.kind}.${item.id}`} itemKey={`${item.kind}.${item.id}`} index={index}>
               <PaymentRecordRow
                 amountCentavos={item.amount}
                 occurredAt={item.at}
@@ -270,17 +258,7 @@ export default function Today() {
           ))}
         </View>
       </ScrollView>
-      <Snackbar
-        visible={savedToast !== null}
-        duration={3200}
-        onDismiss={() => setSavedToast(null)}
-        icon="check-circle-outline"
-        onIconPress={() => setSavedToast(null)}
-        style={{ marginBottom: TAB_BAR_CLEARANCE }}
-        accessibilityLiveRegion="polite"
-      >
-        {savedToast}
-      </Snackbar>
+      <SaveToast toast={savedToast} onDismiss={dismissToast} bottom={insets.bottom + TAB_BAR_CLEARANCE - SPACING.md} />
       <AppUpdateDialog update={update.data} visible={showUpdate} onDismiss={() => setShowUpdate(false)} />
       <Portal>
         <Dialog visible={showCloseDay} onDismiss={() => setShowCloseDay(false)}>
@@ -330,9 +308,6 @@ const styles = StyleSheet.create({
   countRow: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
   offline: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   rhythm: { marginTop: SPACING.lg },
-  bars: { height: 62, flexDirection: 'row', alignItems: 'flex-end', gap: 5 },
-  barSlot: { flex: 1, height: 62, justifyContent: 'flex-end' },
-  axis: { marginTop: 7, flexDirection: 'row', justifyContent: 'space-between' },
   sectionHeader: { minHeight: 58, marginTop: SPACING.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: StyleSheet.hairlineWidth },
   sectionTitle: { fontWeight: '800', letterSpacing: -0.2 },
   viewAll: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', gap: 4 },
