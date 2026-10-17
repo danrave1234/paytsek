@@ -5,7 +5,6 @@ import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { ActivityIndicator, Searchbar, Text, useTheme } from 'react-native-paper';
 import { ProviderLogo } from '@/components/provider-logo';
 import { AppearMotion } from '@/components/motion';
-import { animateNextLayout } from '@/components/motion-feedback';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PaymentRecordRow } from '@/components/payment-record-row';
 import { SyncStatus } from '@/components/sync-status';
@@ -136,7 +135,6 @@ export default function Records() {
 
   const hasFilters = Boolean(search || provider || evidenceFilter !== 'ALL');
   const clearFilters = () => {
-    animateNextLayout();
     setText('');
     setSearch('');
     setProvider(undefined);

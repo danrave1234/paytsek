@@ -1,4 +1,4 @@
-import type { CaptureOrigin, OcrResult, ReceiptFields } from '@paytsek/contracts';
+import { PROVIDER_LABELS, type CaptureOrigin, type OcrResult, type ReceiptFields } from '@paytsek/contracts';
 import { assessReceiptAmount, parseMoneyExact, type ReceiptExtraction } from '@paytsek/receipt-parsers';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
@@ -12,7 +12,6 @@ import { FadeIn } from '@/components/motion';
 import { ScanSweep } from '@/components/motion-effects';
 import { useShake } from '@/components/motion-feedback';
 import { ProviderLogo } from '@/components/provider-logo';
-import { PROVIDER_LABELS } from '@paytsek/contracts';
 import { haptics } from '@/lib/haptics';
 import { Notice, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
@@ -372,7 +371,7 @@ export default function Scan() {
             </View>
           ) : null}
           <Animated.View style={amountShake.style}>
-            <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={(value) => { setAmountText(value); if (error) setError(null); }} error={Boolean(error)} right={<TextInput.Affix text="₱" />} />
+            <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={(value) => { setAmountText(value); if (error) setError(null); }} right={<TextInput.Affix text="₱" />} />
           </Animated.View>
           {duplicateWarning ? <Notice kind="warning">{duplicateWarning}</Notice> : null}
           {error ? <Notice kind="error">{error}</Notice> : null}

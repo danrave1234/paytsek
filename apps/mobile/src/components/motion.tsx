@@ -56,7 +56,7 @@ export function AppearMotion({ itemKey, index = 0, children }: { itemKey: string
     translateY.setValue(8);
     // A short cascade for the first screenful reads as one settling list;
     // capping the delay keeps long pages from feeling slow.
-    const delay = Math.min(index, 7) * 35;
+    const delay = index < 8 ? index * 35 : 0;
     Animated.parallel([
       Animated.timing(opacity, { toValue: 1, duration: 220, delay, useNativeDriver: true }),
       Animated.timing(translateY, { toValue: 0, duration: 220, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
@@ -170,9 +170,9 @@ export function ScreenEnter({ children, duration = 200 }: { children: React.Reac
 }
 
 /**
- * Animate a bar height from 0 to the target once.
- * Uses non-native driver (layout animation) for height changes.
- * Renders a colored bar directly — the caller provides color and borderRadius.
+ * Bar that grows from 0 on mount, then glides to new heights (a refresh that
+ * rescales the chart must not collapse every bar). Height is a layout prop,
+ * so this uses the JS driver. The caller provides color and borderRadius.
  */
 export function GrowBar({ height, color, borderRadius = 3 }: { height: number; color: string; borderRadius?: number }) {
   const reduced = useReducedMotion();
@@ -180,8 +180,9 @@ export function GrowBar({ height, color, borderRadius = 3 }: { height: number; c
 
   useEffect(() => {
     if (reduced) { h.setValue(height); return; }
-    h.setValue(0);
-    Animated.timing(h, { toValue: height, duration: 220, useNativeDriver: false }).start();
+    const animation = Animated.timing(h, { toValue: height, duration: 220, useNativeDriver: false });
+    animation.start();
+    return () => animation.stop();
   }, [reduced, height, h]);
 
   return <Animated.View style={{ height: h, width: '100%', minWidth: 2, borderRadius, backgroundColor: color }} />;

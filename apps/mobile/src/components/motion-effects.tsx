@@ -18,14 +18,17 @@ const EASE_OUT = Easing.out(Easing.cubic);
  * re-renders per frame, never the screen around it. The first value is shown
  * as-is so opening a screen does not replay a count from zero.
  */
-export function CountUpText({ value, format, duration = 620, ...textProps }: {
+export function CountUpText({ value, format, duration = 620, animate = true, ...textProps }: {
   value: number;
   format: (value: number) => string;
   duration?: number;
+  /** False while the value is still a placeholder (e.g. before data loads): snap instead of rolling. */
+  animate?: boolean;
 } & Omit<React.ComponentProps<typeof Text>, 'children'>) {
   const reduced = useReducedMotion();
   const [shown, setShown] = useState(value);
   const animated = useRef(new Animated.Value(value)).current;
+  const wasAnimating = useRef(animate);
 
   useEffect(() => {
     const id = animated.addListener(({ value: next }) => setShown(Math.round(next)));
@@ -33,7 +36,11 @@ export function CountUpText({ value, format, duration = 620, ...textProps }: {
   }, [animated]);
 
   useEffect(() => {
-    if (reduced) {
+    // The first real value after a placeholder (animate false → true) snaps too:
+    // it arrives in the same render that enables animation.
+    const settled = wasAnimating.current;
+    wasAnimating.current = animate;
+    if (reduced || !animate || !settled) {
       animated.stopAnimation();
       animated.setValue(value);
       setShown(value);
@@ -42,7 +49,7 @@ export function CountUpText({ value, format, duration = 620, ...textProps }: {
     const animation = Animated.timing(animated, { toValue: value, duration, easing: EASE_OUT, useNativeDriver: false });
     animation.start(({ finished }) => { if (finished) setShown(value); });
     return () => animation.stop();
-  }, [animated, duration, reduced, value]);
+  }, [animate, animated, duration, reduced, value]);
 
   // Screen readers get the settled value, never an intermediate frame.
   return <Text {...textProps} accessibilityLabel={format(value)}>{format(shown)}</Text>;
@@ -115,12 +122,13 @@ const CHECK_LENGTH = 20;
 const RING_LENGTH = 2 * Math.PI * 9.5;
 
 /** A ring and check that draw themselves once: the save-confirmation mark. */
-export function DrawnCheck({ size = 28, color, play }: { size?: number; color: string; play: boolean }) {
+export function DrawnCheck({ size = 28, color, play }: { size?: number; color: string; play: number | null }) {
   const reduced = useReducedMotion();
   const ring = useRef(new Animated.Value(reduced ? 1 : 0)).current;
   const tick = useRef(new Animated.Value(reduced ? 1 : 0)).current;
+  // `play` is a token: each new non-null value draws the check again.
   useEffect(() => {
-    if (!play) return;
+    if (play === null) return;
     if (reduced) { ring.setValue(1); tick.setValue(1); return; }
     ring.setValue(0);
     tick.setValue(0);
@@ -148,15 +156,20 @@ export function DrawnCheck({ size = 28, color, play }: { size?: number; color: s
   );
 }
 
+export type Toast = { id: number; text: string };
+
 /**
  * Save confirmation that rises from above the dock, draws its check, and
- * leaves on its own. Announced politely for screen readers.
+ * leaves on its own. Each toast has its own id so two identical saves in a
+ * row still show (and announce) twice.
  */
-export function SaveToast({ message, onDismiss, bottom, duration = 3400 }: { message: string | null; onDismiss: () => void; bottom: number; duration?: number }) {
+export function SaveToast({ toast, onDismiss, bottom, duration = 3400 }: { toast: Toast | null; onDismiss: () => void; bottom: number; duration?: number }) {
   const theme = useTheme();
   const reduced = useReducedMotion();
   const progress = useRef(new Animated.Value(0)).current;
-  const [shown, setShown] = useState<string | null>(message);
+  const [shown, setShown] = useState<string | null>(toast?.text ?? null);
+  const message = toast?.text ?? null;
+  const toastId = toast?.id ?? null;
 
   useEffect(() => {
     if (!message) return;
@@ -167,7 +180,9 @@ export function SaveToast({ message, onDismiss, bottom, duration = 3400 }: { mes
     enter?.start();
     const timer = setTimeout(onDismiss, duration);
     return () => { clearTimeout(timer); enter?.stop(); };
-  }, [duration, message, onDismiss, progress, reduced]);
+    // Keyed on the toast id: a repeated identical message is still a new toast.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toastId]);
 
   useEffect(() => {
     if (message || !shown) return;
@@ -181,7 +196,6 @@ export function SaveToast({ message, onDismiss, bottom, duration = 3400 }: { mes
   const success = successColorFor(theme.dark);
   return (
     <Animated.View
-      accessibilityLiveRegion="polite"
       style={{
         position: 'absolute',
         left: SPACING.lg,
@@ -200,7 +214,7 @@ export function SaveToast({ message, onDismiss, bottom, duration = 3400 }: { mes
         accessibilityLabel={`${shown}. Dismiss`}
         style={[styles.toast, { backgroundColor: theme.colors.inverseSurface }]}
       >
-        <DrawnCheck play={Boolean(message)} color={theme.dark ? '#00664E' : success} />
+        <DrawnCheck play={toastId} color={theme.dark ? '#00664E' : success} />
         <Text variant="bodyMedium" style={{ color: theme.colors.inverseOnSurface, flex: 1, fontWeight: '600' }}>{shown}</Text>
       </Pressable>
     </Animated.View>

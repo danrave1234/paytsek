@@ -1,4 +1,4 @@
-import { EVIDENCE_STATE_LABELS, PROVIDER_LABELS, type AnalyticsRange, type AnalyticsSummary } from '@paytsek/contracts';
+import { EVIDENCE_STATE_LABELS, type AnalyticsRange } from '@paytsek/contracts';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Icon, Text, useTheme } from 'react-native-paper';

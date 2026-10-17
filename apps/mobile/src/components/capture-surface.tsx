@@ -20,7 +20,6 @@ function ApertureCorners({ locked, color, lockedColor }: { locked: boolean; colo
   const reduced = useReducedMotion();
   const progress = useRef(new Animated.Value(locked ? 1 : 0)).current;
   useEffect(() => {
-    if (locked) haptics.select();
     if (reduced) { progress.setValue(locked ? 1 : 0); return; }
     const animation = Animated.spring(progress, { toValue: locked ? 1 : 0, damping: 14, stiffness: 220, mass: 0.6, useNativeDriver: true });
     animation.start();

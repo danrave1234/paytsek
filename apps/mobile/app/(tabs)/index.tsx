@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppUpdateDialog } from '@/components/app-update-dialog';
 import { AppearMotion } from '@/components/motion';
 import { animateNextLayout } from '@/components/motion-feedback';
-import { CountUpText, SaveToast } from '@/components/motion-effects';
+import { CountUpText, SaveToast, type Toast } from '@/components/motion-effects';
 import { RhythmChart } from '@/components/rhythm-chart';
 import { PaymentRecordRow } from '@/components/payment-record-row';
 import { SyncStatus } from '@/components/sync-status';
@@ -42,7 +42,7 @@ export default function Today() {
   const [localError, setLocalError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showUpdate, setShowUpdate] = useState(false);
-  const [savedToast, setSavedToast] = useState<string | null>(null);
+  const [savedToast, setSavedToast] = useState<Toast | null>(null);
   const [showCloseDay, setShowCloseDay] = useState(false);
   const [healthDismissed, setHealthDismissed] = useState(false);
 
@@ -99,7 +99,7 @@ export default function Today() {
   const today = todayWithPending(home.data, drafts, timezone);
   const totalCentavos = today.recordedCentavos;
   const recordCount = today.recordedCount;
-  const hourlyBars = useMemo(() => hourlyBuckets(today.hourlyRecordedCentavos), [today.hourlyRecordedCentavos]);
+  const hourlyBars = hourlyBuckets(today.hourlyRecordedCentavos);
   const dismissToast = useCallback(() => setSavedToast(null), []);
 
   // Day-close summary: evidence breakdown from server today counts + drafts
@@ -120,7 +120,7 @@ export default function Today() {
     const providerLabel = savedProvider && Object.hasOwn(PROVIDER_LABELS, savedProvider)
       ? PROVIDER_LABELS[savedProvider]
       : null;
-    setSavedToast(`${peso(savedAmount)}${providerLabel ? ` · ${providerLabel}` : ''} recorded · checking wallet evidence`);
+    setSavedToast({ id: Date.now(), text: `${peso(savedAmount)}${providerLabel ? ` · ${providerLabel}` : ''} recorded · checking wallet evidence` });
     haptics.success();
     // Route parameters outlive a render. Clear this one immediately so the
     // confirmation cannot stick around or replay after later navigation.
@@ -185,6 +185,7 @@ export default function Today() {
           <CountUpText
             value={totalCentavos}
             format={peso}
+            animate={home.isSuccess}
             variant="displayMedium"
             numberOfLines={1}
             adjustsFontSizeToFit
@@ -257,7 +258,7 @@ export default function Today() {
           ))}
         </View>
       </ScrollView>
-      <SaveToast message={savedToast} onDismiss={dismissToast} bottom={insets.bottom + TAB_BAR_CLEARANCE - SPACING.md} />
+      <SaveToast toast={savedToast} onDismiss={dismissToast} bottom={insets.bottom + TAB_BAR_CLEARANCE - SPACING.md} />
       <AppUpdateDialog update={update.data} visible={showUpdate} onDismiss={() => setShowUpdate(false)} />
       <Portal>
         <Dialog visible={showCloseDay} onDismiss={() => setShowCloseDay(false)}>

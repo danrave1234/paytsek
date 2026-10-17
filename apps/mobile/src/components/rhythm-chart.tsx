@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, type AccessibilityActionEvent, type GestureResponderEvent } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { PanResponder, StyleSheet, View, type AccessibilityActionEvent } from 'react-native';
 import { Text, useTheme } from 'react-native-paper';
 import { haptics } from '@/lib/haptics';
 import { peso } from '@/lib/format';
@@ -19,40 +19,70 @@ type Props = {
   gap?: number;
 };
 
+/** Movement (dp) below which a touch is a tap, above which it is a drag. */
+const SLOP = 8;
+
 function countText(count: number | null) {
   return count === null ? '' : ` · ${count} ${count === 1 ? 'record' : 'records'}`;
 }
 
 /**
- * Recorded amount over time. Tap or drag across the bars to read one; the
- * readout otherwise shows the peak. Screen readers adjust it with swipe
- * up/down instead of hunting for thin bars.
+ * Recorded amount over time. Tap a bar to read it (tap again to clear) or
+ * drag sideways to scrub; vertical drags are left to the page scroll. The
+ * readout otherwise shows the peak. Screen readers swipe up/down to adjust.
  */
 export function RhythmChart({ bars, height, axis, accessibilityLabel, peakLabel, emptyLabel, gap = 5 }: Props) {
   const theme = useTheme();
-  const [selected, setSelected] = useState<number | null>(null);
+  const [picked, setPicked] = useState<number | null>(null);
+  const pickedRef = useRef<number | null>(null);
   const width = useRef(0);
+  const count = useRef(bars.length);
+  count.current = bars.length;
+  // Bars can change under a selection (e.g. 30 days → 12 weeks); never index past the end.
+  const selected = picked !== null && picked < bars.length ? picked : null;
   const max = Math.max(1, ...bars.map((bar) => bar.centavos));
   const peak = peakIndex(bars);
 
-  // A different period or day replaces the bars; drop a stale selection.
-  useEffect(() => { setSelected(null); }, [bars.length, bars[0]?.label]);
-
   const choose = (index: number | null) => {
-    if (index === null || index === selected) return;
-    setSelected(index);
+    if (index === pickedRef.current) return;
+    pickedRef.current = index;
+    setPicked(index);
     haptics.select();
   };
-  const fromTouch = (event: GestureResponderEvent) => choose(barAt(event.nativeEvent.locationX, width.current, bars.length));
+
+  const responder = useMemo(() => {
+    let dragging = false;
+    const at = (x: number) => barAt(x, width.current, count.current);
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => count.current > 0,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > SLOP && Math.abs(g.dx) > Math.abs(g.dy),
+      onPanResponderGrant: () => { dragging = false; },
+      onPanResponderMove: (event, g) => {
+        if (!dragging && Math.abs(g.dx) > SLOP && Math.abs(g.dx) > Math.abs(g.dy)) dragging = true;
+        if (dragging) choose(at(event.nativeEvent.locationX));
+      },
+      onPanResponderRelease: (event, g) => {
+        if (dragging || Math.abs(g.dx) > SLOP || Math.abs(g.dy) > SLOP) return;
+        const index = at(event.nativeEvent.locationX);
+        choose(index === pickedRef.current ? null : index);
+      },
+      // Once scrubbing sideways keep the gesture; otherwise yield to the page scroll.
+      onPanResponderTerminationRequest: () => !dragging,
+    });
+    // `choose` only touches refs and a stable setter, so one responder is enough.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const onAccessibilityAction = (event: AccessibilityActionEvent) => {
     const current = selected ?? peak ?? 0;
-    if (event.nativeEvent.actionName === 'increment') choose(Math.min(bars.length - 1, current + (selected === null ? 0 : 1)));
-    if (event.nativeEvent.actionName === 'decrement') choose(Math.max(0, current - (selected === null ? 0 : 1)));
+    const step = selected === null ? 0 : 1;
+    if (event.nativeEvent.actionName === 'increment') choose(Math.min(bars.length - 1, current + step));
+    if (event.nativeEvent.actionName === 'decrement') choose(Math.max(0, current - step));
   };
 
   const focus = selected ?? peak;
-  const focusBar = focus === null ? null : bars[focus];
-  const title = selected !== null ? focusBar!.label : focusBar ? `${peakLabel} · ${focusBar.label}` : emptyLabel;
+  const focusBar = focus === null ? null : bars[focus] ?? null;
+  const title = !focusBar ? emptyLabel : selected !== null ? focusBar.label : `${peakLabel} · ${focusBar.label}`;
   const amount = focusBar ? `${peso(focusBar.centavos)}${countText(focusBar.count)}` : '';
 
   return (
@@ -62,6 +92,7 @@ export function RhythmChart({ bars, height, axis, accessibilityLabel, peakLabel,
         <Text variant="labelLarge" numberOfLines={1} style={{ fontWeight: '800', fontVariant: ['tabular-nums'] }}>{amount}</Text>
       </View>
       <View
+        {...responder.panHandlers}
         accessible
         accessibilityRole="adjustable"
         accessibilityLabel={accessibilityLabel}
@@ -69,11 +100,6 @@ export function RhythmChart({ bars, height, axis, accessibilityLabel, peakLabel,
         accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
         onAccessibilityAction={onAccessibilityAction}
         onLayout={(event) => { width.current = event.nativeEvent.layout.width; }}
-        onStartShouldSetResponder={() => bars.length > 0}
-        onResponderGrant={fromTouch}
-        onResponderMove={fromTouch}
-        // Let the page scroll take over when the drag is clearly vertical.
-        onResponderTerminationRequest={() => true}
         style={[styles.bars, { height: height + 4, gap }]}
       >
         {bars.map((bar, index) => {

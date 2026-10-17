@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { Animated, Easing, LayoutAnimation, Platform, UIManager, type ViewStyle } from 'react-native';
+import { Animated, Easing, LayoutAnimation, type ViewStyle } from 'react-native';
 import { reducedMotionNow, useReducedMotion } from './motion';
 
 /**
@@ -7,11 +7,6 @@ import { reducedMotionNow, useReducedMotion } from './motion';
  * shakes when it cannot be accepted, staggered entrances and icon swaps.
  * All of them use React Native's built-in animation APIs.
  */
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  // No-op on the New Architecture; required on the legacy renderer.
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 const LAYOUT_EASE = LayoutAnimation.create(220, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity);
 
