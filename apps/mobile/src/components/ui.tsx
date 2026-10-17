@@ -61,7 +61,15 @@ export function Screen({
 }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const inner = <View style={[styles.screen, !scroll && tabbed && { paddingBottom: TAB_BAR_CLEARANCE }, style]}>{children}</View>;
+  // Scrolling pages settle in section by section. toArray keys are positional
+  // (null slots included), so a notice appearing later never remounts its
+  // siblings. Fixed layouts keep their children unwrapped for flex sizing.
+  const content = scroll
+    ? React.Children.toArray(children).map((child, index) => (
+      <RiseIn key={React.isValidElement(child) ? child.key : index} delay={Math.min(index, 6) * 45} distance={10}>{child}</RiseIn>
+    ))
+    : children;
+  const inner = <View style={[styles.screen, !scroll && tabbed && { paddingBottom: TAB_BAR_CLEARANCE }, style]}>{content}</View>;
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top', 'left', 'right']}>
       {scroll ? (

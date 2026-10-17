@@ -6,7 +6,7 @@ import { Button, Dialog, Icon, Portal, Text, TouchableRipple, useTheme } from 'r
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppUpdateDialog } from '@/components/app-update-dialog';
 import { AppearMotion } from '@/components/motion';
-import { animateNextLayout } from '@/components/motion-feedback';
+import { animateNextLayout, RiseIn } from '@/components/motion-feedback';
 import { CountUpText, SaveToast, type Toast } from '@/components/motion-effects';
 import { RhythmChart } from '@/components/rhythm-chart';
 import { PaymentRecordRow } from '@/components/payment-record-row';
@@ -152,6 +152,7 @@ export default function Today() {
         {localError ? <Notice kind="error">Saved scans could not be read. Pull to refresh; the files have not been removed.</Notice> : null}
         {home.error && !offline ? <Notice kind="error">Could not refresh server records. Pull to retry.</Notice> : null}
         {update.data ? (
+          <RiseIn distance={8}>
           <TouchableRipple onPress={() => setShowUpdate(true)} accessibilityRole="button">
             <View style={[styles.inlineNotice, { backgroundColor: theme.colors.primaryContainer }]}>
               <Icon source="download" size={19} color={theme.colors.primary} />
@@ -161,6 +162,7 @@ export default function Today() {
               <Icon source="chevron-right" size={18} color={theme.colors.primary} />
             </View>
           </TouchableRipple>
+          </RiseIn>
         ) : null}
 
         {healthWarning && !healthDismissed ? (

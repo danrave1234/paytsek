@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react';
-import { Animated, Easing, LayoutAnimation, type ViewStyle } from 'react-native';
+import { Animated, Easing, LayoutAnimation, type StyleProp, type ViewStyle } from 'react-native';
 import { reducedMotionNow, useReducedMotion } from './motion';
 
 /**
@@ -35,7 +35,14 @@ export function useShake(): { style: Animated.WithAnimatedObject<ViewStyle>; sha
 }
 
 /** Fade and rise on mount after `delay`, for composing a staggered first view. */
-export function RiseIn({ delay = 0, distance = 14, children, style }: { delay?: number; distance?: number; children: React.ReactNode; style?: ViewStyle }) {
+export function RiseIn({ delay = 0, distance = 14, scaleFrom = 1, children, style }: {
+  delay?: number;
+  distance?: number;
+  /** Start slightly larger (e.g. 1.04) to settle a just-captured image into place. */
+  scaleFrom?: number;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
   const reduced = useReducedMotion();
   const progress = useRef(new Animated.Value(reducedMotionNow() ? 1 : 0)).current;
   useEffect(() => {
@@ -48,7 +55,13 @@ export function RiseIn({ delay = 0, distance = 14, children, style }: { delay?: 
     <Animated.View
       style={[
         style,
-        { opacity: progress, transform: [{ translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [distance, 0] }) }] },
+        {
+          opacity: progress,
+          transform: [
+            { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [distance, 0] }) },
+            { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [scaleFrom, 1] }) },
+          ],
+        },
       ]}
     >
       {children}
