@@ -2,10 +2,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { Image, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, Image, KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Button, HelperText, Text, TextInput, TouchableRipple, useTheme } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
+import { animateNextLayout, RiseIn, useShake } from '@/components/motion-feedback';
 import { Notice } from '@/components/ui';
 import { finishOAuth, OAUTH_REDIRECT_URL } from '@/lib/oauth';
 import { supabase } from '@/lib/supabase';
@@ -26,6 +27,7 @@ export default function SignIn() {
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState<{ kind: 'info' | 'error'; text: string } | null>(null);
+  const formShake = useShake();
   const { control, handleSubmit, getValues, formState: { errors } } = useForm<Form>({
     resolver: zodResolver(Form),
     defaultValues: { email: '', password: '' },
@@ -54,6 +56,7 @@ export default function SignIn() {
       }
       router.replace('/workspaces');
     } catch {
+      formShake.shake();
       setMessage({
         kind: 'error',
         text: mode === 'signin'
@@ -63,7 +66,7 @@ export default function SignIn() {
     } finally {
       setBusy(false);
     }
-  });
+  }, () => formShake.shake());
 
   const reset = async () => {
     const email = getValues('email').trim();
@@ -118,19 +121,19 @@ export default function SignIn() {
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.brand}>
+          <RiseIn style={styles.brand}>
             <Image source={require('../../assets/icon.png')} style={styles.logo} resizeMode="contain" />
             <Text variant="headlineMedium" style={[styles.brandName, { color: theme.colors.primary }]}>PayTsek</Text>
-          </View>
+          </RiseIn>
 
-          <View style={styles.intro}>
+          <RiseIn delay={90} style={styles.intro}>
             <Text variant="headlineLarge" style={styles.title}>Record QR payments in seconds.</Text>
             <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant }}>
               Scan the proof. Keep the record. Check wallet evidence when it is available.
             </Text>
-          </View>
+          </RiseIn>
 
-          <View style={styles.actions}>
+          <RiseIn delay={180} style={styles.actions}>
             <Button
               mode="contained"
               icon="google"
@@ -146,16 +149,16 @@ export default function SignIn() {
               mode="outlined"
               icon="email-outline"
               disabled={busy}
-              onPress={() => setEmailOpen((open) => !open)}
+              onPress={() => { animateNextLayout(); setEmailOpen((open) => !open); }}
               contentStyle={styles.actionContent}
               style={styles.secondaryAction}
             >
               {emailOpen ? 'Hide email' : 'Continue with email'}
             </Button>
-          </View>
+          </RiseIn>
 
           {emailOpen ? (
-            <View style={[styles.emailPanel, { borderTopColor: theme.colors.outlineVariant }]}>
+            <Animated.View style={[styles.emailPanel, { borderTopColor: theme.colors.outlineVariant }, formShake.style]}>
               <View style={styles.modeRow} accessibilityRole="tablist">
                 {(['signin', 'signup'] as const).map((item) => (
                   <TouchableRipple
@@ -217,7 +220,7 @@ export default function SignIn() {
                 {mode === 'signin' ? 'Sign in' : 'Create account'}
               </Button>
               {mode === 'signin' ? <Button mode="text" compact disabled={busy} onPress={() => void reset()}>Forgot password?</Button> : null}
-            </View>
+            </Animated.View>
           ) : message ? <Notice kind={message.kind}>{message.text}</Notice> : null}
 
           <Text variant="bodySmall" style={[styles.legal, { color: theme.colors.onSurfaceVariant }]}>

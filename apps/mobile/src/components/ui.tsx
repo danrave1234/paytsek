@@ -1,10 +1,11 @@
 import type { EvidenceState } from '@paytsek/contracts';
-import React, { useEffect, useRef } from 'react';
-import { Animated, ScrollView, StyleSheet, View, type DimensionValue, type ViewStyle } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, ScrollView, StyleSheet, View, type DimensionValue, type ViewStyle } from 'react-native';
 import { ActivityIndicator, Button, Icon, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { stateLabel } from '@/lib/format';
 import { useReducedMotion, FadeIn, PressScale } from './motion';
+import { RiseIn } from './motion-feedback';
 import { RADIUS, SHADOW_COLOR, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET, stateColorsFor } from '@/theme';
 
 /** True when Paper is running the dark scheme; drives the state palette. */
@@ -15,17 +16,30 @@ function useIsDark() {
 /** Evidence-state badge: colour + icon + text (never colour alone). */
 export function StateChip({ state, compact = false }: { state: EvidenceState; compact?: boolean }) {
   const c = stateColorsFor(useIsDark())[state];
+  const reduced = useReducedMotion();
+  const previous = useRef(state);
+  const pop = useRef(new Animated.Value(1)).current;
+  // New evidence settles into place instead of silently swapping labels.
+  useEffect(() => {
+    if (previous.current === state) return;
+    previous.current = state;
+    if (reduced) return;
+    pop.setValue(0.82);
+    const animation = Animated.spring(pop, { toValue: 1, damping: 11, stiffness: 260, mass: 0.6, useNativeDriver: true });
+    animation.start();
+    return () => animation.stop();
+  }, [pop, reduced, state]);
   return (
-    <View
+    <Animated.View
       accessibilityRole="text"
       accessibilityLabel={`Status: ${stateLabel(state)}`}
-      style={[styles.chip, { backgroundColor: c.bg }, compact && styles.chipCompact]}
+      style={[styles.chip, { backgroundColor: c.bg, transform: [{ scale: pop }] }, compact && styles.chipCompact]}
     >
       <Icon source={c.icon} size={compact ? 14 : 16} color={c.fg} />
       <Text variant={compact ? 'labelSmall' : 'labelMedium'} style={{ color: c.fg, fontWeight: '600' }}>
         {stateLabel(state)}
       </Text>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -161,24 +175,29 @@ function SkeletonBlock({ width = '100%', height, radius = RADIUS.sm }: { width?:
 }
 
 /**
- * Content-shaped loading state. A single native opacity animation keeps the
- * page feeling alive without the visual noise and layout jump of a spinner.
+ * Content-shaped loading state. A soft highlight travels across the shapes
+ * (one native transform), which reads as "loading" without a spinner's
+ * visual noise or layout jump.
  */
 export function Loading({ label = 'Loading…', variant = 'list' }: { label?: string; variant?: LoadingVariant }) {
-  const pulse = useRef(new Animated.Value(0.48)).current;
+  const theme = useTheme();
+  const sweep = useRef(new Animated.Value(0)).current;
+  const [sceneWidth, setSceneWidth] = useState(0);
   const reducedMotion = useReducedMotion();
+  const band = Math.max(80, sceneWidth * 0.4);
 
   useEffect(() => {
-    if (variant === 'progress' || reducedMotion) { pulse.setValue(0.65); return; }
+    if (variant === 'progress' || reducedMotion || sceneWidth <= 0) { sweep.setValue(0); return; }
     const animation = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.9, duration: 720, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0.48, duration: 720, useNativeDriver: true }),
+        Animated.timing(sweep, { toValue: 1, duration: 1150, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.delay(250),
+        Animated.timing(sweep, { toValue: 0, duration: 0, useNativeDriver: true }),
       ]),
     );
     animation.start();
     return () => animation.stop();
-  }, [pulse, variant, reducedMotion]);
+  }, [sweep, variant, reducedMotion, sceneWidth]);
 
   if (variant === 'progress') {
     return (
@@ -191,7 +210,12 @@ export function Loading({ label = 'Loading…', variant = 'list' }: { label?: st
 
   return (
     <View style={styles.skeletonScene} accessible accessibilityState={{ busy: true }} accessibilityLiveRegion="polite" accessibilityLabel={label}>
-      <Animated.View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.skeletonScene, { opacity: pulse }]}>
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        onLayout={(event) => setSceneWidth(event.nativeEvent.layout.width)}
+        style={[styles.skeletonScene, { opacity: 0.8, overflow: 'hidden' }]}
+      >
         {variant === 'dashboard' ? (
           <>
             <SkeletonBlock width="56%" height={28} />
@@ -236,19 +260,40 @@ export function Loading({ label = 'Loading…', variant = 'list' }: { label?: st
             ))}
           </>
         )}
-      </Animated.View>
+        {!reducedMotion && sceneWidth > 0 ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.shimmer,
+              {
+                width: band,
+                backgroundColor: theme.colors.background,
+                transform: [{ translateX: sweep.interpolate({ inputRange: [0, 1], outputRange: [-band, sceneWidth] }) }, { skewX: '-14deg' }],
+              },
+            ]}
+          />
+        ) : null}
+      </View>
     </View>
   );
 }
 
 export function EmptyState({ icon, title, body, action }: { icon: string; title: string; body?: string; action?: { label: string; onPress: () => void } }) {
   const theme = useTheme();
+  const reduced = useReducedMotion();
+  const pop = useRef(new Animated.Value(reduced ? 1 : 0.6)).current;
+  useEffect(() => {
+    if (reduced) { pop.setValue(1); return; }
+    const animation = Animated.spring(pop, { toValue: 1, damping: 9, stiffness: 180, mass: 0.7, useNativeDriver: true });
+    animation.start();
+    return () => animation.stop();
+  }, [pop, reduced]);
   return (
     <FadeIn>
       <View style={styles.center}>
-        <View style={styles.emptyIcon}>
-          <Icon source={icon} size={32} color={theme.colors.onSurfaceVariant} />
-        </View>
+        <Animated.View style={[styles.emptyIcon, { backgroundColor: theme.colors.surfaceVariant, transform: [{ scale: pop }] }]}>
+          <Icon source={icon} size={30} color={theme.colors.onSurfaceVariant} />
+        </Animated.View>
         <Text variant="titleMedium" style={{ marginTop: SPACING.lg, textAlign: 'center', fontWeight: '600' }}>{title}</Text>
         {body ? (
           <Text variant="bodyMedium" style={{ marginTop: SPACING.xs + 2, textAlign: 'center', color: theme.colors.onSurfaceVariant, maxWidth: 320 }}>
@@ -277,12 +322,12 @@ export function Notice({ kind, children }: { kind: 'info' | 'warning' | 'error';
   const fg = kind === 'error' ? theme.colors.onErrorContainer : kind === 'warning' ? theme.colors.onTertiaryContainer : theme.colors.onSecondaryContainer;
   const icon = kind === 'error' ? 'alert-octagon-outline' : kind === 'warning' ? 'alert-outline' : 'information-outline';
   return (
-    <FadeIn>
+    <RiseIn distance={6}>
       <View style={[styles.notice, { backgroundColor: bg }]} accessibilityRole="alert">
         <Icon source={icon} size={18} color={fg} />
         <Text variant="bodySmall" style={{ color: fg, flex: 1, lineHeight: 18 }}>{children}</Text>
       </View>
-    </FadeIn>
+    </RiseIn>
   );
 }
 
@@ -301,12 +346,13 @@ const styles = StyleSheet.create({
   chipCompact: { paddingHorizontal: 8, paddingVertical: 3 },
   screen: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.md, gap: SPACING.md },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: SPACING.xl, minHeight: 220 },
-  emptyIcon: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
+  emptyIcon: { width: 64, height: 64, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   notice: { flexDirection: 'row', gap: 10, alignItems: 'center', padding: SPACING.md, borderRadius: RADIUS.md },
   group: { borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden', shadowColor: SHADOW_COLOR, shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.md, paddingHorizontal: SPACING.lg, minHeight: TOUCH_TARGET },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: SPACING.md, paddingVertical: 6 },
   skeletonScene: { width: '100%', gap: SPACING.md },
+  shimmer: { position: 'absolute', top: -20, bottom: -20, left: 0, opacity: 0.45 },
   skeletonHeading: { flexDirection: 'row', alignItems: 'center', gap: SPACING.lg },
   skeletonRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: SPACING.md, padding: SPACING.md },
 });

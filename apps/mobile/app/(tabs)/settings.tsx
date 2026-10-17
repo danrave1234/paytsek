@@ -3,8 +3,9 @@ import React, { useEffect, useState } from 'react';
 import { clearInactiveCache } from '@/lib/queries';
 import { pruneSynced } from '@/lib/drafts';
 import { Linking, Platform, View } from 'react-native';
-import { IconButton, Portal, Snackbar, Switch, Text, useTheme } from 'react-native-paper';
+import { Icon, IconButton, Portal, Snackbar, Switch, Text, useTheme } from 'react-native-paper';
 import { AppUpdateDialog } from '@/components/app-update-dialog';
+import { SwapMotion } from '@/components/motion-feedback';
 import { Group, ListRow, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
 import { useAppUpdate } from '@/lib/release-update';
@@ -57,7 +58,11 @@ export default function Settings() {
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <ScreenTitle title="Settings" />
         <IconButton
-          icon={mode === 'system' ? 'theme-light-dark' : mode === 'light' ? 'weather-sunny' : 'weather-night'}
+          icon={({ size, color }) => (
+            <SwapMotion swapKey={mode}>
+              <Icon source={mode === 'system' ? 'theme-light-dark' : mode === 'light' ? 'weather-sunny' : 'weather-night'} size={size} color={color} />
+            </SwapMotion>
+          )}
           mode="contained-tonal"
           size={20}
           onPress={() => void setMode(nextMode)}

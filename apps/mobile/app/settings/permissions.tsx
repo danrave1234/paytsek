@@ -208,7 +208,7 @@ export default function PermissionsChecklist() {
                 />
 
                 <CheckRow
-                  icon="cellbase"
+                  icon="cellphone-link"
                   label="Collector configured"
                   subtitle={isConfigured
                     ? 'Listening is set up on this phone'

@@ -1,12 +1,26 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated } from 'react-native';
+import { AccessibilityInfo, Animated, Easing } from 'react-native';
+
+// The system setting is read asynchronously. Remember the last answer so a
+// screen mounted later starts with the real value instead of assuming
+// reduced motion for one frame (which skipped entrances and caused flashes).
+let knownReducedMotion: boolean | null = null;
+
+/** Last known system setting, for imperative animations outside render. Unknown counts as reduced. */
+export function reducedMotionNow() {
+  return knownReducedMotion ?? true;
+}
 
 export function useReducedMotion() {
-  const [reduced, setReduced] = useState(true);
+  const [reduced, setReduced] = useState(knownReducedMotion ?? true);
   useEffect(() => {
     let mounted = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then((value) => { if (mounted) setReduced(value); });
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduced);
+    const update = (value: boolean) => {
+      knownReducedMotion = value;
+      if (mounted) setReduced(value);
+    };
+    void AccessibilityInfo.isReduceMotionEnabled().then(update);
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', update);
     return () => { mounted = false; subscription.remove(); };
   }, []);
   return reduced;
@@ -28,7 +42,7 @@ export function SelectionMotion({ selected, children }: { selected: boolean; chi
  * Fade + slight rise when a list item first appears. Tracks which keys have
  * already animated so the initial page load does not cascade-animate every row.
  */
-export function AppearMotion({ itemKey, children }: { itemKey: string; children: React.ReactNode }) {
+export function AppearMotion({ itemKey, index = 0, children }: { itemKey: string; index?: number; children: React.ReactNode }) {
   const reduced = useReducedMotion();
   const seen = useRef(new Set<string>()).current;
   const opacity = useRef(new Animated.Value(1)).current;
@@ -40,10 +54,15 @@ export function AppearMotion({ itemKey, children }: { itemKey: string; children:
     if (reduced) return;
     opacity.setValue(0);
     translateY.setValue(8);
+    // A short cascade for the first screenful reads as one settling list;
+    // capping the delay keeps long pages from feeling slow.
+    const delay = index < 8 ? index * 35 : 0;
     Animated.parallel([
-      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: 220, delay, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: 0, duration: 220, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
+    // index only staggers the first appearance; later changes must not replay it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemKey, reduced, opacity, translateY]);
 
   return (
@@ -151,9 +170,9 @@ export function ScreenEnter({ children, duration = 200 }: { children: React.Reac
 }
 
 /**
- * Animate a bar height from 0 to the target once.
- * Uses non-native driver (layout animation) for height changes.
- * Renders a colored bar directly — the caller provides color and borderRadius.
+ * Bar that grows from 0 on mount, then glides to new heights (a refresh that
+ * rescales the chart must not collapse every bar). Height is a layout prop,
+ * so this uses the JS driver. The caller provides color and borderRadius.
  */
 export function GrowBar({ height, color, borderRadius = 3 }: { height: number; color: string; borderRadius?: number }) {
   const reduced = useReducedMotion();
@@ -161,8 +180,9 @@ export function GrowBar({ height, color, borderRadius = 3 }: { height: number; c
 
   useEffect(() => {
     if (reduced) { h.setValue(height); return; }
-    h.setValue(0);
-    Animated.timing(h, { toValue: height, duration: 220, useNativeDriver: false }).start();
+    const animation = Animated.timing(h, { toValue: height, duration: 220, useNativeDriver: false });
+    animation.start();
+    return () => animation.stop();
   }, [reduced, height, h]);
 
   return <Animated.View style={{ height: h, width: '100%', minWidth: 2, borderRadius, backgroundColor: color }} />;
