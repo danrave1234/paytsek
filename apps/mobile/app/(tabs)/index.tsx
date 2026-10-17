@@ -6,6 +6,7 @@ import { Button, Dialog, Icon, Portal, Text, TouchableRipple, useTheme } from 'r
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppUpdateDialog } from '@/components/app-update-dialog';
 import { AppearMotion } from '@/components/motion';
+import { animateNextLayout } from '@/components/motion-feedback';
 import { CountUpText, SaveToast } from '@/components/motion-effects';
 import { RhythmChart } from '@/components/rhythm-chart';
 import { PaymentRecordRow } from '@/components/payment-record-row';
@@ -168,7 +169,7 @@ export default function Today() {
             <Text variant="labelLarge" style={{ color: theme.colors.onErrorContainer, flex: 1 }}>
               {healthWarning}
             </Text>
-            <TouchableRipple onPress={() => setHealthDismissed(true)} accessibilityRole="button">
+            <TouchableRipple onPress={() => { animateNextLayout(); setHealthDismissed(true); }} accessibilityRole="button" accessibilityLabel="Dismiss listening warning">
               <View style={{ minHeight: TOUCH_TARGET, minWidth: TOUCH_TARGET, alignItems: 'center', justifyContent: 'center' }}>
                 <Icon source="close" size={18} color={theme.colors.onErrorContainer} />
               </View>

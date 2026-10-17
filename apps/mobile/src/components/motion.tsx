@@ -6,6 +6,11 @@ import { AccessibilityInfo, Animated, Easing } from 'react-native';
 // reduced motion for one frame (which skipped entrances and caused flashes).
 let knownReducedMotion: boolean | null = null;
 
+/** Last known system setting, for imperative animations outside render. Unknown counts as reduced. */
+export function reducedMotionNow() {
+  return knownReducedMotion ?? true;
+}
+
 export function useReducedMotion() {
   const [reduced, setReduced] = useState(knownReducedMotion ?? true);
   useEffect(() => {

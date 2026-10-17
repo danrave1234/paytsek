@@ -4,12 +4,15 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Image, Platform, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, AppState, Image, Platform, StyleSheet, View } from 'react-native';
 import { Button, IconButton, Text, TextInput, useTheme } from 'react-native-paper';
 import { ReceiptOcr } from 'receipt-ocr';
 import { CaptureSurface } from '@/components/capture-surface';
 import { FadeIn } from '@/components/motion';
 import { ScanSweep } from '@/components/motion-effects';
+import { useShake } from '@/components/motion-feedback';
+import { ProviderLogo } from '@/components/provider-logo';
+import { PROVIDER_LABELS } from '@paytsek/contracts';
 import { haptics } from '@/lib/haptics';
 import { Notice, Screen, ScreenTitle } from '@/components/ui';
 import { APP_VERSION } from '@/lib/env';
@@ -60,6 +63,7 @@ export default function Scan() {
   const resetOnNextFocus = useRef(false);
   const handledShare = useRef<string | null>(null);
   const temporaryImage = useRef<string | null>(null);
+  const amountShake = useShake();
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -306,7 +310,11 @@ export default function Scan() {
   const saveReview = async () => {
     if (!fields || !extraction || !imageUri || busy) return;
     const amount = parseMoneyExact(amountText.trim());
-    if (!amount) return setError('Check the amount.');
+    if (!amount) {
+      amountShake.shake();
+      haptics.warning();
+      return setError('Check the amount.');
+    }
     const corrected: ReceiptFields = { ...fields, amountCentavos: amount.centavos, currency: 'PHP' };
     setBusy(true);
     try {
@@ -356,7 +364,16 @@ export default function Scan() {
           {imageUri ? <Image source={{ uri: imageUri }} style={styles.preview} resizeMode="contain" accessibilityLabel="Captured payment proof" /> : null}
           <Notice kind="info">We'll save the proof now. You can edit details later.</Notice>
           {amountWarning ? <Notice kind="warning">{amountWarning}</Notice> : null}
-          <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} right={<TextInput.Affix text="₱" />} />
+          {fields.receiptProvider ? (
+            <View style={styles.detected} accessible accessibilityLabel={`Read from proof: ${PROVIDER_LABELS[fields.receiptProvider]}`}>
+              <ProviderLogo provider={fields.receiptProvider} size={28} />
+              <Text variant="bodyMedium" style={{ flex: 1 }}>{PROVIDER_LABELS[fields.receiptProvider]}</Text>
+              <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Read from proof</Text>
+            </View>
+          ) : null}
+          <Animated.View style={amountShake.style}>
+            <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={(value) => { setAmountText(value); if (error) setError(null); }} error={Boolean(error)} right={<TextInput.Affix text="₱" />} />
+          </Animated.View>
           {duplicateWarning ? <Notice kind="warning">{duplicateWarning}</Notice> : null}
           {error ? <Notice kind="error">{error}</Notice> : null}
           <Button mode="contained" onPress={() => void saveReview()} disabled={busy} loading={busy} style={{ minHeight: TOUCH_TARGET }}>Save proof</Button>
@@ -417,6 +434,7 @@ const styles = StyleSheet.create({
   processingImage: { width: '100%', height: '82%', borderRadius: RADIUS.lg, backgroundColor: '#000000', overflow: 'hidden' },
   processingIndicator: { position: 'absolute', bottom: 128, minHeight: 48, borderRadius: RADIUS.full, paddingHorizontal: SPACING.lg, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm },
   preview: { width: '100%', height: 210, borderRadius: RADIUS.lg, backgroundColor: '#000000' },
+  detected: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
   sourceHealth: { minHeight: 24, flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: -SPACING.xs },
   healthDot: { width: 8, height: 8, borderRadius: 4 },
 });

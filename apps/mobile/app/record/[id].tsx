@@ -6,6 +6,7 @@ import { BackHandler, Image, Pressable, StyleSheet, View } from 'react-native';
 import { Button, Chip, Dialog, Icon, IconButton, Portal, Snackbar, Text, TextInput, TouchableRipple, useTheme } from 'react-native-paper';
 import { ProviderLogo } from '@/components/provider-logo';
 import { AppearMotion, FadeIn, ScreenEnter, ValueChangeMotion } from '@/components/motion';
+import { animateNextLayout } from '@/components/motion-feedback';
 import { ErrorState, Loading, Notice, Screen, StateChip } from '@/components/ui';
 import { isApiError } from '@/lib/api';
 import { haptics } from '@/lib/haptics';
@@ -175,7 +176,7 @@ export default function RecordDetail() {
 
       {pinnedProofUrl.current ? (
         <Pressable
-          onPress={() => setProofExpanded((current) => !current)}
+          onPress={() => { animateNextLayout(); setProofExpanded((current) => !current); }}
           accessibilityRole="button"
           accessibilityLabel={proofExpanded ? 'Collapse payment proof' : 'Expand payment proof'}
           style={[styles.proofBand, { borderTopColor: theme.colors.outlineVariant, borderBottomColor: theme.colors.outlineVariant }]}
@@ -232,7 +233,7 @@ export default function RecordDetail() {
       ) : null}
 
       <SectionTitle>History</SectionTitle>
-      <TouchableRipple onPress={() => setHistoryOpen((current) => !current)} accessibilityRole="button" accessibilityState={{ expanded: historyOpen }}>
+      <TouchableRipple onPress={() => { animateNextLayout(); setHistoryOpen((current) => !current); }} accessibilityRole="button" accessibilityState={{ expanded: historyOpen }}>
         <View style={styles.historyToggle}>
           <Icon source="history" size={20} color={theme.colors.onSurfaceVariant} />
           <Text variant="bodyMedium" style={{ flex: 1 }}>{r.history.length} recorded event{r.history.length === 1 ? '' : 's'}</Text>
