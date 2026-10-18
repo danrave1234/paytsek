@@ -34,6 +34,29 @@ describe('camera auto-capture gate', () => {
     expect(result.eligible).toBe(true);
     expect(result.fingerprint).toContain('GCASH|15000');
   });
+
+  it('ignores screens that only look like payments', () => {
+    const cases = [
+      // A seller's QR standee: brand, "Scan to Pay", a price, no reference or time.
+      ['GCash', 'Scan to Pay', 'QR Ph', 'Payment successful', 'Amount', 'PHP 150.00'],
+      // An order screen with a date but no reference number.
+      ['GCash', 'Order completed', 'Amount', 'PHP 150.00', 'Oct 1, 2026 9:00 AM'],
+      // A proof-like screen with a reference but only a date, no time.
+      ['GCash', 'Payment successful', 'Amount', 'PHP 150.00', 'Reference No. 1234567890123', 'Oct 1, 2026'],
+    ].map((lines) => lines.join('\n'));
+    for (const text of cases) {
+      const result = assessReceiptForAutoCapture(extractReceiptFields(text));
+      expect(result.eligible, text).toBe(false);
+      expect(result.reason, text).toBe('TOO_LITTLE_EVIDENCE');
+    }
+  });
+
+  it('still auto-captures every successful sample proof layout', () => {
+    const { cases } = loadJson<{ cases: Array<{ id: string; ocrText: string }> }>('receipts/receipts.json');
+    const successful = cases.filter((item) => /success/.test(item.id));
+    expect(successful.length).toBeGreaterThan(0);
+    for (const item of successful) expect(assessReceiptForAutoCapture(extractReceiptFields(item.ocrText)).eligible, item.id).toBe(true);
+  });
 });
 
 describe('money', () => {
