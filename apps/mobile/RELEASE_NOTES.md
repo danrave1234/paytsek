@@ -7,6 +7,8 @@
 - Tap or drag the charts on Today and Analytics to read any hour, day or week.
 - Light haptic feedback for the shutter, tabs, filters and saved proofs.
 - The tab bar no longer shows a press circle over neighbouring tabs.
+- "Allow camera" on the Scan screen works on a fresh install again, and PayTsek notices when you allow the camera from Android Settings.
+- Sign-in and sign-up now say what went wrong, for example when an email already has an account.
 - Deleting your account now also deletes your store's records when you are its only owner. The confirmation tells you before anything is removed.
 
 PayTsek remains free beta. A Strong match is supplementary notification evidence,

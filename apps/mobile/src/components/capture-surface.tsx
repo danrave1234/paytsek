@@ -60,7 +60,8 @@ export function CaptureSurface({ granted, canAskAgain, active, ready, busy, onPe
   const theme = useTheme();
   const captureDisabled = busy || !granted || !ready || !active;
 
-  return <View style={[styles.surface, { backgroundColor: granted ? '#101B2C' : theme.colors.surface }]}>
+  // Always the dark camera surface: its controls are white in both states.
+  return <View style={styles.surface}>
     {granted && active ? <CameraView ref={cameraRef} onCameraReady={onReady} enableTorch={torch} facing="back" style={StyleSheet.absoluteFill} /> : null}
     {granted ? (
       <>
@@ -78,11 +79,13 @@ export function CaptureSurface({ granted, canAskAgain, active, ready, busy, onPe
         <Icon source={torch ? 'flash' : 'flash-off'} size={22} color="#FFFFFF" />
       </Pressable>
     </View>
-    <View style={styles.center} pointerEvents="none">
+    {/* box-none: the overlay itself ignores touches but its permission button must not.
+        ("none" would block every child, so "Allow camera" could never be tapped.) */}
+    <View style={styles.center} pointerEvents="box-none">
       {!granted ? (
-        <View style={styles.permission} pointerEvents="auto">
-          <Icon source="camera-outline" size={48} color={theme.colors.primary} />
-          <Text variant="titleMedium">Camera access</Text>
+        <View style={styles.permission}>
+          <Icon source="camera-outline" size={48} color="#8DB4FF" />
+          <Text variant="titleMedium" style={{ color: '#FFFFFF' }}>Camera access</Text>
           <Button mode="contained" onPress={canAskAgain ? onPermission : () => void Linking.openSettings()}>{canAskAgain ? 'Allow camera' : 'Open settings'}</Button>
         </View>
       ) : null}
@@ -123,9 +126,10 @@ const styles = StyleSheet.create({
   shutter: { width: 84, height: 84, borderRadius: 42, borderWidth: 2, borderColor: '#FFFFFF99', padding: 5 },
   shutterInner: { flex: 1, borderRadius: 40, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   corner: { position: 'absolute', width: 34, height: 34, zIndex: 2 },
-  sweepFrame: { position: 'absolute', top: 22, left: 22, right: 22, bottom: 118 },
-  topLeft: { top: 22, left: 22, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 12 },
-  topRight: { top: 22, right: 22, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 12 },
+  // Top corners sit below the auto-capture and flash buttons (18 padding + 48 button + gap).
+  sweepFrame: { position: 'absolute', top: 80, left: 22, right: 22, bottom: 118 },
+  topLeft: { top: 80, left: 22, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 12 },
+  topRight: { top: 80, right: 22, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 12 },
   bottomLeft: { bottom: 118, left: 22, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 12 },
   bottomRight: { bottom: 118, right: 22, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 12 },
 });

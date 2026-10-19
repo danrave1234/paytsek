@@ -35,7 +35,7 @@ export default function Scan() {
   const params = useLocalSearchParams<{ source?: string; uri?: string }>();
   const { workspace, session } = useSession();
   const home = useHomeSnapshot();
-  const [permission, requestPermission] = useCameraPermissions();
+  const [permission, requestPermission, refreshPermission] = useCameraPermissions();
   const [camera, setCamera] = useState<CameraView | null>(null);
   const [stage, setStage] = useState<Stage>('capture');
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -66,10 +66,12 @@ export default function Scan() {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       setForeground(state === 'active');
+      // Coming back from Android Settings: pick up a camera grant made there.
+      if (state === 'active') void refreshPermission();
       if (state !== 'active') { setTorch(false); setCameraReady(false); }
     });
     return () => subscription.remove();
-  }, []);
+  }, [refreshPermission]);
 
   const reset = useCallback(() => {
     generation.current += 1;
@@ -94,6 +96,7 @@ export default function Scan() {
 
   useFocusEffect(useCallback(() => {
     let active = true;
+    void refreshPermission();
     void getCapturePreferences().then((preferences) => { if (active) setLocalCapturePreferences(preferences); });
     if (resetOnNextFocus.current) {
       resetOnNextFocus.current = false;
@@ -101,7 +104,7 @@ export default function Scan() {
     }
     setFocused(true);
     return () => { active = false; setFocused(false); setTorch(false); setCameraReady(false); };
-  }, [reset]));
+  }, [refreshPermission, reset]));
 
   const persist = useCallback(async (
     receipt: ReceiptExtraction,
