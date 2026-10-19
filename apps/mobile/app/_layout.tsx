@@ -139,6 +139,7 @@ function AppNavigator() {
                   <Stack.Screen name="settings/sources" options={{ headerShown: true, title: 'Wallet notifications' }} />
                   <Stack.Screen name="settings/devices" options={{ headerShown: true, title: 'Devices & health' }} />
                   <Stack.Screen name="settings/team" options={{ headerShown: true, title: 'Team' }} />
+                  <Stack.Screen name="settings/join" options={{ headerShown: true, title: 'Join a team' }} />
                   <Stack.Screen name="settings/privacy" options={{ headerShown: true, title: 'Privacy & data' }} />
                   <Stack.Screen name="settings/account" options={{ headerShown: true, title: 'Account' }} />
                   <Stack.Screen name="settings/notifications" options={{ headerShown: true, title: 'Notifications' }} />

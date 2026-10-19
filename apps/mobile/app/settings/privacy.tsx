@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Share, View } from 'react-native';
 import { Button, Dialog, List, Portal, Text, TextInput, useTheme } from 'react-native-paper';
 import { Group, ListRow, Notice, Row, Screen } from '@/components/ui';
-import { api } from '@/lib/api';
+import { api, isApiError } from '@/lib/api';
 import { useIsOwner, useSession } from '@/lib/session';
 
 export default function Privacy() {
@@ -40,10 +40,21 @@ export default function Privacy() {
     try {
       if (dialog === 'workspace') {
         await api('/v1/workspaces/current', { method: 'DELETE', body: { confirm: 'DELETE' } });
+        // Everyone always has a store: this starts a fresh, empty one.
         await selectWorkspace(null);
         await refreshWorkspaces();
       } else {
-        await api('/v1/me', { method: 'DELETE', noWorkspace: true, body: { confirm: 'DELETE' } });
+        const deleteAccount = () => api('/v1/me', { method: 'DELETE', noWorkspace: true, body: { confirm: 'DELETE' } });
+        try {
+          await deleteAccount();
+        } catch (e) {
+          // The server keeps a sole owner's store from being orphaned. Every
+          // account owns its store, so delete that store first (the dialog
+          // says so), then retry. Never auto-create a new one in between.
+          if (!isOwner || !isApiError(e, 'CONFLICT')) throw e;
+          await api('/v1/workspaces/current', { method: 'DELETE', body: { confirm: 'DELETE' } });
+          await deleteAccount();
+        }
         await signOut();
       }
       closeDialog();
@@ -68,7 +79,7 @@ export default function Privacy() {
           <View style={{ paddingHorizontal: 24, paddingBottom: 16 }}>
             <Row label="Unmatched notifications" value="7 days" />
             <Row label="Receipt images" value="30 days during beta" />
-            <Row label="Records and history" value="Review after 12 months; retained until an approved purge or workspace deletion" />
+            <Row label="Records and history" value="Review after 12 months; retained until an approved purge or you delete your store records" />
             <Row label="Export files" value="24 hours" />
           </View>
         </List.Accordion>
@@ -77,15 +88,19 @@ export default function Privacy() {
         <ListRow icon="file-export-outline" title="Export my personal data" onPress={() => void exportData()} />
       </Group>
       <Group title="Danger zone">
-        {isOwner ? <ListRow icon="delete-outline" title={`Delete ${workspace?.name ?? 'workspace'}`} destructive onPress={() => openDialog('workspace')} /> : null}
+        {isOwner ? <ListRow icon="delete-outline" title="Delete all store records" subtitle="Start over with an empty store" destructive onPress={() => openDialog('workspace')} /> : null}
         <ListRow icon="account-remove-outline" title="Delete my account" destructive onPress={() => openDialog('account')} />
       </Group>
       {msg ? <Notice kind={msg.kind}>{msg.text}</Notice> : null}
       <Portal>
         <Dialog visible={dialog !== null} onDismiss={closeDialog}>
-          <Dialog.Title>{dialog === 'workspace' ? 'Delete workspace' : 'Delete account'}</Dialog.Title>
+          <Dialog.Title>{dialog === 'workspace' ? 'Delete all store records' : 'Delete account'}</Dialog.Title>
           <Dialog.Content style={{ gap: 8 }}>
-            <Text variant="bodySmall">{dialog === 'workspace' ? 'This removes its records, images, notifications and devices.' : 'Access is removed immediately and account deletion finishes in the background. Business records stay with their workspace with your authorship de-identified.'}</Text>
+            <Text variant="bodySmall">{dialog === 'workspace'
+              ? 'This removes every record, proof image, notification and connected device for your store. PayTsek then starts again with an empty store.'
+              : isOwner
+                ? 'Access is removed immediately and account deletion finishes in the background. If you are the only owner, your store and all of its records, images, notifications and devices are deleted too.'
+                : 'Access is removed immediately and account deletion finishes in the background. Records you made stay with the store with your authorship de-identified.'}</Text>
             <TextInput label="Type DELETE to confirm" mode="outlined" value={confirm} onChangeText={setConfirm} autoCapitalize="characters" />
           </Dialog.Content>
           <Dialog.Actions>

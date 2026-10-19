@@ -211,10 +211,8 @@ export default function Records() {
             </ScrollView>
           </View>
         )}
-        ListEmptyComponent={query.isLoading
+        ListEmptyComponent={query.isLoading || !workspace
           ? <Loading variant="list" label="Loading records" />
-          : !workspace
-            ? <EmptyState icon="folder-outline" title="Choose a workspace" action={{ label: 'Choose workspace', onPress: () => router.push('/workspaces') }} />
           : query.error
             ? <ErrorState error={query.error} retry={() => void refresh()} />
             : hasFilters

@@ -5,6 +5,7 @@ import { api } from './api';
 import { isConfigured } from './env';
 import { supabase } from './supabase';
 import { clearWorkspaceCache, readWorkspaceCache, setActiveWorkspaceId, writeWorkspaceCache } from './workspace';
+import { pickWorkspace } from './workspace-pick';
 import { queryClient } from './queries';
 import { getRequestScope, isScopeCurrent, setRequestScope } from './request-scope';
 import { signOutConfirmed } from './sign-out';
@@ -15,11 +16,24 @@ interface SessionState {
   session: Session | null;
   workspace: WorkspaceSummary | null;
   workspaces: WorkspaceSummary[];
-  refreshWorkspaces: () => Promise<void>;
+  /**
+   * Load memberships and enter one automatically, creating the account's
+   * default workspace when it has none. `preferId` wins when it is a member
+   * (e.g. right after joining a team). Resolves true when a workspace is active.
+   */
+  refreshWorkspaces: (preferId?: string) => Promise<boolean>;
   selectWorkspace: (id: string | null) => Promise<void>;
   signOut: () => Promise<void>;
 }
 const Ctx = createContext<SessionState | null>(null);
+
+const deviceTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Manila';
+
+function displayNameFor(user: Session['user'] | undefined): string {
+  const metadataName = user?.user_metadata?.full_name;
+  if (typeof metadataName === 'string' && metadataName.trim()) return metadataName.trim();
+  return user?.email?.split('@')[0]?.replace(/[._-]+/g, ' ').trim() || 'Owner';
+}
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const configured = isConfigured();
@@ -31,23 +45,51 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const signingOut = useRef<Promise<void> | null>(null);
   const signedOutRevision = useRef(0);
 
-  const refreshWorkspaces = useCallback(async () => {
+  // One default-workspace creation per account at a time, however many
+  // refreshes race (launch, retry button, returning from the background).
+  const creatingDefault = useRef<{ userId: string; promise: Promise<WorkspaceSummary> } | null>(null);
+
+  const refreshWorkspaces = useCallback(async (preferId?: string) => {
     const scope = getRequestScope();
-    if (!scope) return;
+    if (!scope) return false;
     try {
-      const list = await api<WorkspaceSummary[]>('/v1/workspaces', { noWorkspace: true, scope });
-      if (!isScopeCurrent(scope)) return;
-      const nextId = list.some((w) => w.id === scope.workspaceId) ? scope.workspaceId : list.length === 1 ? list[0]!.id : null;
+      let list = await api<WorkspaceSummary[]>('/v1/workspaces', { noWorkspace: true, scope });
+      if (!isScopeCurrent(scope)) return false;
+      if (list.length === 0) {
+        // PayTsek has no workspace picker: every account simply has its own.
+        if (creatingDefault.current?.userId !== scope.userId) {
+          // Claim the slot synchronously (no await before this assignment) so
+          // concurrent refreshes share one request instead of creating two.
+          const promise = (async () => {
+            const user = (await supabase().auth.getSession()).data.session?.user;
+            return api<WorkspaceSummary>('/v1/workspaces', {
+              method: 'POST',
+              noWorkspace: true,
+              scope,
+              body: { name: 'My records', timezone: deviceTimezone(), ownerDisplayName: displayNameFor(user) },
+            });
+          })();
+          creatingDefault.current = { userId: scope.userId, promise };
+          void promise.finally(() => { if (creatingDefault.current?.promise === promise) creatingDefault.current = null; });
+        }
+        list = [await creatingDefault.current!.promise];
+        if (!isScopeCurrent(scope)) return false;
+      }
+      const nextId = pickWorkspace(list, preferId ?? scope.workspaceId);
       // Cache writes are account scoped and serialized with sign-out cleanup.
       await writeWorkspaceCache(scope.userId, list, nextId);
-      if (!isScopeCurrent(scope)) return;
+      if (!isScopeCurrent(scope)) return false;
       if (nextId !== scope.workspaceId) {
         setRequestScope(scope.userId, nextId);
         queryClient.clear();
       }
       setWorkspaces(list);
       setActiveId(nextId);
-    } catch { /* Offline metadata keeps capture available; every server action still authorizes membership. */ }
+      return nextId !== null;
+    } catch {
+      // Offline metadata keeps capture available; every server action still authorizes membership.
+      return getRequestScope()?.workspaceId != null;
+    }
   }, []);
 
   useEffect(() => {

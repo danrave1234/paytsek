@@ -1,27 +1,34 @@
-import type { WorkspaceSummary } from '@paytsek/contracts';
-import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { Button, Icon, Text, TextInput, TouchableRipple, useTheme } from 'react-native-paper';
-import { Notice, Screen, ScreenTitle } from '@/components/ui';
-import { api } from '@/lib/api';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
+import { Button } from 'react-native-paper';
+import { Loading, Notice, Screen } from '@/components/ui';
 import { useSession } from '@/lib/session';
-import { RADIUS, SPACING, TOUCH_TARGET } from '@/theme';
 import { SIGN_OUT_RETRY_MESSAGE } from '@/lib/sign-out';
+import { SPACING, TOUCH_TARGET } from '@/theme';
 
-export default function Workspaces() {
-  const theme = useTheme();
-  const { workspaces, selectWorkspace, refreshWorkspaces, signOut, session } = useSession();
-  const [businessName, setBusinessName] = useState('');
-  const [invite, setInvite] = useState('');
-  const [joining, setJoining] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [busy, setBusy] = useState(false);
+/**
+ * There is no workspace picker. Signing in lands here only for the moment it
+ * takes to load (or create) the account's workspace; the root gate then opens
+ * Today. If that fails, offer a retry instead of a choice.
+ */
+export default function SettingUp() {
+  const { refreshWorkspaces, signOut } = useSession();
+  const [failed, setFailed] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const emailName = session?.user.email?.split('@')[0]?.replace(/[._-]+/g, ' ').trim();
-  const metadataName = session?.user.user_metadata?.full_name;
-  const displayName = typeof metadataName === 'string' && metadataName.trim() ? metadataName.trim() : (emailName || 'Owner');
-  const deviceTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Manila';
+  const running = useRef(false);
+
+  const enter = useCallback(async () => {
+    if (running.current) return;
+    running.current = true;
+    setFailed(false);
+    try { setFailed(!(await refreshWorkspaces())); }
+    catch { setFailed(true); }
+    finally { running.current = false; }
+  }, [refreshWorkspaces]);
+
+  useEffect(() => { void enter(); }, [enter]);
+
   const leave = async () => {
     if (signingOut) return;
     setSigningOut(true);
@@ -31,100 +38,15 @@ export default function Workspaces() {
     finally { setSigningOut(false); }
   };
 
-  const create = async () => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const workspace = await api<WorkspaceSummary>('/v1/workspaces', {
-        method: 'POST',
-        noWorkspace: true,
-        body: { name: businessName.trim() || 'My records', timezone: deviceTimezone, ownerDisplayName: displayName },
-      });
-      await refreshWorkspaces();
-      await selectWorkspace(workspace.id);
-    } catch (createError) {
-      setError((createError as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const accept = async () => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const workspace = await api<WorkspaceSummary>('/v1/workspaces/invites/accept', {
-        method: 'POST',
-        noWorkspace: true,
-        body: { inviteToken: invite.trim(), displayName },
-      });
-      await refreshWorkspaces();
-      await selectWorkspace(workspace.id);
-    } catch (acceptError) {
-      setError((acceptError as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
+  if (!failed) return <Screen scroll={false}><Loading variant="dashboard" label="Setting up PayTsek" /></Screen>;
   return (
     <Screen>
-      <ScreenTitle
-        title={workspaces.length ? 'Choose workspace' : 'Finish setup'}
-        subtitle={workspaces.length ? undefined : 'Create your workspace or join with a code.'}
-      />
-
-      {workspaces.map((workspace) => (
-        <TouchableRipple key={workspace.id} onPress={() => void selectWorkspace(workspace.id)} borderless style={{ borderRadius: RADIUS.lg }}>
-          <View style={[styles.workspace, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}>
-            <Icon source="wallet-outline" size={22} color={theme.colors.onSurfaceVariant} />
-            <Text variant="titleMedium" style={{ flex: 1, fontWeight: '700' }}>{workspace.name}</Text>
-            <Icon source="chevron-right" size={22} color={theme.colors.onSurfaceVariant} />
-          </View>
-        </TouchableRipple>
-      ))}
-
+      <Notice kind="error">PayTsek couldn't finish setting up. Check your connection and try again.</Notice>
       {error ? <Notice kind="error">{error}</Notice> : null}
-
-      {creating ? (
-        <View style={styles.form}>
-          <TextInput label="Workspace name" mode="outlined" value={businessName} onChangeText={setBusinessName} maxLength={80} />
-          <Button mode="contained" loading={busy} disabled={busy} onPress={() => void create()} contentStyle={{ minHeight: TOUCH_TARGET }}>
-            Create workspace
-          </Button>
-          <Button mode="text" onPress={() => setCreating(false)}>Cancel</Button>
-        </View>
-      ) : joining ? (
-        <View style={styles.form}>
-          <TextInput label="Invite code" mode="outlined" autoCapitalize="characters" value={invite} onChangeText={setInvite} />
-          <Button mode="contained" loading={busy} disabled={busy || invite.trim().length < 16} onPress={() => void accept()} contentStyle={{ minHeight: TOUCH_TARGET }}>
-            Join
-          </Button>
-          <Button mode="text" onPress={() => setJoining(false)}>Back</Button>
-        </View>
-      ) : workspaces.length ? (
-        <View style={styles.secondaryActions}>
-          <Button mode="outlined" icon="plus" onPress={() => setCreating(true)}>New workspace</Button>
-          <Button mode="text" onPress={() => setJoining(true)}>Join with a code</Button>
-        </View>
-      ) : (
-        <View style={styles.form}>
-          <Button mode="contained" icon="plus" onPress={() => setCreating(true)} contentStyle={{ minHeight: TOUCH_TARGET }}>
-            Create workspace
-          </Button>
-          <Button mode="text" onPress={() => setJoining(true)}>Join with a code</Button>
-        </View>
-      )}
-
-      <Button icon="logout" loading={signingOut} disabled={signingOut || busy} onPress={() => void leave()} style={{ alignSelf: 'center' }}>Sign out</Button>
+      <View style={{ gap: SPACING.sm }}>
+        <Button mode="contained" onPress={() => void enter()} contentStyle={{ minHeight: TOUCH_TARGET }}>Try again</Button>
+        <Button icon="logout" loading={signingOut} disabled={signingOut} onPress={() => void leave()}>Sign out</Button>
+      </View>
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  workspace: { minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: SPACING.md, padding: SPACING.md, borderRadius: RADIUS.lg, borderWidth: StyleSheet.hairlineWidth },
-  form: { gap: SPACING.md, marginTop: SPACING.sm },
-  secondaryActions: { gap: SPACING.xs, marginTop: SPACING.xs },
-});
