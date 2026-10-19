@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
 import { animateNextLayout, RiseIn, useShake } from '@/components/motion-feedback';
 import { Notice } from '@/components/ui';
+import { authErrorMessage } from '@/lib/auth-errors';
 import { finishOAuth, OAUTH_REDIRECT_URL } from '@/lib/oauth';
 import { supabase } from '@/lib/supabase';
 import { RADIUS, SPACING, TOUCH_TARGET } from '@/theme';
@@ -55,14 +56,9 @@ export default function SignIn() {
         return;
       }
       router.replace('/workspaces');
-    } catch {
+    } catch (authError) {
       formShake.shake();
-      setMessage({
-        kind: 'error',
-        text: mode === 'signin'
-          ? 'Email or password is incorrect.'
-          : 'Could not create the account. Try signing in or resetting the password.',
-      });
+      setMessage({ kind: 'error', text: authErrorMessage(authError, mode) });
     } finally {
       setBusy(false);
     }
