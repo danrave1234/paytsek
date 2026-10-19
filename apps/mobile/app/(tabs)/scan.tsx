@@ -113,7 +113,7 @@ export default function Scan() {
   ) => {
     if (saveLock.current) return false;
     if (!workspace) {
-      setError('Choose a workspace in Settings before saving proofs.');
+      setError('PayTsek is still setting up. Try again in a moment.');
       return false;
     }
     if (!corrected.amountCentavos) {

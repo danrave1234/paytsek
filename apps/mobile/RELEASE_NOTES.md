@@ -1,3 +1,18 @@
+## PayTsek V2 beta — 0.2.16
+
+- PayTsek now opens straight into your store. There's nothing to choose or set up; a new account gets its store automatically.
+- Cashiers join an owner's store from Settings → Join a team with the invite code from the owner.
+- Auto-capture now waits for a completed payment proof with a reference number and time, so price tags, QR stands and other screens no longer trigger it. The shutter still works for anything.
+- A new look: PayTsek's own icons, smoother animations, and a save confirmation that draws its check.
+- Tap or drag the charts on Today and Analytics to read any hour, day or week.
+- Light haptic feedback for the shutter, tabs, filters and saved proofs.
+- The tab bar no longer shows a press circle over neighbouring tabs.
+- Deleting your account now also deletes your store's records when you are its only owner. The confirmation tells you before anything is removed.
+
+PayTsek remains free beta. A Strong match is supplementary notification evidence,
+not bank confirmation or a wallet balance. Proof capture works without
+notification access.
+
 ## PayTsek V2 beta — 0.2.15
 
 - More reliable offline saving and sync, with safer retries when switching accounts or workspaces. Unsynced proofs remain on the phone.

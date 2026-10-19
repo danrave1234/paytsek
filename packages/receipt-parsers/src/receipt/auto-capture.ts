@@ -8,8 +8,12 @@ export interface AutoCaptureAssessment {
 }
 
 /**
- * Conservative camera auto-capture gate. One OCR amount is never enough:
- * require a decisive provider, successful status and another receipt signal.
+ * Conservative camera auto-capture gate. Every completed wallet proof shows
+ * a reference number and a dated transaction time, while price tags, QR
+ * standees and other app screens usually show neither. So auto-capture
+ * requires all of: a confident amount and provider, a success line, a
+ * normalized reference and a minute-precision receipt time. Weak hints
+ * (a "QR" word, a date alone) never qualify. Manual capture is unaffected.
  * The caller must still see the same fingerprint in two consecutive frames.
  */
 export function assessReceiptForAutoCapture(receipt: ReceiptExtraction): AutoCaptureAssessment {
@@ -19,8 +23,9 @@ export function assessReceiptForAutoCapture(receipt: ReceiptExtraction): AutoCap
   if (!fields.receiptProvider) return { eligible: false, fingerprint: null, reason: 'NO_PROVIDER' };
   if (receipt.providerDetection.confidence < 0.5) return { eligible: false, fingerprint: null, reason: 'LOW_CONFIDENCE' };
   if (fields.receiptStatus !== 'SUCCESS') return { eligible: false, fingerprint: null, reason: 'NOT_SUCCESSFUL' };
-  const corroborating = Boolean(fields.referenceValue || fields.receiptTransactionAt || fields.paymentRail);
-  if (!corroborating || receipt.readabilityScore < 0.6) {
+  const timed = fields.receiptTransactionAt !== null
+    && (fields.receiptTransactionPrecision === 'MINUTE' || fields.receiptTransactionPrecision === 'SECOND');
+  if (!fields.referenceValue || !timed || receipt.readabilityScore < 0.6) {
     return { eligible: false, fingerprint: null, reason: 'TOO_LITTLE_EVIDENCE' };
   }
   return {

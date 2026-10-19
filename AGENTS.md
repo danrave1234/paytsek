@@ -42,7 +42,8 @@
 - Analytics may group only recorded amount/count by time, the provider read from the proof, and evidence state. Do not infer customer, product, or category analytics.
 - Record filters are evidence and the provider read from the proof. Search is limited to visible provider labels and exact amounts; do not surface or search hidden payer data.
 - Use the checked-in provider artwork for GCash, Maya, GoTyme, and MariBank. Unknown/custom sources fall back to the neutral wallet mark. Keep `assets/providers/SOURCES.md` current when artwork changes.
-- The Today header uses the checked-in text-only PayTsek wordmark. Workspace switching remains in Settings/workspace flows; do not put a workspace subtitle under the wordmark.
+- The Today header uses the checked-in text-only PayTsek wordmark; do not put a workspace subtitle under it.
+- There is no workspace picker. After sign-in the app enters the account's workspace automatically (the last active membership, else its own store), creating a default one when the account has none (`apps/mobile/src/lib/session.tsx`). Do not reintroduce choosing, creating, renaming or switching workspaces in the UI. Cashiers join an owner's store from Settings → Join a team. Because every account owns a store, account deletion for an owner deletes that store first after an explicit warning; the server's sole-owner guard stays in place.
 - Scan is the center action and must remain visually distinct, accessible, and at least 48 dp. It uses the PayTsek receipt/QR aperture treatment, not a generic oversized floating circle.
 - Support System, Light, and Dark modes from the same semantic tokens. Resolve the saved/system theme before hiding the native splash to prevent a color flash.
 - Prefer typography, spacing, alignment, dividers, and compact sheets over card grids. Avoid nested cards, pill-shaped everything, glass, decorative gradients, mascot loading screens, oversized greetings, and marketing copy inside operational screens.
@@ -58,7 +59,7 @@
 - Default a new workspace timezone from the phone, normally `Asia/Manila`, and let the owner change it. Historical Today groupings use the workspace timezone.
 - The phone clock makes offline UI immediate but is never the sole authority for matching or security. Time alone cannot create a Strong match.
 - Write a scan to app-private storage and SQLite before upload. Local persistence is success; proof upload, canonical record creation, and matching continue in the background with stable idempotency IDs.
-- Unsynced scans are durable data, not cache. Cache cleanup, workspace switching, and sign-out must not accidentally delete them.
+- Unsynced scans are durable data, not cache. Cache cleanup, joining a team (which changes the active workspace), and sign-out must not accidentally delete them.
 - Draft upload attempts are fenced by account/workspace scope and SQLite lease tokens. Never acknowledge stale attempts after switching accounts, delete unsynced files, or automatically assign legacy unowned drafts to a newly signed-in user. Legacy recovery requires explicit owner action and current server membership.
 
 ## Android versioning and releases

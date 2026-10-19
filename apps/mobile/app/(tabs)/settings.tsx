@@ -20,7 +20,7 @@ export default function Settings() {
   const { mode, setMode } = useThemeMode();
   const nextMode = mode === 'system' ? 'light' : mode === 'light' ? 'dark' : 'system';
   const isOwner = useIsOwner();
-  const { workspace, signOut, selectWorkspace, workspaces } = useSession();
+  const { workspace, signOut } = useSession();
   const update = useAppUpdate();
   const [cacheMessage, setCacheMessage] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
@@ -90,7 +90,7 @@ export default function Settings() {
       </Group>
 
       {isOwner ? (
-        <Group title="Workspace">
+        <Group title="Store">
           <ListRow
             icon="account-multiple-outline"
             title="Team"
@@ -110,16 +110,14 @@ export default function Settings() {
         <ListRow
           icon="camera-timer"
           title="Auto-capture clear proofs"
-          subtitle="Requires two matching on-device reads; manual capture stays available"
+          subtitle="Only completed proofs with a reference number and time; manual capture stays available"
           right={<Switch value={capturePreferences.autoCapture} onValueChange={(value) => void updateCapturePreference('autoCapture', value)} />}
         />
         <ListRow icon="shield-check-outline" title="Permissions checklist" subtitle="Verify camera, notifications, and listener access" onPress={() => router.push('/settings/permissions' as any)} />
         <ListRow icon="bell-outline" title="Notifications" onPress={() => router.push('/settings/notifications')} />
         <ListRow icon="shield-lock-outline" title="Privacy & data" onPress={() => router.push('/settings/privacy')} />
         <ListRow icon="account-cog-outline" title="Account & password" onPress={() => router.push('/settings/account')} />
-        {workspaces.length > 1 ? (
-          <ListRow icon="swap-horizontal" title="Switch workspace" onPress={() => void selectWorkspace(null)} />
-        ) : null}
+        <ListRow icon="account-multiple-outline" title="Join a team" subtitle="Enter an invite code from a store owner" onPress={() => router.push('/settings/join')} />
       </Group>
 
       <Group title="Help">
