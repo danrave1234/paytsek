@@ -96,7 +96,7 @@ export default function ReportProblem() {
         <>
           <Group title="What we include">
             <ListRow icon="information-outline" title="App version & platform" />
-            <ListRow icon="office-building-outline" title="Workspace name & your role" />
+            <ListRow icon="office-building-outline" title="Store name & your role" />
             <ListRow icon="bell-ring-outline" title="Collector status & enabled wallets" />
             <ListRow icon="file-document-outline" title={`Pending drafts (${draftCount})`} />
           </Group>

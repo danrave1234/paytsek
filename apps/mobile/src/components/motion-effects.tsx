@@ -221,33 +221,6 @@ export function SaveToast({ toast, onDismiss, bottom, duration = 3400 }: { toast
   );
 }
 
-/** Active-tab marker: a short bar that grows above the selected icon. */
-export function TabFocusMotion({ focused, color, children }: { focused: boolean; color: string; children: React.ReactNode }) {
-  const reduced = useReducedMotion();
-  const progress = useRef(new Animated.Value(focused ? 1 : 0)).current;
-  useEffect(() => {
-    if (reduced) { progress.setValue(focused ? 1 : 0); return; }
-    const animation = Animated.spring(progress, { toValue: focused ? 1 : 0, damping: 16, stiffness: 240, mass: 0.6, useNativeDriver: true });
-    animation.start();
-    return () => animation.stop();
-  }, [focused, progress, reduced]);
-  return (
-    <View style={styles.tabIcon}>
-      <Animated.View style={[styles.tabMarker, { backgroundColor: color, opacity: progress, transform: [{ scaleX: progress }] }]} />
-      <Animated.View
-        style={{
-          transform: [
-            { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, -1] }) },
-            { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) },
-          ],
-        }}
-      >
-        {children}
-      </Animated.View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   toast: {
     minHeight: TOUCH_TARGET + 8,
@@ -263,6 +236,4 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 10,
   },
-  tabIcon: { height: 30, alignItems: 'center', justifyContent: 'center' },
-  tabMarker: { position: 'absolute', top: -11, width: 20, height: 3, borderRadius: 2 },
 });

@@ -127,7 +127,7 @@ export default function Team() {
             <Text selectable variant="bodyMedium">{invite.inviteToken}</Text>
             <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Single use · expires in 7 days</Text>
           </View>
-          <Button compact mode="contained-tonal" onPress={() => void Share.share({ message: `Join my PayTsek workspace. Open PayTsek → Join with an invite and enter: ${invite.inviteToken}` })}>Share</Button>
+          <Button compact mode="contained-tonal" onPress={() => void Share.share({ message: `Join my store on PayTsek. Open PayTsek → Settings → Join a team and enter: ${invite.inviteToken}` })}>Share</Button>
         </View>
       ) : null}
 
@@ -135,7 +135,7 @@ export default function Team() {
         <Dialog visible={removing !== null} onDismiss={() => setRemoving(null)}>
           <Dialog.Title>Remove {removing?.displayName ?? 'member'}?</Dialog.Title>
           <Dialog.Content>
-            <Text variant="bodySmall">They lose access to this workspace immediately. Records they created stay in history.</Text>
+            <Text variant="bodySmall">They lose access to this store immediately. Records they created stay in history.</Text>
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setRemoving(null)}>Cancel</Button>
