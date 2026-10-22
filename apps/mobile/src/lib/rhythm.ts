@@ -55,6 +55,19 @@ export function dailyBuckets(daily: AnalyticsSummary['daily'], range: AnalyticsR
   return weeks;
 }
 
+/** Both notification-match states have the same user-facing Strong match label. */
+export function evidenceBuckets(rows: AnalyticsSummary['byEvidence']): AnalyticsSummary['byEvidence'] {
+  const groups = new Map<AnalyticsSummary['byEvidence'][number]['state'], AnalyticsSummary['byEvidence'][number]>();
+  for (const row of rows) {
+    const state = row.state === 'MATCHED_BY_USER' ? 'MATCHED_AUTO' : row.state;
+    const group = groups.get(state) ?? { state, recordedCount: 0, recordedCentavos: 0 };
+    group.recordedCount += row.recordedCount;
+    group.recordedCentavos += row.recordedCentavos;
+    groups.set(state, group);
+  }
+  return [...groups.values()].sort((a, b) => b.recordedCentavos - a.recordedCentavos);
+}
+
 /** Index of the largest bar, or null when nothing was recorded. Ties keep the earliest. */
 export function peakIndex(bars: readonly RhythmBar[]): number | null {
   let best: number | null = null;

@@ -70,6 +70,46 @@ describe('durable draft SQL ownership', () => {
     expect(attempt?.draft.request.corrected.amountCentavos).toBe(12500);
   });
 
+  it('keeps an unchanged offline draft and its retry state intact', async () => {
+    const { store } = await modules();
+    const draft = await store.saveDraft(draftFixture());
+    state.db!.prepare("update drafts set sync_status = 'FAILED', last_error = 'Synthetic retry error' where client_record_id = ?").run(draft.clientRecordId);
+    const before = await store.getDraft(TEST_WORKSPACE, draft.clientRecordId);
+    const after = await store.correctDraft(TEST_WORKSPACE, draft.clientRecordId, { amountCentavos: 10000, receiptProvider: null });
+    expect(after).toEqual(before);
+    expect(after.request.editedFields).toEqual([]);
+    expect(state.deleted).toEqual([]);
+  });
+
+  it('clears a wrong wallet while retaining the proof and only marking actual edits', async () => {
+    const { store } = await modules();
+    const fixture = draftFixture();
+    fixture.request.corrected.receiptProvider = 'GCASH';
+    const draft = await store.saveDraft(fixture);
+    const after = await store.correctDraft(TEST_WORKSPACE, draft.clientRecordId, { receiptProvider: null, amountCentavos: 10000 });
+    expect(after.request.corrected.receiptProvider).toBeNull();
+    expect(after.request.editedFields).toEqual(['receiptProvider']);
+    expect(after.imageUri).toBe(draft.imageUri);
+    expect(after.request.extracted).toEqual(draft.request.extracted);
+    expect(state.deleted).toEqual([]);
+  });
+
+  it('rejects invalid amounts before changing durable data', async () => {
+    const { store } = await modules();
+    const draft = await store.saveDraft(draftFixture());
+    await expect(store.correctDraft(TEST_WORKSPACE, draft.clientRecordId, { amountCentavos: 0 })).rejects.toThrow();
+    expect(await store.getDraft(TEST_WORKSPACE, draft.clientRecordId)).toEqual(draft);
+  });
+
+  it('does not let a correction overwrite an active upload', async () => {
+    const { store, scope } = await modules();
+    const draft = await store.saveDraft(draftFixture());
+    const attempt = await store.claimDraft(draft, scope.requireRequestScope());
+    await expect(store.correctDraft(TEST_WORKSPACE, draft.clientRecordId, { amountCentavos: 15000 })).rejects.toThrow('Wait for sync');
+    expect((await store.getDraft(TEST_WORKSPACE, draft.clientRecordId))?.request.corrected.amountCentavos).toBe(10000);
+    expect(await store.updateAttempt(attempt!, { syncStatus: 'SYNCED', serverRecordId: 'synthetic-server-record' })).toBe(true);
+  });
+
   it('never exposes or claims another signed-in account’s drafts in a shared workspace', async () => {
     const { store, scope } = await modules();
     const own = await store.saveDraft(draftFixture());

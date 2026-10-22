@@ -6,6 +6,7 @@ import type {
   ExportJobView,
   HomeSummary,
   ListRecordsResponse,
+  ListRecordsQuery,
   MemberSummary,
   OwnerInboxEvent,
   RecordDetail,
@@ -104,7 +105,7 @@ export const useMembers = () => useQuery({ queryKey: keys.members, queryFn: ({ s
 export const useInbox = () => useQuery({ queryKey: keys.inbox, queryFn: ({ signal }) => api<OwnerInboxEvent[]>('/v1/inbox?unlinkedOnly=true&limit=100', { signal }) });
 
 /** Full ledger pagination. It is mounted only by Records and fetches the next page near scroll end. */
-export function useInfiniteRecords(filters: { q?: string; state?: string[]; sourceId?: string; provider?: string; staffUserId?: string; from?: string; to?: string }) {
+export function useInfiniteRecords(filters: Omit<ListRecordsQuery, 'cursor' | 'limit'>) {
   return useInfiniteQuery({
     queryKey: keys.recordsInfinite(filters),
     initialPageParam: null as string | null,
@@ -218,8 +219,12 @@ export function useVoid(recordId: string) {
 /** Corrections preserve the proof and write an audit-history entry. */
 export function useCorrectRecord(recordId: string) {
   const inv = useInvalidateRecord();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: CorrectRecordRequest) => api<RecordDetail>(`/v1/records/${recordId}`, { method: 'PATCH', body }),
+    // The save response already contains the canonical amount and reopened
+    // evidence state. Retain it even if the following refresh loses connection.
+    onSuccess: (record) => { qc.setQueryData(keys.record(recordId), record); },
     onSettled: () => inv(recordId),
   });
 }

@@ -1,10 +1,10 @@
-import { PROVIDERS, PROVIDER_LABELS, type EvidenceState, type Provider } from '@paytsek/contracts';
-import { parseMoneyExact } from '@paytsek/receipt-parsers';
+import { PROVIDER_LABELS, type CorrectRecordRequest, type EvidenceState } from '@paytsek/contracts';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useRef, useState } from 'react';
 import { BackHandler, Image, Pressable, StyleSheet, View } from 'react-native';
-import { Button, Chip, Dialog, Icon, IconButton, Portal, Snackbar, Text, TextInput, TouchableRipple, useTheme } from 'react-native-paper';
+import { Button, Dialog, Icon, IconButton, Portal, Snackbar, Text, TextInput, TouchableRipple, useTheme } from 'react-native-paper';
 import { ProviderLogo } from '@/components/provider-logo';
+import { RecordCorrectionDialog } from '@/components/record-correction-dialog';
 import { AppearMotion, FadeIn, ValueChangeMotion } from '@/components/motion';
 import { animateNextLayout } from '@/components/motion-feedback';
 import { ErrorState, Loading, Notice, Screen, StateChip } from '@/components/ui';
@@ -74,8 +74,8 @@ export default function RecordDetail() {
   const correct = useCorrectRecord(id);
   const [dialog, setDialog] = useState<'unlink' | 'void' | 'manual' | 'edit' | null>(null);
   const [reason, setReason] = useState('');
-  const [amountText, setAmountText] = useState('');
-  const [providerValue, setProviderValue] = useState<Provider | null>(null);
+  const [dialogBusy, setDialogBusy] = useState(false);
+  const dialogSaving = useRef(false);
   const [msg, setMsg] = useState<{ kind: 'info' | 'error' | 'warning'; text: string } | null>(null);
   const [proofExpanded, setProofExpanded] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -90,11 +90,12 @@ export default function RecordDetail() {
 
   useFocusEffect(useCallback(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (dialog !== null) return false; // The dialog handles Back and blocks it during saves.
       goBack();
       return true;
     });
     return () => subscription.remove();
-  }, [goBack]));
+  }, [dialog, goBack]));
 
   if (rec.isLoading) return <Screen scroll={false}><Loading variant="detail" label="Loading payment record" /></Screen>;
   if (!rec.data) return <Screen scroll={false}><ErrorState error={rec.error} retry={() => void rec.refetch()} /></Screen>;
@@ -102,7 +103,7 @@ export default function RecordDetail() {
   const open = r.evidenceState === 'UNVERIFIED' || r.evidenceState === 'REVIEW_REQUIRED';
   const cands = r.candidates;
   const canConfirm = isOwner || session?.user.id === r.createdByUserId;
-  const canEdit = isOwner || session?.user.id === r.createdByUserId;
+  const canEdit = isOwner || (open && session?.user.id === r.createdByUserId);
 
   const onConfirm = async (eventId: string) => {
     setMsg(null);
@@ -115,32 +116,31 @@ export default function RecordDetail() {
     }
   };
   const runDialog = async () => {
+    if (!dialog || dialog === 'edit' || dialogSaving.current) return;
+    dialogSaving.current = true;
+    setDialogBusy(true);
     setMsg(null);
     try {
       // The unlink contract requires a reason of at least 3 characters, so an
       // empty optional input falls back to a stable audit note.
       if (dialog === 'unlink') await unlink.mutateAsync(reason.trim() || 'Unlinked from the app');
-      if (dialog === 'void') await voidRec.mutateAsync(reason);
-      if (dialog === 'manual') await manual.mutateAsync(reason || undefined);
-      if (dialog === 'edit') {
-        const amount = parseMoneyExact(amountText.trim());
-        if (!amount) throw new Error('Enter a valid amount.');
-        await correct.mutateAsync({
-          corrected: { amountCentavos: amount.centavos, receiptProvider: providerValue },
-          reason: 'Updated from the app',
-        });
-        setMsg({ kind: 'info', text: 'Record updated.' });
-      }
-      if (dialog === 'manual' || dialog === 'edit') haptics.success();
+      if (dialog === 'void') await voidRec.mutateAsync(reason.trim());
+      if (dialog === 'manual') await manual.mutateAsync(reason.trim() || undefined);
+      if (dialog === 'manual') haptics.success();
       setDialog(null);
       setReason('');
     }
     catch (e) { haptics.warning(); setMsg({ kind: 'error', text: (e as Error).message }); }
+    finally { dialogSaving.current = false; setDialogBusy(false); }
+  };
+
+  const saveCorrection = async (corrected: CorrectRecordRequest['corrected']) => {
+    await correct.mutateAsync({ corrected, reason: 'Updated from the app' });
+    setMsg({ kind: 'info', text: 'Record updated.' });
   };
 
   const openEdit = () => {
-    setAmountText((r.amountCentavos / 100).toFixed(2));
-    setProviderValue(r.corrected.receiptProvider);
+    setMsg(null);
     setDialog('edit');
   };
 
@@ -263,8 +263,20 @@ export default function RecordDetail() {
       ) : null}
     </>
 
+    {dialog === 'edit' ? <RecordCorrectionDialog record={r} onSave={saveCorrection} onDismiss={() => setDialog(null)} reopensEvidence={!open} /> : null}
     <Portal>
-      <Dialog visible={dialog !== null} onDismiss={() => setDialog(null)}><Dialog.Title>{dialog === 'edit' ? 'Correct record' : dialog === 'unlink' ? 'Unlink association' : dialog === 'void' ? 'Void record' : 'Confirm after wallet check'}</Dialog.Title><Dialog.Content style={{ gap: 8 }}>{dialog === 'edit' ? <><Text variant="bodySmall">The proof and correction stay in History.</Text><TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} /><Text variant="labelMedium">Sent from</Text><View style={styles.providerChoices}>{PROVIDERS.map((item) => <Chip key={item.value} selected={providerValue === item.value} onPress={() => setProviderValue(item.value)}>{item.label}</Chip>)}</View></> : <><Text variant="bodySmall">{dialog === 'manual' ? 'Use this only after checking the receiving wallet. It is recorded as an owner confirmation, not a provider verification.' : dialog === 'void' ? 'This removes the record from active totals while preserving the proof and History.' : 'The previous state remains in History.'}</Text><TextInput label={dialog === 'void' ? 'Reason' : dialog === 'manual' ? 'Note (optional)' : 'Reason (optional)'} mode="outlined" value={reason} onChangeText={setReason} /></>}</Dialog.Content><Dialog.Actions><Button onPress={() => setDialog(null)}>Cancel</Button><Button onPress={() => void runDialog()} disabled={dialog === 'void' && reason.trim().length < 3}>{dialog === 'edit' ? 'Save' : 'Confirm'}</Button></Dialog.Actions></Dialog>
+      <Dialog visible={dialog !== null && dialog !== 'edit'} dismissable={!dialogBusy} dismissableBackButton={!dialogBusy} onDismiss={() => setDialog(null)}>
+        <Dialog.Title>{dialog === 'unlink' ? 'Unlink association' : dialog === 'void' ? 'Void record' : 'Confirm after wallet check'}</Dialog.Title>
+        <Dialog.Content style={{ gap: SPACING.sm }}>
+          <Text variant="bodySmall">{dialog === 'manual' ? 'Use this only after checking the receiving wallet. It is recorded as an owner confirmation, not a provider verification.' : dialog === 'void' ? 'This removes the record from active totals while preserving the proof and History.' : 'The previous state remains in History.'}</Text>
+          <TextInput label={dialog === 'void' ? 'Reason' : dialog === 'manual' ? 'Note (optional)' : 'Reason (optional)'} mode="outlined" value={reason} onChangeText={setReason} maxLength={300} disabled={dialogBusy} />
+          {msg?.kind === 'error' ? <Notice kind="error">{msg.text}</Notice> : null}
+        </Dialog.Content>
+        <Dialog.Actions>
+          <Button onPress={() => setDialog(null)} disabled={dialogBusy} contentStyle={{ minHeight: TOUCH_TARGET }}>Cancel</Button>
+          <Button onPress={() => void runDialog()} loading={dialogBusy} disabled={dialogBusy || (dialog === 'void' && reason.trim().length < 3) || (dialog === 'unlink' && reason.trim().length > 0 && reason.trim().length < 3)} contentStyle={{ minHeight: TOUCH_TARGET }}>Confirm</Button>
+        </Dialog.Actions>
+      </Dialog>
       <Snackbar visible={msg?.kind === 'info'} duration={3000} onDismiss={() => setMsg(null)}>{msg?.text}</Snackbar>
     </Portal>
   </Screen>;
@@ -286,5 +298,4 @@ const styles = StyleSheet.create({
   timeline: { marginLeft: SPACING.sm + 2, paddingLeft: SPACING.lg, gap: SPACING.md, borderLeftWidth: 1 },
   actions: { marginTop: SPACING.md, borderTopWidth: StyleSheet.hairlineWidth },
   actionRow: { minHeight: TOUCH_TARGET, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  providerChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
 });
