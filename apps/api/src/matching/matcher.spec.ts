@@ -40,6 +40,9 @@ function event(over: Partial<MatchEventInput> = {}): MatchEventInput {
 }
 
 describe('matcher v2 — single amount+time candidate now AUTO-matches', () => {
+  it.each(['receiptStatus', 'receiptTransactionPrecision'])('requires review when %s was edited', (field) => {
+    expect(decide(record({ editedFields: [field] }), [event()], cfg).kind).toBe('REVIEW');
+  });
   it('receipt has ref, notification does not -> AUTO (real GCash scenario)', () => {
     // Real GCash: receipt OCR extracts a ref number, but the notification text has none.
     // This should AUTO-match on amount+time alone, not require manual tap.
