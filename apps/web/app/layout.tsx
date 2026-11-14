@@ -27,6 +27,8 @@ export const metadata: Metadata = {
   },
   twitter: { card: 'summary_large_image', title: 'PayTsek', description: 'Record GCash, GoTyme, Maya and MariBank QR payments on your Android phone.', images: ['/brand/paytsek-social.png'] },
   robots: { index: true, follow: true },
+  // App Builders PH ownership check for the PayTsek listing.
+  other: { 'appbuildersph-verification': 'kzbj98qsveju8lwgkdgqyoctzttshejm' },
 };
 
 export const viewport: Viewport = { themeColor: [{ media: '(prefers-color-scheme: light)', color: '#f7f5ef' }, { media: '(prefers-color-scheme: dark)', color: '#0c1016' }], width: 'device-width', initialScale: 1 };
