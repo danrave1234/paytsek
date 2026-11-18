@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { CorrectRecordRequest, CreateRecordRequest, CreateRecordResponse, ListRecordsQuery, ListRecordsResponse, RecordDetail, RecordSummary } from '@paytsek/contracts';
 import { AUTO_MATCH_DISCLOSURE, MATCHING_CRITICAL_FIELDS } from '@paytsek/contracts';
+import { parseMoneyExact } from '@paytsek/receipt-parsers';
 import { ApiException } from '../common/errors';
 import { AuditService } from '../db/audit.service';
 import { DbService, isUniqueViolation } from '../db/db.service';
@@ -8,6 +9,7 @@ import { ReconcileService } from '../matching/reconcile.service';
 import { ProofsService } from './proofs.service';
 import { PROVIDER_LABEL_SQL, RECORD_SELECT, toDetail, toSummary, type RecordRow } from './records.rows';
 import { loadEnv } from '../config/env';
+import { recordCorrection } from './record-corrections';
 
 @Injectable()
 export class RecordsService {
@@ -158,12 +160,14 @@ export class RecordsService {
     const where: string[] = ['r.organization_id = $1'];
     if (q.q) {
       const raw = q.q.trim();
-      params.push(`%${raw}%`);
+      params.push(raw.toLowerCase());
       const textParam = params.length;
-      const visibleFields = [`(${PROVIDER_LABEL_SQL}) ilike $${textParam}`];
-      const pesos = Number(raw.replace(/[PHP\s,₱]/gi, ''));
-      if (Number.isFinite(pesos) && pesos > 0) {
-        params.push(Math.round(pesos * 100));
+      // Literal substring search, like the offline list: %, _ and backslashes
+      // are text, and malformed amounts must never be rounded into a match.
+      const visibleFields = [`strpos(lower(${PROVIDER_LABEL_SQL}), $${textParam}) > 0`];
+      const amount = parseMoneyExact(raw);
+      if (amount) {
+        params.push(amount.centavos);
         visibleFields.push(`r.amount_centavos = $${params.length}`);
       }
       where.push(`(${visibleFields.join(' or ')})`);
@@ -248,29 +252,25 @@ export class RecordsService {
       if (!row) throw new ApiException('RECORD_NOT_FOUND', 'Record not found');
       if (row.evidence_state === 'VOIDED') throw new ApiException('RECORD_VOIDED', 'Voided records cannot be edited');
       if (!isOwner && row.created_by !== userId) throw new ApiException('FORBIDDEN', 'Cashiers can only correct their own records');
-      const changed = Object.keys(input.corrected).filter((k) => (input.corrected as Record<string, unknown>)[k] !== undefined);
+      const { corrected, changed, values, assignments } = recordCorrection(row, input);
+      if (changed.length === 0) return;
       const material = changed.some((k) => (MATCHING_CRITICAL_FIELDS as readonly string[]).includes(k));
       if (material && !isOwner && row.evidence_state !== 'UNVERIFIED' && row.evidence_state !== 'REVIEW_REQUIRED') {
         throw new ApiException('OWNER_ONLY', 'Only the owner can change matching-critical fields of a matched record');
       }
-      const f = input.corrected;
       await tx.query(
-        `update payment_records set amount_centavos = coalesce($3, amount_centavos), fee_centavos = coalesce($4, fee_centavos), total_charged_centavos = coalesce($5, total_charged_centavos),
-           receipt_provider = coalesce($6, receipt_provider), payment_rail = coalesce($7, payment_rail), reference_namespace = coalesce($8, reference_namespace), reference_value = coalesce($9, reference_value),
-           payer_name = coalesce($10, payer_name), payer_phone = coalesce($11, payer_phone), payee_name = coalesce($12, payee_name), payee_phone = coalesce($13, payee_phone),
-           receipt_transaction_at = coalesce($14, receipt_transaction_at), receipt_transaction_precision = coalesce($15, receipt_transaction_precision), receipt_status = coalesce($16, receipt_status),
-           customer_label = coalesce($17, customer_label), note = coalesce($18, note),
-           edited_fields = (select array_agg(distinct x) from unnest(edited_fields || $19::text[]) x)
+        `update payment_records set ${assignments.join(', ')},
+           edited_fields = (select array_agg(distinct x) from unnest(edited_fields || $${values.length + 3}::text[]) x)
          where organization_id = $1 and id = $2`,
-        [orgId, id, f.amountCentavos, f.feeCentavos, f.totalChargedCentavos, f.receiptProvider, f.paymentRail, f.referenceNamespace, f.referenceValue, f.payerName, f.payerPhone, f.payeeName, f.payeePhone, f.receiptTransactionAt, f.receiptTransactionPrecision, f.receiptStatus, input.customerLabel ?? null, input.note ?? null, changed],
+        [orgId, id, ...values, changed],
       );
       const v = await tx.query<{ n: number }>(`select coalesce(max(version),0)::int + 1 as n from proof_versions where record_id = $1`, [id]);
-      await tx.query(`insert into proof_versions (organization_id, record_id, version, kind, fields, edited_fields, reason, created_by) values ($1,$2,$3,$4,$5,$6,$7,$8)`, [orgId, id, v.rows[0]!.n, isOwner ? 'OWNER_CORRECTION' : 'USER_CORRECTION', JSON.stringify(f), changed, input.reason, userId]);
+      await tx.query(`insert into proof_versions (organization_id, record_id, version, kind, fields, edited_fields, reason, created_by) values ($1,$2,$3,$4,$5,$6,$7,$8)`, [orgId, id, v.rows[0]!.n, isOwner ? 'OWNER_CORRECTION' : 'USER_CORRECTION', JSON.stringify(corrected), changed, input.reason, userId]);
       await this.audit.record({ organizationId: orgId, actorUserId: userId, action: 'RECORD_CORRECTED', subjectType: 'payment_record', subjectId: id, after: { fields: changed, material }, reason: input.reason }, tx);
       if (material) {
         // Reopen reconciliation: deactivate the current association but keep it in history.
         await tx.query(`update payment_matches set active = false, unlinked_at = now(), unlinked_by = $2, unlink_reason = 'material edit' where record_id = $1 and active`, [id, userId]);
-        await tx.query(`update payment_records set evidence_state = 'UNVERIFIED' where id = $1 and evidence_state in ('MATCHED_AUTO','MATCHED_BY_USER','REVIEW_REQUIRED')`, [id]);
+        await tx.query(`update payment_records set evidence_state = 'UNVERIFIED', last_reconciled_at = null where id = $1 and organization_id = $2`, [id, orgId]);
         await this.audit.record({ organizationId: orgId, actorUserId: userId, action: 'MATCH_REOPENED', subjectType: 'payment_record', subjectId: id, reason: 'material edit' }, tx);
         await this.reconcile.scheduleRecord(id, tx);
       }

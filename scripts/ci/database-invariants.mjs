@@ -139,3 +139,4 @@ try {
 }
 
 await import('./proof-retention-invariants.mjs');
+await import('./record-correction-invariants.mjs');

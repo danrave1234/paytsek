@@ -1,10 +1,10 @@
-import { PROVIDERS, PROVIDER_LABELS, type Provider } from '@paytsek/contracts';
-import { parseMoneyExact } from '@paytsek/receipt-parsers';
+import { PROVIDER_LABELS, type CorrectRecordRequest } from '@paytsek/contracts';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import { BackHandler, Image, Pressable, StyleSheet, View } from 'react-native';
-import { Button, Chip, Dialog, Icon, IconButton, Portal, Snackbar, Text, TextInput, useTheme } from 'react-native-paper';
+import { Button, Icon, IconButton, Portal, Snackbar, Text, useTheme } from 'react-native-paper';
 import { ProviderLogo } from '@/components/provider-logo';
+import { RecordCorrectionDialog } from '@/components/record-correction-dialog';
 import { Loading, Notice, Screen } from '@/components/ui';
 import { correctDraft, getDraft, pruneSynced, syncDraft, type Draft } from '@/lib/drafts';
 import { manilaTime, peso } from '@/lib/format';
@@ -21,8 +21,6 @@ export default function LocalRecordDetail() {
   const invalidate = useInvalidateRecord();
   const draftsSignal = useDraftsSignal();
   const [draft, setDraft] = useState<Draft | null | undefined>(undefined);
-  const [amountText, setAmountText] = useState('');
-  const [providerValue, setProviderValue] = useState<Provider | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [proofExpanded, setProofExpanded] = useState(false);
@@ -46,42 +44,25 @@ export default function LocalRecordDetail() {
       return;
     }
     setDraft(next);
-    if (next) {
-      setAmountText((next.request.corrected.amountCentavos / 100).toFixed(2));
-      setProviderValue(next.request.corrected.receiptProvider);
-    }
   }, [id, router, workspace]);
 
   useFocusEffect(useCallback(() => {
     if (!editing) void load().catch(() => setError('Could not read the saved record. Go back and open it again.'));
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (editing) return false; // The dialog owns Back while editing or saving.
       goBack();
       return true;
     });
     return () => subscription.remove();
   }, [goBack, load, draftsSignal, editing]));
 
-  const save = async () => {
-    if (!draft || !workspace || busy) return;
-    const amount = parseMoneyExact(amountText.trim());
-    if (!amount) return setError('Enter a valid amount.');
-    setBusy(true);
-    setError(null);
-    try {
-      const next = await correctDraft(workspace.id, draft.clientRecordId, {
-        amountCentavos: amount.centavos,
-        receiptProvider: providerValue,
-      });
-      setDraft(next);
-      invalidate();
-      void invalidateDrafts();
-      setEditing(false);
-      setToast('Record updated');
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Could not update this record.');
-    } finally {
-      setBusy(false);
-    }
+  const save = async (correction: Pick<CorrectRecordRequest['corrected'], 'amountCentavos' | 'receiptProvider'>) => {
+    if (!draft || !workspace) throw new Error('This local record is no longer available.');
+    const next = await correctDraft(workspace.id, draft.clientRecordId, correction);
+    setDraft(next);
+    invalidate();
+    void invalidateDrafts();
+    setToast('Record updated');
   };
 
   const retry = async () => {
@@ -174,20 +155,8 @@ export default function LocalRecordDetail() {
         </View>
       ) : null}
 
+      {editing ? <RecordCorrectionDialog record={fields} onSave={save} onDismiss={() => setEditing(false)} /> : null}
       <Portal>
-        <Dialog visible={editing} onDismiss={busy ? undefined : () => setEditing(false)}>
-          <Dialog.Title>Correct record</Dialog.Title>
-          <Dialog.Content style={{ gap: SPACING.sm }}>
-            <Text variant="bodySmall">The proof stays with this record.</Text>
-            <TextInput label="Amount" mode="outlined" keyboardType="decimal-pad" value={amountText} onChangeText={setAmountText} disabled={busy} />
-            <Text variant="labelMedium">Sent from</Text>
-            <View style={styles.providerChoices}>{PROVIDERS.map((item) => <Chip key={item.value} selected={providerValue === item.value} onPress={() => setProviderValue(item.value)} disabled={busy}>{item.label}</Chip>)}</View>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setEditing(false)} disabled={busy}>Cancel</Button>
-            <Button onPress={() => void save()} loading={busy} disabled={busy}>Save</Button>
-          </Dialog.Actions>
-        </Dialog>
         <Snackbar visible={toast !== null} duration={2600} onDismiss={() => setToast(null)}>{toast}</Snackbar>
       </Portal>
     </Screen>
@@ -205,6 +174,5 @@ const styles = StyleSheet.create({
   proofHeader: { minHeight: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   proof: { width: '100%', borderRadius: 0 },
   recordActions: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm, alignItems: 'center' },
-  providerChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
   sync: { gap: SPACING.xs, alignItems: 'flex-start' },
 });

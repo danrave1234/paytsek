@@ -6,6 +6,7 @@ export * from './schemas/pairing';
 export * from './schemas/ingestion';
 export * from './schemas/evidence';
 export * from './schemas/records';
+export * from './record-corrections';
 export * from './schemas/review';
 export * from './schemas/billing';
 export * from './schemas/workspace';

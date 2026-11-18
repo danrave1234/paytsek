@@ -7,10 +7,10 @@ import { ProviderLogo } from '@/components/provider-logo';
 import { AppearMotion, ScreenEnter, useReducedMotion } from '@/components/motion';
 import { CountUpText, FillBar } from '@/components/motion-effects';
 import { RhythmChart } from '@/components/rhythm-chart';
-import { ErrorState, Loading } from '@/components/ui';
+import { EmptyState, ErrorState, Loading, Notice } from '@/components/ui';
 import { peso } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
-import { dailyBuckets, shortDay } from '@/lib/rhythm';
+import { dailyBuckets, evidenceBuckets, shortDay } from '@/lib/rhythm';
 import { providerLabel } from '@/lib/feed';
 import { useAnalytics } from '@/lib/queries';
 import { RADIUS, SHADOW_COLOR, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET, stateColorsFor } from '@/theme';
@@ -75,8 +75,14 @@ export default function Analytics() {
   const [range, setRange] = useState<AnalyticsRange>('7D');
   const [refreshing, setRefreshing] = useState(false);
   const query = useAnalytics(range);
-  const bars = useMemo(() => dailyBuckets(query.data?.daily ?? [], range), [query.data?.daily, range]);
-  const rangeLabel = RANGES.find((item) => item.value === range)?.label ?? '';
+  // A previous dashboard may stay visible while the selected period loads.
+  // Its chart, total label and accessibility copy must describe that data.
+  const displayedRange = query.data?.range ?? range;
+  const rangeLabel = RANGES.find((item) => item.value === displayedRange)!.label;
+  const requestedLabel = RANGES.find((item) => item.value === range)!.label;
+  const bars = useMemo(() => dailyBuckets(query.data?.daily ?? [], displayedRange), [query.data?.daily, displayedRange]);
+  const evidence = useMemo(() => evidenceBuckets(query.data?.byEvidence ?? []), [query.data?.byEvidence]);
+  const paused = query.fetchStatus === 'paused';
   const average = query.data?.daily.length ? Math.round(query.data.recordedCentavos / query.data.daily.length) : 0;
   const strongest = query.data?.byProvider[0] ?? null;
 
@@ -102,11 +108,16 @@ export default function Analytics() {
         <RangeTabs value={range} onChange={setRange} />
 
         {query.isLoading ? <Loading variant="dashboard" label="Loading analytics" /> : null}
-        {query.error ? <ErrorState error={query.error} retry={() => void query.refetch()} /> : null}
+        {paused ? <Notice kind="info">{query.data ? `Offline. Showing saved analytics for ${rangeLabel}. Reconnect to refresh ${requestedLabel}.` : 'Offline. Analytics will load when you reconnect.'}</Notice>
+          : query.isPlaceholderData ? <Notice kind="info">Loading {requestedLabel}. Showing {rangeLabel} until it is ready.</Notice> : null}
+        {paused && !query.data ? <EmptyState icon="chart-box-outline" title="No saved analytics" body="Reconnect to load recorded payments for this period." /> : null}
+        {query.error ? query.data
+          ? <Notice kind="error">Could not refresh analytics. Showing saved results; pull to retry.</Notice>
+          : <ErrorState error={query.error} retry={() => void query.refetch()} /> : null}
         {query.data ? (
           <ScreenEnter>
             <View style={styles.hero}>
-              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>Recorded in this period</Text>
+              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>Recorded over {rangeLabel}</Text>
               <CountUpText value={query.data.recordedCentavos} format={peso} variant="displaySmall" numberOfLines={1} adjustsFontSizeToFit style={styles.total} />
             </View>
 
@@ -121,25 +132,25 @@ export default function Analytics() {
               </View>
               <View style={[styles.metric, styles.metricRule, { borderColor: theme.colors.outlineVariant }]}>
                 <Text variant="titleMedium" numberOfLines={1} style={styles.metricValue}>{strongest ? providerLabel(strongest.provider) : '—'}</Text>
-                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Top source</Text>
+                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>Top payment app</Text>
               </View>
             </View>
 
             <View style={styles.section}>
-              <Text variant="titleMedium" style={styles.sectionTitle}>{range === '90D' ? 'Weekly rhythm' : 'Daily rhythm'}</Text>
+              <Text variant="titleMedium" style={styles.sectionTitle}>{displayedRange === '90D' ? 'Weekly rhythm' : 'Daily rhythm'}</Text>
               <RhythmChart
                 bars={bars}
                 height={92}
-                gap={range === '30D' ? 2 : 4}
+                gap={displayedRange === '30D' ? 2 : 4}
                 axis={[shortDay(query.data.from), shortDay(query.data.to)]}
                 accessibilityLabel={`Recorded amount trend for ${rangeLabel}`}
-                peakLabel={range === '90D' ? 'Best week' : 'Best day'}
+                peakLabel={displayedRange === '90D' ? 'Best week' : 'Best day'}
                 emptyLabel="No recorded payments in this period"
               />
             </View>
 
             <View style={styles.section}>
-              <Text variant="titleMedium" style={styles.sectionTitle}>By payment source</Text>
+              <Text variant="titleMedium" style={styles.sectionTitle}>By payment app</Text>
               {query.data.byProvider.length === 0 ? (
                 <Text variant="bodyMedium" style={[styles.empty, { color: theme.colors.onSurfaceVariant }]}>No recorded payments in this period.</Text>
               ) : query.data.byProvider.map((item, index) => (
@@ -164,7 +175,7 @@ export default function Analytics() {
 
             <View style={styles.section}>
               <Text variant="titleMedium" style={styles.sectionTitle}>By evidence</Text>
-              {query.data.byEvidence.map((item, index) => {
+              {evidence.map((item, index) => {
                 const colors = stateColorsFor(theme.dark)[item.state];
                 const share = query.data.recordedCentavos ? item.recordedCentavos / query.data.recordedCentavos * 100 : 0;
                 const width = item.recordedCount > 0 ? Math.max(3, share) : 0;

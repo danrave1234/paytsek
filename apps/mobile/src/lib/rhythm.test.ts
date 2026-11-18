@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { barAt, dailyBuckets, hourLabel, hourlyBuckets, peakIndex, shortDay } from './rhythm';
+import { barAt, dailyBuckets, evidenceBuckets, hourLabel, hourlyBuckets, peakIndex, shortDay } from './rhythm';
 
 describe('rhythm buckets', () => {
   it('labels hours on a 12-hour clock', () => {
@@ -42,6 +42,22 @@ describe('rhythm buckets', () => {
     const bar = (centavos: number) => ({ label: '', centavos, count: null });
     expect(peakIndex([bar(0), bar(5), bar(5), bar(1)])).toBe(1);
     expect(peakIndex([bar(0), bar(0)])).toBeNull();
+  });
+
+  it('combines both Strong match states without changing cached analytics', () => {
+    const rows = [
+      { state: 'UNVERIFIED' as const, recordedCount: 1, recordedCentavos: 1200 },
+      { state: 'MATCHED_AUTO' as const, recordedCount: 2, recordedCentavos: 1000 },
+      { state: 'MATCHED_BY_USER' as const, recordedCount: 1, recordedCentavos: 500 },
+      { state: 'CONFIRMED_MANUALLY' as const, recordedCount: 1, recordedCentavos: 200 },
+    ];
+    const before = structuredClone(rows);
+    expect(evidenceBuckets(rows)).toEqual([
+      { state: 'MATCHED_AUTO', recordedCount: 3, recordedCentavos: 1500 },
+      rows[0], rows[3],
+    ]);
+    expect(rows).toEqual(before);
+    expect(evidenceBuckets([])).toEqual([]);
   });
 
   it('maps touch positions onto bar slots and clamps the edges', () => {

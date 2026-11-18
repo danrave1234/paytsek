@@ -50,7 +50,7 @@ export const PROVIDER_LABEL_SQL = `case r.receipt_provider
            when 'GOTYME' then 'GoTyme'
            when 'MAYA' then 'Maya'
            when 'MARIBANK' then 'MariBank'
-           else 'Unknown provider'
+           else 'Unknown wallet'
          end`;
 
 export const RECORD_SELECT = `

@@ -48,6 +48,8 @@ export const MATCHING_CRITICAL_FIELDS = [
   'referenceNamespace',
   'referenceValue',
   'receiptTransactionAt',
+  'receiptTransactionPrecision',
+  'receiptStatus',
   'receiptProvider',
   'paymentRail',
 ] as const satisfies ReadonlyArray<keyof ReceiptFields>;
@@ -150,7 +152,12 @@ export const CreateRecordRequest = z.object({
 export type CreateRecordRequest = z.infer<typeof CreateRecordRequest>;
 
 export const CorrectRecordRequest = z.object({
-  corrected: ReceiptFields.partial(),
+  // Missing keys preserve the current value; explicit null clears nullable fields.
+  // Persisted records must always retain a valid amount and PHP currency.
+  corrected: ReceiptFields.extend({
+    amountCentavos: z.number().int().positive(),
+    currency: z.literal('PHP'),
+  }).partial(),
   customerLabel: z.string().max(120).nullable().optional(),
   note: z.string().max(500).nullable().optional(),
   reason: z.string().max(300),

@@ -2,19 +2,19 @@ import { EVIDENCE_STATE_LABELS, PROVIDERS, type EvidenceState, type Provider, ty
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Searchbar, Text, useTheme } from 'react-native-paper';
+import { ActivityIndicator, Button, Searchbar, Text, useTheme } from 'react-native-paper';
 import { ProviderLogo } from '@/components/provider-logo';
 import { AppearMotion } from '@/components/motion';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PaymentRecordRow } from '@/components/payment-record-row';
 import { SyncStatus } from '@/components/sync-status';
-import { parseMoneyExact } from '@paytsek/receipt-parsers';
 import { EmptyState, ErrorState, Loading, Notice } from '@/components/ui';
 import { listDrafts, type Draft } from '@/lib/drafts';
 import { draftOccurredAt, providerLabel, recordOccurredAt } from '@/lib/feed';
 import { getFormatter } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
 import { prefetchRecord, useDraftsSignal, useInfiniteRecords } from '@/lib/queries';
+import { matchesRecordFilters } from '@/lib/record-filters';
 import { useSession } from '@/lib/session';
 import { RADIUS, SPACING, TAB_BAR_CLEARANCE, TOUCH_TARGET } from '@/theme';
 
@@ -92,6 +92,8 @@ export default function Records() {
 
   const evidenceStates = EVIDENCE_FILTERS.find((item) => item.value === evidenceFilter)?.states;
   const query = useInfiniteRecords({ q: search || undefined, state: evidenceStates, provider });
+  const updatingFilters = text.trim() !== search || query.isPlaceholderData;
+  const paused = query.fetchStatus === 'paused';
   const draftsSignal = useDraftsSignal();
   const refreshLocal = useCallback(() => {
     if (!workspace) return;
@@ -101,14 +103,12 @@ export default function Records() {
 
   const rows = useMemo<RowItem[]>(() => {
     const remote = query.data?.pages.flatMap((page) => page.items) ?? [];
-    const normalizedSearch = search.toLowerCase().replace(/[₱,\s]/g, '');
-    const localRows: RowItem[] = drafts.filter((draft) => {
-      if (provider && draft.request.corrected.receiptProvider !== provider) return false;
-      if (evidenceStates && !evidenceStates.includes('UNVERIFIED')) return false;
-      if (!normalizedSearch) return true;
-      const source = providerLabel(draft.request.corrected.receiptProvider).toLowerCase();
-      return source.includes(search.toLowerCase()) || parseMoneyExact(normalizedSearch)?.centavos === draft.request.corrected.amountCentavos;
-    }).map((draft) => ({
+    const filters = { q: text.trim(), state: evidenceStates, provider };
+    const localRows: RowItem[] = drafts.filter((draft) => matchesRecordFilters({
+      receiptProvider: draft.request.corrected.receiptProvider,
+      amountCentavos: draft.request.corrected.amountCentavos,
+      evidenceState: 'UNVERIFIED',
+    }, filters)).map((draft) => ({
       kind: 'draft',
       id: draft.clientRecordId,
       draft,
@@ -118,7 +118,8 @@ export default function Records() {
       state: 'UNVERIFIED',
       onPress: () => router.push(`/record/local/${draft.clientRecordId}`),
     }));
-    const remoteRows: RowItem[] = remote.map((record) => ({
+    // Cached rows remain useful while a new filter loads, but must satisfy it.
+    const remoteRows: RowItem[] = remote.filter((record) => matchesRecordFilters(record, filters)).map((record) => ({
       kind: 'record',
       id: record.id,
       record,
@@ -131,9 +132,9 @@ export default function Records() {
     }));
     const canonicalIds = new Set(remote.map((record) => record.clientRecordId));
     return [...localRows.filter((row) => !canonicalIds.has(row.id)), ...remoteRows].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-  }, [drafts, evidenceStates, provider, query.data?.pages, router, search]);
+  }, [drafts, evidenceStates, provider, query.data?.pages, router, text]);
 
-  const hasFilters = Boolean(search || provider || evidenceFilter !== 'ALL');
+  const hasFilters = Boolean(text.trim() || provider || evidenceFilter !== 'ALL');
   const clearFilters = () => {
     setText('');
     setSearch('');
@@ -153,6 +154,12 @@ export default function Records() {
     }
   };
 
+  const loadMore = () => {
+    if (query.hasNextPage && !query.isFetching && !updatingFilters && !paused) {
+      void query.fetchNextPage({ cancelRefetch: false });
+    }
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }} edges={['top']}>
       <FlatList
@@ -160,11 +167,13 @@ export default function Records() {
         keyExtractor={(item) => `${item.kind}.${item.id}`}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         refreshing={refreshing}
         onRefresh={() => void refresh()}
         onEndReachedThreshold={0.3}
         onEndReached={() => {
-          if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
+          if (!query.isFetchNextPageError) loadMore();
         }}
         ListHeaderComponent={(
           <View style={styles.header}>
@@ -174,11 +183,14 @@ export default function Records() {
             </View>
             <SyncStatus drafts={drafts} />
             {localError ? <Notice kind="error">Saved scans could not be read. Pull to retry; their files remain on this phone.</Notice> : null}
-            {query.error && rows.length > 0 ? <Notice kind="error">Could not refresh server records. Pull to retry.</Notice> : null}
+            {query.error && !query.isFetchNextPageError && rows.length > 0 ? <Notice kind="error">Could not refresh server records. Pull to retry.</Notice> : null}
+            {paused ? <Notice kind="info">Offline. Showing saved results; server records will load when you reconnect.</Notice>
+              : updatingFilters ? <Text accessibilityLiveRegion="polite" variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Updating results…</Text> : null}
             <Searchbar
               placeholder="Search wallet or amount"
               value={text}
               onChangeText={setText}
+              maxLength={120}
               elevation={0}
               style={[styles.search, { backgroundColor: theme.colors.surface, borderColor: theme.colors.outlineVariant }]}
               inputStyle={styles.searchInput}
@@ -211,14 +223,20 @@ export default function Records() {
             </ScrollView>
           </View>
         )}
-        ListEmptyComponent={query.isLoading || !workspace
+        ListEmptyComponent={paused
+          ? <EmptyState icon="receipt-text-outline" title="No saved results" body="Reconnect to load server records." />
+          : query.isLoading || updatingFilters || !workspace
           ? <Loading variant="list" label="Loading records" />
           : query.error
             ? <ErrorState error={query.error} retry={() => void refresh()} />
             : hasFilters
               ? <EmptyState icon="filter-outline" title="No matching records" action={{ label: 'Clear filters', onPress: clearFilters }} />
               : <EmptyState icon="receipt-text-outline" title="No records yet" body="Saved payment proofs will appear here." />}
-        ListFooterComponent={query.isFetchingNextPage ? <ActivityIndicator style={styles.footer} /> : <View style={styles.footer} />}
+        ListFooterComponent={query.isFetchingNextPage && !paused ? <ActivityIndicator accessibilityLabel="Loading more records" style={styles.footer} />
+          : query.isFetchNextPageError ? <View style={styles.footer}>
+            <Text variant="bodySmall" accessibilityLiveRegion="polite" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>Could not load more records. Your loaded records are still here.</Text>
+            <Button onPress={loadMore} disabled={query.isFetching || updatingFilters || paused} contentStyle={{ minHeight: TOUCH_TARGET }}>Retry loading more</Button>
+          </View> : <View style={styles.footer} />}
         renderItem={({ item, index }) => {
           const showDay = index === 0 || dayKey(rows[index - 1]!.at, timezone) !== dayKey(item.at, timezone);
           const previousSameDay = index > 0 && !showDay;

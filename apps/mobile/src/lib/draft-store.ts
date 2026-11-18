@@ -1,5 +1,5 @@
 import type { CreateRecordRequest, SyncStatus } from '@paytsek/contracts';
-import { LOCAL_DRAFT_CAP } from '@paytsek/contracts';
+import { CorrectRecordRequest, LOCAL_DRAFT_CAP, receiptFieldChanges } from '@paytsek/contracts';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
 import { newId } from './device';
@@ -126,12 +126,15 @@ export async function getDraft(workspaceId: string, clientRecordId: string): Pro
   return row ? rowToDraft(row) : null;
 }
 
-export async function correctDraft(workspaceId: string, clientRecordId: string, correction: Pick<CreateRecordRequest['corrected'], 'amountCentavos' | 'receiptProvider'>): Promise<Draft> {
+export async function correctDraft(workspaceId: string, clientRecordId: string, correction: Pick<CorrectRecordRequest['corrected'], 'amountCentavos' | 'receiptProvider'>): Promise<Draft> {
   const scope = scopeFor(workspaceId);
   const current = await getDraft(workspaceId, clientRecordId);
   if (!current) throw new Error('This local record is no longer available.');
   if (current.syncStatus === 'SYNCED' || current.syncStatus === 'UPLOADING') throw new Error('Wait for sync to finish before editing this record.');
-  const request = { ...current.request, corrected: { ...current.request.corrected, ...correction }, editedFields: [...new Set([...current.request.editedFields, ...Object.keys(correction)])] };
+  const validated = CorrectRecordRequest.shape.corrected.pick({ amountCentavos: true, receiptProvider: true }).parse(correction);
+  const changes = receiptFieldChanges(current.request.corrected, validated);
+  if (!Object.keys(changes).length) return current;
+  const request = { ...current.request, corrected: { ...current.request.corrected, ...changes }, editedFields: [...new Set([...current.request.editedFields, ...Object.keys(changes)])] };
   const db = await open();
   assertScopeCurrent(scope);
   const result = await db.runAsync(`update drafts set request_json = ?, sync_status = case when proof_id is null then 'LOCAL_DRAFT' else 'PARTIAL_UPLOAD' end, last_error = null, updated_at = ?
